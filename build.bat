@@ -12,7 +12,7 @@ if errorlevel 1 (
 taskkill /im IslandBar.exe /f >nul 2>nul
 
 echo === Building IslandBar.exe (first build downloads packages, please wait) ===
-dotnet publish src\IslandBar\IslandBar.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish
+dotnet publish src\IslandBar\IslandBar.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o publish
 if errorlevel 1 goto :fail
 
 echo === Building MSI installer ===

@@ -32,7 +32,7 @@ jobs:
       - name: Publish IslandBar.exe
         run: >
           dotnet publish src/IslandBar/IslandBar.csproj -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none
           -p:Version=${{ steps.ver.outputs.version }}
           -o publish
 
