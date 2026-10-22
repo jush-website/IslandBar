@@ -95,6 +95,22 @@ namespace IslandBar
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
 
+        public const int GWL_STYLE = -16;
+        public const long WS_CAPTION = 0x00C00000L;
+
+        [DllImport("user32.dll")]
+        public static extern bool IsZoomed(IntPtr hWnd);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct POINT { public int X, Y; }
+
+        [DllImport("user32.dll")]
+        public static extern bool GetCursorPos(out POINT lpPoint);
+
+        // QUERY_USER_NOTIFICATION_STATE：3 = D3D 全螢幕、2 = 全螢幕程式（忙碌）、4 = 簡報模式
+        [DllImport("shell32.dll")]
+        public static extern int SHQueryUserNotificationState(out int pquns);
+
         public static string GetClassName(IntPtr hWnd)
         {
             var sb = new StringBuilder(256);

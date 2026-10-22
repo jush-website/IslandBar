@@ -229,7 +229,11 @@
                 ClipToBounds="True"
                 MouseEnter="Island_MouseEnter"
                 MouseLeave="Island_MouseLeave"
-                MouseWheel="Island_MouseWheel">
+                MouseWheel="Island_MouseWheel"
+                PreviewMouseLeftButtonDown="Island_PreviewMouseLeftButtonDown"
+                PreviewMouseMove="Island_PreviewMouseMove"
+                PreviewMouseLeftButtonUp="Island_PreviewMouseLeftButtonUp"
+                LostMouseCapture="Island_LostMouseCapture">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="20" ShadowDepth="3" Direction="270" Opacity="0.45" Color="Black" />
             </Border.Effect>
@@ -240,42 +244,44 @@
             <Grid>
                 <!-- ================= 收合狀態 ================= -->
                 <Grid x:Name="CompactView" Height="34" VerticalAlignment="Top">
-                    <!-- 沒有媒體：時鐘 -->
+                    <!-- 沒有媒體：時鐘 ＋ 額度點點 -->
                     <StackPanel x:Name="CompactIdle" Orientation="Horizontal"
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock x:Name="CompactClock" Text="20:14" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                         <TextBlock x:Name="CompactTimer" Text="" FontSize="12" FontWeight="SemiBold"
                                    Foreground="#FFB454" Margin="10,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
+                        <StackPanel x:Name="IdleDots" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0" />
                     </StackPanel>
 
-                    <!-- 有媒體：封面 + 標題 + 跳動條 -->
-                    <Grid x:Name="CompactMedia" Margin="10,0,12,0" Visibility="Collapsed">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+                    <!-- 有媒體：封面（跳動條疊在封面上）＋ 歌名 ＋ 額度點點 -->
+                    <StackPanel x:Name="CompactMedia" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="Collapsed">
                         <Border x:Name="CompactArt" Width="22" Height="22" CornerRadius="6" Background="#26FFFFFF"
                                 VerticalAlignment="Center">
-                            <TextBlock x:Name="CompactArtPlaceholder" Style="{StaticResource Glyph}" Text="&#xE8D6;" FontSize="11" />
+                            <Grid>
+                                <TextBlock x:Name="CompactArtPlaceholder" Style="{StaticResource Glyph}" Text="&#xE8D6;" FontSize="11" />
+                                <Border x:Name="CompactEqScrim" CornerRadius="6" Background="#80000000" Visibility="Collapsed" IsHitTestVisible="False" />
+                                <StackPanel x:Name="EqBars" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Height="12" Visibility="Collapsed" IsHitTestVisible="False">
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    </StackPanel>
+                            </Grid>
                         </Border>
-                        <TextBlock x:Name="CompactTitle" Grid.Column="1" Text="" FontSize="12" Margin="10,0,10,0"
+                        <TextBlock x:Name="CompactTitle" Width="140" Text="" FontSize="12" Margin="10,0,0,0"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="#E6FFFFFF" />
-                        <StackPanel x:Name="EqBars" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Height="14">
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                        </StackPanel>
-                    </Grid>
+                        <StackPanel x:Name="MediaDots" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0" />
+                    </StackPanel>
                 </Grid>
 
                 <!-- ================= 側邊收合（左側 / 右側）：直式窄條 ================= -->
@@ -286,27 +292,31 @@
                         <TextBlock x:Name="SideClockM" Text="44" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"
                                    Foreground="{StaticResource Secondary}" />
                     </StackPanel>
-                    <StackPanel x:Name="SideMedia" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <Border x:Name="SideArt" Width="26" Height="26" CornerRadius="7" Background="#26FFFFFF" HorizontalAlignment="Center">
+                    <Border x:Name="SideArt" Width="26" Height="26" CornerRadius="7" Background="#26FFFFFF" HorizontalAlignment="Center"
+                            Visibility="Collapsed">
+                        <Grid>
                             <TextBlock x:Name="SideArtPlaceholder" Style="{StaticResource Glyph}" Text="&#xE8D6;" FontSize="12" />
-                        </Border>
-                        <StackPanel x:Name="SideEqBars" Orientation="Horizontal" HorizontalAlignment="Center" Height="14" Margin="0,8,0,0">
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
-                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
-                            </Rectangle>
-                        </StackPanel>
-                    </StackPanel>
+                            <Border x:Name="SideEqScrim" CornerRadius="7" Background="#80000000" Visibility="Collapsed" IsHitTestVisible="False" />
+                            <StackPanel x:Name="SideEqBars" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Height="14" Visibility="Collapsed" IsHitTestVisible="False">
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                        <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                                    </Rectangle>
+                                    </StackPanel>
+                        </Grid>
+                    </Border>
                     <TextBlock x:Name="SideTimer" Text="" FontSize="10" FontWeight="SemiBold" Foreground="#FFB454"
                                HorizontalAlignment="Center" Margin="0,8,0,0" Visibility="Collapsed" />
+                    <StackPanel x:Name="SideDots" HorizontalAlignment="Center" Margin="0,8,0,0" />
                 </StackPanel>
 
                 <!-- ================= 側邊 HUD：直式音量條 ================= -->
@@ -368,6 +378,8 @@
                                      ToolTip="音樂" IsChecked="True" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabCalendar" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE787;"
                                      ToolTip="日曆與計時器" Checked="Tab_Checked" />
+                        <RadioButton x:Name="TabQuota" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE945;"
+                                     ToolTip="AI 額度" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabStats" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9D9;"
                                      ToolTip="系統資訊" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabQuick" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE713;"
@@ -591,18 +603,37 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-                        <!-- 開機時間 -->
-                        <Border Style="{StaticResource StatTile}">
+                        <!-- GPU -->
+                        <Border Style="{StaticResource StatTile}" x:Name="GpuTile">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE823;" FontSize="13" Foreground="#FFB454" />
-                                    <TextBlock Style="{StaticResource StatLabel}" Text="已開機" />
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE7F4;" FontSize="13" Foreground="#FFB454" />
+                                    <TextBlock x:Name="GpuLabel" Style="{StaticResource StatLabel}" Text="GPU" />
                                 </StackPanel>
-                                <TextBlock x:Name="UptimeValue" Style="{StaticResource StatValue}" Text="0 分" />
-                                <TextBlock x:Name="UptimeSub" Text="" FontSize="11" Foreground="{StaticResource Tertiary}" Margin="0,2,0,0" />
+                                <TextBlock x:Name="GpuValue" Style="{StaticResource StatValue}" Text="—" />
+                                <Grid Margin="0,7,0,0" Height="4">
+                                    <Border CornerRadius="2" Background="{StaticResource TrackBg}" />
+                                    <Border CornerRadius="2" Background="#FFB454" RenderTransformOrigin="0,0.5">
+                                        <Border.RenderTransform><ScaleTransform x:Name="GpuBar" ScaleX="0" /></Border.RenderTransform>
+                                    </Border>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </UniformGrid>
+
+                    <!-- == AI 額度 == -->
+                    <Grid x:Name="PageQuota" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" Focusable="False">
+                            <StackPanel x:Name="QuotaList" />
+                        </ScrollViewer>
+                        <StackPanel x:Name="QuotaEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE945;" FontSize="28" Foreground="{StaticResource Tertiary}" />
+                            <TextBlock Text="還沒有額度資料" FontSize="13" Foreground="{StaticResource Secondary}" Margin="0,10,0,0" HorizontalAlignment="Center" />
+                            <TextBlock x:Name="QuotaEmptyHint" Text="這台電腦需要安裝並登入 Codex、Claude Code 或 Antigravity" FontSize="11"
+                                       Foreground="{StaticResource Tertiary}" Margin="0,4,0,0" HorizontalAlignment="Center" TextWrapping="Wrap"
+                                       TextAlignment="Center" MaxWidth="400" />
+                        </StackPanel>
+                    </Grid>
 
                     <!-- == 快速設定 == -->
                     <Grid x:Name="PageQuick" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">

@@ -20,6 +20,18 @@ namespace IslandBar
         /// <summary>動態島位置：TopCenter / TopLeft / TopRight / Left / Right</summary>
         public IslandPosition Position { get; set; } = IslandPosition.TopCenter;
 
+        /// <summary>拖曳後沿著邊緣的位置（0~1，島中心在該邊的比例）；null = 使用 Position 的預設位置</summary>
+        public double? AlongEdge { get; set; } = null;
+
+        /// <summary>背景不透明度 0.2 ~ 1.0</summary>
+        public double BackgroundOpacity { get; set; } = 0.96;
+
+        /// <summary>收合時顯示 AI 額度點點</summary>
+        public bool ShowQuotaDots { get; set; } = true;
+
+        /// <summary>收合時顯示歌名（關掉就只剩封面，比較不擋路）</summary>
+        public bool ShowCompactTitle { get; set; } = true;
+
         /// <summary>整體大小（文字與圖示一起縮放），1.0 = 100%，範圍 0.7 ~ 1.6</summary>
         public double Scale { get; set; } = 1.0;
 

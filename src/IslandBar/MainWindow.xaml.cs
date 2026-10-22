@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Media;
@@ -41,6 +42,10 @@ namespace IslandBar
         private readonly AudioService _audio = new AudioService();
         private readonly SystemStats _stats = new SystemStats();
         private readonly WeatherService _weather = new WeatherService();
+        private readonly QuotaService _quota = new QuotaService();
+        private readonly GpuService _gpu = new GpuService();
+        private QuotaSnapshot _quotaSnap = new QuotaSnapshot();
+        private int _dotCount;
 
         private IslandMode _mode = IslandMode.Compact;
         private MediaInfo _currentMedia;
@@ -107,6 +112,7 @@ namespace IslandBar
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            ApplyBackground();
             PositionWindow();
             BuildCalendar();
             UpdateTimerUi();
@@ -128,6 +134,11 @@ namespace IslandBar
             _media.Changed += info => Dispatcher.BeginInvoke(new Action(() => OnMediaChanged(info)));
             await _media.InitAsync();
 
+            // AI 額度 + GPU
+            _quota.Updated += snap => Dispatcher.BeginInvoke(new Action(() => OnQuotaUpdated(snap)));
+            _quota.Start();
+            _gpu.Start();
+
             StatsTick();
             UpdateDarkModeTile();
             await RefreshWeatherAsync();
@@ -136,6 +147,9 @@ namespace IslandBar
         public void ApplySettings(AppSettings settings)
         {
             _settings = settings;
+            ApplyBackground();
+            RebuildDots();
+            if (_currentMedia != null) CompactTitle.Visibility = _settings.ShowCompactTitle ? Visibility.Visible : Visibility.Collapsed;
             PositionWindow();
             ApplyMode(animate: false);
             if (!_settings.AutoHide) SetEdgeHidden(false, animate: true);
@@ -163,6 +177,8 @@ namespace IslandBar
             _watchTimer.Stop();
             _weatherTimer.Stop();
             _audio.Dispose();
+            _quota.Stop();
+            _gpu.Stop();
             Close();
         }
 
@@ -193,6 +209,37 @@ namespace IslandBar
             double sh = SystemParameters.PrimaryScreenHeight;
             double off = Math.Max(0, _settings.TopOffset);
             const double topSideMargin = 24; // 左上 / 右上 離左右邊的距離
+            double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
+
+            // 拖曳過：沿著邊緣的自訂位置
+            if (_settings.AlongEdge is double along)
+            {
+                along = Math.Clamp(along, 0, 1);
+                if (IsSide)
+                {
+                    double half = 135 * sc; // 展開面板高度的一半，避免超出螢幕
+                    double cy = Math.Clamp(along * sh, half, sh - half);
+                    Top = cy - Height / 2;
+                    bool left = _settings.Position == IslandPosition.Left;
+                    Left = left ? off : sw - Width - off;
+                    Island.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                    Island.VerticalAlignment = VerticalAlignment.Center;
+                    Island.Margin = new Thickness(0);
+                    Island.BorderThickness = left ? new Thickness(0, 1, 1, 1) : new Thickness(1, 1, 0, 1);
+                }
+                else
+                {
+                    double half = 245 * sc; // 展開面板寬度的一半
+                    double cx = Math.Clamp(along * sw, half, sw - half);
+                    Left = cx - Width / 2;
+                    Top = off;
+                    Island.HorizontalAlignment = HorizontalAlignment.Center;
+                    Island.VerticalAlignment = VerticalAlignment.Top;
+                    Island.Margin = new Thickness(0);
+                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                }
+                return;
+            }
 
             switch (_settings.Position)
             {
@@ -236,6 +283,7 @@ namespace IslandBar
 
         private CornerRadius CornersFor(double r)
         {
+            if (_dragging) return new CornerRadius(17); // 拖曳中：浮起來的膠囊
             switch (_settings.Position)
             {
                 case IslandPosition.Left: return new CornerRadius(0, r, r, 0);
@@ -251,7 +299,7 @@ namespace IslandBar
         private const double EdgePeek = 4; // 隱藏時露出的寬度
 
         private bool ShouldHideToEdge() =>
-            _settings.AutoHide && _mode == IslandMode.Compact && !Island.IsMouseOver && DateTime.Now >= _peekUntil;
+            _settings.AutoHide && _mode == IslandMode.Compact && !Island.IsMouseOver && !_dragging && DateTime.Now >= _peekUntil;
 
         private void ScheduleAutoHide()
         {
@@ -327,16 +375,25 @@ namespace IslandBar
                     if (IsSide && !_hudIsMessage) return new Size(44, 180);
                     return new Size(300, 40);
                 default:
+                {
+                    int dots = _settings.ShowQuotaDots ? _dotCount : 0;
                     if (IsSide)
                     {
                         // 直式窄條：上下各留 10，內容高度依狀態而定
-                        double h = _currentMedia != null ? 68 : 58;
+                        double h = 20 + (_currentMedia != null ? 26 : 38);
                         if (_timerRunning) h += 22;
+                        if (dots > 0) h += 8 + dots * 10;
                         return new Size(40, h);
                     }
-                    if (_currentMedia != null) return new Size(300, 34);
-                    if (_timerRunning) return new Size(200, 34);
-                    return new Size(150, 34);
+                    double dotsW = dots > 0 ? 10 + dots * 10 : 0;
+                    if (_currentMedia != null)
+                    {
+                        double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW;
+                        return new Size(Math.Max(w, 74), 34);
+                    }
+                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW;
+                    return new Size(Math.Max(iw, 130), 34);
+                }
             }
         }
 
@@ -422,6 +479,7 @@ namespace IslandBar
 
         private void Island_MouseEnter(object sender, MouseEventArgs e)
         {
+            if (_dragging) return;
             _collapseDelay.Stop();
             _autoHideDelay.Stop();
             if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
@@ -430,6 +488,7 @@ namespace IslandBar
 
         private void Island_MouseLeave(object sender, MouseEventArgs e)
         {
+            if (_dragging) return;
             _expandDelay.Stop();
             if (_mode == IslandMode.Expanded) _collapseDelay.Start();
             else if (_mode == IslandMode.Compact) ScheduleAutoHide();
@@ -549,7 +608,7 @@ namespace IslandBar
             {
                 CompactMedia.Visibility = Visibility.Collapsed;
                 CompactIdle.Visibility = Visibility.Visible;
-                SideMedia.Visibility = Visibility.Collapsed;
+                SideArt.Visibility = Visibility.Collapsed;
                 SideIdle.Visibility = Visibility.Visible;
                 MediaContent.Visibility = Visibility.Collapsed;
                 NoMediaPanel.Visibility = Visibility.Visible;
@@ -559,8 +618,9 @@ namespace IslandBar
             {
                 CompactMedia.Visibility = Visibility.Visible;
                 CompactIdle.Visibility = Visibility.Collapsed;
-                SideMedia.Visibility = Visibility.Visible;
+                SideArt.Visibility = Visibility.Visible;
                 SideIdle.Visibility = Visibility.Collapsed;
+                CompactTitle.Visibility = _settings.ShowCompactTitle ? Visibility.Visible : Visibility.Collapsed;
                 MediaContent.Visibility = Visibility.Visible;
                 NoMediaPanel.Visibility = Visibility.Collapsed;
 
@@ -628,6 +688,9 @@ namespace IslandBar
         {
             if (running == _eqRunning) return;
             _eqRunning = running;
+            var vis = running ? Visibility.Visible : Visibility.Collapsed;
+            EqBars.Visibility = vis; CompactEqScrim.Visibility = vis;
+            SideEqBars.Visibility = vis; SideEqScrim.Visibility = vis;
             double[] durations = { 0.42, 0.55, 0.36, 0.48 };
             int i = 0;
             var bars = new System.Collections.Generic.List<UIElement>();
@@ -671,6 +734,8 @@ namespace IslandBar
             PageCalendar.Visibility = TabCalendar.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageStats.Visibility = TabStats.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageQuick.Visibility = TabQuick.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageQuota.Visibility = TabQuota.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            if (TabQuota.IsChecked == true) BuildQuotaList();
 
             if (TabStats.IsChecked == true) UpdateStatsUi();
             if (TabQuick.IsChecked == true) UpdateDarkModeTile();
@@ -737,9 +802,13 @@ namespace IslandBar
             NetDown.Text = SystemStats.FormatSpeed(_stats.DownBytesPerSec);
             NetUp.Text = SystemStats.FormatSpeed(_stats.UpBytesPerSec);
 
-            var up = _stats.Uptime;
-            UptimeValue.Text = up.TotalDays >= 1 ? $"{(int)up.TotalDays} 天 {up.Hours} 時" : $"{up.Hours} 時 {up.Minutes} 分";
-            UptimeSub.Text = "自 " + (DateTime.Now - up).ToString("M/d HH:mm");
+            var gu = _gpu.Usage;
+            GpuValue.Text = gu.HasValue ? $"{gu.Value:0}%" : "—";
+            GpuBar.ScaleX = (gu ?? 0) / 100.0;
+            string gpuExtra = "";
+            if (_gpu.Temperature.HasValue) gpuExtra += $"{_gpu.Temperature}°C";
+            if (_gpu.VramTotalGb.HasValue) gpuExtra += (gpuExtra.Length > 0 ? " · " : "") + $"{_gpu.VramUsedGb:0.0}/{_gpu.VramTotalGb:0}G";
+            GpuLabel.Text = gpuExtra.Length > 0 ? "GPU  " + gpuExtra : "GPU";
         }
 
         private async Task RefreshWeatherAsync()
@@ -792,6 +861,14 @@ namespace IslandBar
                 if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
                     return false;
 
+                // 系統回報的全螢幕狀態（D3D 遊戲 / 全螢幕程式 / 簡報模式）
+                if (NativeMethods.SHQueryUserNotificationState(out int quns) == 0 && (quns == 2 || quns == 3 || quns == 4))
+                    return true;
+
+                // 最大化的一般視窗（有標題列）不算全螢幕——工作列自動隱藏時它也會蓋滿整個螢幕
+                if (NativeMethods.IsZoomed(fg) && (NativeMethods.GetWindowLong(fg, NativeMethods.GWL_STYLE) & NativeMethods.WS_CAPTION) == NativeMethods.WS_CAPTION)
+                    return false;
+
                 if (!NativeMethods.GetWindowRect(fg, out var wr)) return false;
 
                 IntPtr mon = NativeMethods.MonitorFromWindow(fg, NativeMethods.MONITOR_DEFAULTTONEAREST);
@@ -808,6 +885,319 @@ namespace IslandBar
             {
                 return false;
             }
+        }
+
+
+        // ================================================================
+        //  背景不透明度
+        // ================================================================
+
+        private void ApplyBackground()
+        {
+            double a = Math.Clamp(_settings.BackgroundOpacity, 0.2, 1.0);
+            Island.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(a * 255), 0x0D, 0x0D, 0x0F));
+            Island.BorderBrush = new SolidColorBrush(Color.FromArgb((byte)Math.Round(a * 0x1A), 0xFF, 0xFF, 0xFF));
+            if (Island.Effect is System.Windows.Media.Effects.DropShadowEffect shadow) shadow.Opacity = 0.45 * a;
+        }
+
+        // ================================================================
+        //  拖曳：拖到上 / 左 / 右邊緣，放開就停在那裡
+        // ================================================================
+
+        private bool _dragPending;
+        private bool _dragging;
+        private Point _dragStart;
+
+        private Point CursorDip()
+        {
+            NativeMethods.GetCursorPos(out var p);
+            var src = PresentationSource.FromVisual(this);
+            var m = src?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+            return m.Transform(new Point(p.X, p.Y));
+        }
+
+        private bool IsInteractive(object source)
+        {
+            var d = source as DependencyObject;
+            while (d != null && d != Island)
+            {
+                if (d is ButtonBase || d is Slider || d is Thumb || d is ScrollBar) return true;
+                if (d is FrameworkElement fe && fe.Name == "MediaProgressHost") return true;
+                d = d is Visual ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+            }
+            return false;
+        }
+
+        private void Island_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (IsInteractive(e.OriginalSource)) return;
+            _dragPending = true;
+            _dragStart = CursorDip();
+        }
+
+        private void Island_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_dragPending) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { _dragPending = false; return; }
+
+            var cur = CursorDip();
+            if (!_dragging)
+            {
+                if (Math.Abs(cur.X - _dragStart.X) < 6 && Math.Abs(cur.Y - _dragStart.Y) < 6) return;
+                BeginDrag();
+            }
+            // 讓島的中心跟著游標
+            Left = cur.X - Width / 2;
+            Top = cur.Y - Height / 2;
+            e.Handled = true;
+        }
+
+        private void BeginDrag()
+        {
+            _dragging = true;
+            _expandDelay.Stop(); _collapseDelay.Stop(); _autoHideDelay.Stop(); _hudTimer.Stop();
+            Island.CaptureMouse();
+            _mode = IslandMode.Compact;
+            SetEdgeHidden(false, animate: false);
+            Island.HorizontalAlignment = HorizontalAlignment.Center;
+            Island.VerticalAlignment = VerticalAlignment.Center;
+            Island.Margin = new Thickness(0);
+            Island.BorderThickness = new Thickness(1);
+            Island.Opacity = 0.9;
+            ApplyMode(animate: false);
+        }
+
+        private void Island_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            _dragPending = false;
+            if (!_dragging) return;
+            EndDrag();
+            e.Handled = true;
+        }
+
+        private void Island_LostMouseCapture(object sender, MouseEventArgs e)
+        {
+            if (_dragging) EndDrag();
+        }
+
+        private void EndDrag()
+        {
+            _dragging = false;
+            _dragPending = false;
+            if (Island.IsMouseCaptured) Island.ReleaseMouseCapture();
+            Island.Opacity = 1;
+
+            var cur = CursorDip();
+            double sw = SystemParameters.PrimaryScreenWidth;
+            double sh = SystemParameters.PrimaryScreenHeight;
+            double cx = Math.Clamp(cur.X, 0, sw);
+            double cy = Math.Clamp(cur.Y, 0, sh);
+
+            // 離哪個邊最近就停在哪個邊（上 / 左 / 右）
+            double dTop = cy, dLeft = cx, dRight = sw - cx;
+            if (dTop <= dLeft && dTop <= dRight)
+            {
+                _settings.Position = IslandPosition.TopCenter;
+                _settings.AlongEdge = cx / sw;
+            }
+            else if (dLeft <= dRight)
+            {
+                _settings.Position = IslandPosition.Left;
+                _settings.AlongEdge = cy / sh;
+            }
+            else
+            {
+                _settings.Position = IslandPosition.Right;
+                _settings.AlongEdge = cy / sh;
+            }
+            _settings.Save();
+            Log.Write($"Dragged to {_settings.Position} along={_settings.AlongEdge:0.000}");
+
+            PositionWindow();
+            ApplyMode(animate: true);
+            SettingsChanged?.Invoke();
+        }
+
+        // ================================================================
+        //  AI 額度
+        // ================================================================
+
+        private static Color LevelColor(double? p)
+        {
+            if (p == null) return Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF);
+            if (p >= 90) return Color.FromRgb(0xFF, 0x5C, 0x5C);
+            if (p >= 75) return Color.FromRgb(0xFA, 0xCC, 0x15);
+            if (p >= 50) return Color.FromRgb(0x4A, 0xDE, 0x80);
+            return Color.FromRgb(0x60, 0xA5, 0xFA);
+        }
+
+        private static string ResetText(DateTimeOffset? resets)
+        {
+            if (resets == null) return "";
+            var span = resets.Value - DateTimeOffset.Now;
+            if (span <= TimeSpan.Zero) return "已重置";
+            if (span.TotalHours < 24) return span.TotalHours >= 1 ? $"{(int)span.TotalHours} 時 {span.Minutes} 分後重置" : $"{Math.Max(1, span.Minutes)} 分後重置";
+            return resets.Value.ToLocalTime().ToString("M/d HH:mm") + " 重置";
+        }
+
+        private static string DotTip(QuotaItem it)
+        {
+            string pct = it.UsedPercent.HasValue ? $"{it.UsedPercent.Value:0}%" : "—";
+            string tip = $"{it.Label}  已用 {pct}";
+            string reset = ResetText(it.ResetsAt);
+            if (reset.Length > 0) tip += "\n" + reset;
+            if (it.Stale) tip += "\n（舊資料）";
+            return tip;
+        }
+
+        private void OnQuotaUpdated(QuotaSnapshot snap)
+        {
+            _quotaSnap = snap;
+            int before = _dotCount;
+            RebuildDots();
+            if (_mode == IslandMode.Expanded && TabQuota.IsChecked == true) BuildQuotaList();
+            if (_mode == IslandMode.Compact && before != _dotCount) ApplyMode(true);
+        }
+
+        private void RebuildDots()
+        {
+            var items = _settings.ShowQuotaDots ? _quotaSnap.Items : new List<QuotaItem>();
+            _dotCount = items.Count;
+            foreach (var panel in new Panel[] { IdleDots, MediaDots, SideDots })
+            {
+                panel.Children.Clear();
+                bool vertical = panel == SideDots;
+                int i = 0;
+                foreach (var it in items) panel.Children.Add(MakeDot(it, i++, vertical));
+                panel.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        private static Ellipse MakeDot(QuotaItem it, int index, bool vertical)
+        {
+            var dot = new Ellipse
+            {
+                Width = 6,
+                Height = 6,
+                Fill = new SolidColorBrush(LevelColor(it.UsedPercent)),
+                Margin = vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
+                ToolTip = DotTip(it)
+            };
+            // 平常依序慢慢呼吸；90% 以上快閃
+            bool alert = it.UsedPercent >= 90;
+            var anim = new DoubleAnimation(1.0, it.Stale ? 0.15 : 0.3, TimeSpan.FromMilliseconds(alert ? 350 : 1400))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                BeginTime = TimeSpan.FromMilliseconds(index * 160)
+            };
+            Timeline.SetDesiredFrameRate(anim, 20);
+            dot.BeginAnimation(OpacityProperty, anim);
+            return dot;
+        }
+
+        private void BuildQuotaList()
+        {
+            QuotaList.Children.Clear();
+            var items = _quotaSnap.Items;
+            if (items.Count == 0)
+            {
+                QuotaEmpty.Visibility = Visibility.Visible;
+                QuotaEmptyHint.Text = _quotaSnap.Messages.Count > 0
+                    ? string.Join("\n", _quotaSnap.Messages)
+                    : "這台電腦需要安裝並登入 Codex、Claude Code 或 Antigravity（每分鐘更新一次）";
+                return;
+            }
+            QuotaEmpty.Visibility = Visibility.Collapsed;
+
+            var secondary = (Brush)FindResource("Secondary");
+            var tertiary = (Brush)FindResource("Tertiary");
+            var track = (Brush)FindResource("TrackBg");
+            string lastProvider = null;
+
+            foreach (var it in items)
+            {
+                if (it.Provider != lastProvider)
+                {
+                    lastProvider = it.Provider;
+                    QuotaList.Children.Add(new TextBlock
+                    {
+                        Text = it.Provider + (it.Stale ? "（舊資料）" : ""),
+                        FontSize = 11,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = secondary,
+                        Margin = new Thickness(2, QuotaList.Children.Count == 0 ? 0 : 8, 0, 2)
+                    });
+                }
+
+                var row = new Grid { Margin = new Thickness(2, 3, 2, 3) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+
+                string label = it.Label.StartsWith(it.Provider) ? it.Label.Substring(it.Provider.Length).Trim() : it.Label;
+                var name = new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                row.Children.Add(name);
+
+                var color = LevelColor(it.UsedPercent);
+                var bar = new Grid { Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 8, 0) };
+                bar.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = track });
+                var fill = new Border
+                {
+                    CornerRadius = new CornerRadius(3),
+                    Background = new SolidColorBrush(color),
+                    RenderTransformOrigin = new Point(0, 0.5),
+                    RenderTransform = new ScaleTransform(Math.Clamp((it.UsedPercent ?? 0) / 100.0, 0, 1), 1)
+                };
+                bar.Children.Add(fill);
+                Grid.SetColumn(bar, 1);
+                row.Children.Add(bar);
+
+                var pct = new TextBlock
+                {
+                    Text = it.UsedPercent.HasValue ? $"{it.UsedPercent.Value:0}%" : "—",
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(color),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(pct, 2);
+                row.Children.Add(pct);
+
+                var reset = new TextBlock
+                {
+                    Text = ResetText(it.ResetsAt),
+                    FontSize = 10,
+                    Foreground = tertiary,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(reset, 3);
+                row.Children.Add(reset);
+
+                QuotaList.Children.Add(row);
+            }
+
+            foreach (var msg in _quotaSnap.Messages)
+            {
+                QuotaList.Children.Add(new TextBlock
+                {
+                    Text = msg,
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB4, 0x54)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(2, 8, 2, 0)
+                });
+            }
+            QuotaList.Children.Add(new TextBlock
+            {
+                Text = $"更新於 {_quotaSnap.UpdatedAt:HH:mm:ss}（每分鐘更新）",
+                FontSize = 10,
+                Foreground = tertiary,
+                Margin = new Thickness(2, 8, 2, 0)
+            });
         }
 
         // ================================================================

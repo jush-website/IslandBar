@@ -27,6 +27,11 @@ namespace IslandBar
             new Dictionary<IslandPosition, Forms.ToolStripMenuItem>();
         private readonly Dictionary<double, Forms.ToolStripMenuItem> _scaleItems =
             new Dictionary<double, Forms.ToolStripMenuItem>();
+        private readonly Dictionary<double, Forms.ToolStripMenuItem> _opacityItems =
+            new Dictionary<double, Forms.ToolStripMenuItem>();
+        private Forms.ToolStripMenuItem _dotsItem;
+        private Forms.ToolStripMenuItem _titleItem;
+        private Forms.ToolStripMenuItem _fullscreenItem;
         private Forms.ToolStripMenuItem _autoHideItem;
         private Forms.ToolStripMenuItem _autoUpdateItem;
         private Forms.ToolStripMenuItem _installUpdateItem;
@@ -81,6 +86,47 @@ namespace IslandBar
             AddPosition(position, IslandPosition.TopRight, "右上");
             AddPosition(position, IslandPosition.Left, "左側");
             AddPosition(position, IslandPosition.Right, "右側");
+            position.DropDownItems.Add(new Forms.ToolStripSeparator());
+            position.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：直接拖曳動態島到螢幕上／左／右邊緣，放開就停在那裡") { Enabled = false });
+
+            // 背景不透明度
+            var opacity = new Forms.ToolStripMenuItem("背景不透明度");
+            foreach (var op in new[] { 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3 })
+            {
+                double value = op;
+                var item = new Forms.ToolStripMenuItem($"{value * 100:0}%");
+                item.Click += (s, e) =>
+                {
+                    _settings.BackgroundOpacity = value;
+                    SaveAndApply();
+                };
+                _opacityItems[value] = item;
+                opacity.DropDownItems.Add(item);
+            }
+
+            _dotsItem = new Forms.ToolStripMenuItem("收合時顯示 AI 額度點點") { CheckOnClick = true };
+            _dotsItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.ShowQuotaDots == _dotsItem.Checked) return;
+                _settings.ShowQuotaDots = _dotsItem.Checked;
+                SaveAndApply();
+            };
+
+            _titleItem = new Forms.ToolStripMenuItem("收合時顯示歌名") { CheckOnClick = true };
+            _titleItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.ShowCompactTitle == _titleItem.Checked) return;
+                _settings.ShowCompactTitle = _titleItem.Checked;
+                SaveAndApply();
+            };
+
+            _fullscreenItem = new Forms.ToolStripMenuItem("全螢幕時自動隱藏") { CheckOnClick = true };
+            _fullscreenItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.HideOnFullscreen == _fullscreenItem.Checked) return;
+                _settings.HideOnFullscreen = _fullscreenItem.Checked;
+                SaveAndApply();
+            };
 
             // 大小
             var size = new Forms.ToolStripMenuItem("文字／大小");
@@ -173,7 +219,11 @@ namespace IslandBar
             menu.Items.Add(toggle);
             menu.Items.Add(position);
             menu.Items.Add(size);
+            menu.Items.Add(opacity);
             menu.Items.Add(_autoHideItem);
+            menu.Items.Add(_fullscreenItem);
+            menu.Items.Add(_dotsItem);
+            menu.Items.Add(_titleItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(autoStart);
             menu.Items.Add(_autoUpdateItem);
@@ -208,6 +258,7 @@ namespace IslandBar
             item.Click += (s, e) =>
             {
                 _settings.Position = pos;
+                _settings.AlongEdge = null; // 回到預設位置
                 SaveAndApply();
             };
             _positionItems[pos] = item;
@@ -216,7 +267,11 @@ namespace IslandBar
 
         private void SyncMenu()
         {
-            foreach (var kv in _positionItems) kv.Value.Checked = kv.Key == _settings.Position;
+            foreach (var kv in _positionItems) kv.Value.Checked = _settings.AlongEdge == null && kv.Key == _settings.Position;
+            foreach (var kv in _opacityItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.BackgroundOpacity) < 0.001;
+            if (_dotsItem != null) _dotsItem.Checked = _settings.ShowQuotaDots;
+            if (_titleItem != null) _titleItem.Checked = _settings.ShowCompactTitle;
+            if (_fullscreenItem != null) _fullscreenItem.Checked = _settings.HideOnFullscreen;
             foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
             if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
             if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
