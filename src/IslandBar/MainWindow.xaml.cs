@@ -48,6 +48,7 @@ namespace IslandBar
         private bool _fullscreenHidden;
         private bool _updatingVolumeUi;
         private bool _eqRunning;
+        private bool _hudIsMessage;
 
         private readonly DispatcherTimer _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         private readonly DispatcherTimer _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -304,8 +305,16 @@ namespace IslandBar
                 case IslandMode.Expanded:
                     return new Size(480, 256);
                 case IslandMode.Hud:
+                    if (IsSide && !_hudIsMessage) return new Size(44, 180);
                     return new Size(300, 40);
                 default:
+                    if (IsSide)
+                    {
+                        // 直式窄條：上下各留 10，內容高度依狀態而定
+                        double h = _currentMedia != null ? 68 : 58;
+                        if (_timerRunning) h += 22;
+                        return new Size(40, h);
+                    }
                     if (_currentMedia != null) return new Size(300, 34);
                     if (_timerRunning) return new Size(200, 34);
                     return new Size(150, 34);
@@ -333,8 +342,11 @@ namespace IslandBar
                 Island.Height = size.Height;
             }
 
-            ShowView(CompactView, _mode == IslandMode.Compact, animate);
-            ShowView(HudView, _mode == IslandMode.Hud, animate);
+            bool side = IsSide;
+            ShowView(CompactView, _mode == IslandMode.Compact && !side, animate);
+            ShowView(SideCompactView, _mode == IslandMode.Compact && side, animate);
+            ShowView(HudView, _mode == IslandMode.Hud && (!side || _hudIsMessage), animate);
+            ShowView(SideHudView, _mode == IslandMode.Hud && side && !_hudIsMessage, animate);
             ShowView(ExpandedView, _mode == IslandMode.Expanded, animate);
 
             // 自動隱藏：非收合狀態一律露出；收合狀態排程收回
@@ -418,6 +430,9 @@ namespace IslandBar
         private void ShowHud(string glyph, double? progress, string valueText, string message, TimeSpan duration)
         {
             HudGlyph.Text = glyph;
+            SideHudGlyph.Text = glyph;
+            bool wasMessage = _hudIsMessage;
+            _hudIsMessage = message != null;
             if (message != null)
             {
                 HudMessage.Text = message;
@@ -434,12 +449,16 @@ namespace IslandBar
                 double target = Math.Clamp(progress ?? 0, 0, 1);
                 HudBarScale.BeginAnimation(ScaleTransform.ScaleXProperty,
                     new DoubleAnimation(target, TimeSpan.FromMilliseconds(120)));
+                SideHudValue.Text = valueText ?? "";
+                SideHudBarScale.BeginAnimation(ScaleTransform.ScaleYProperty,
+                    new DoubleAnimation(target, TimeSpan.FromMilliseconds(120)));
             }
 
             _hudTimer.Stop();
             _hudTimer.Interval = duration;
             _hudTimer.Start();
             if (_mode != IslandMode.Hud) SetMode(IslandMode.Hud);
+            else if (wasMessage != _hudIsMessage) ApplyMode(true); // HUD 類型變了（訊息 ↔ 音量）
         }
 
         // ================================================================
@@ -496,6 +515,8 @@ namespace IslandBar
             {
                 CompactMedia.Visibility = Visibility.Collapsed;
                 CompactIdle.Visibility = Visibility.Visible;
+                SideMedia.Visibility = Visibility.Collapsed;
+                SideIdle.Visibility = Visibility.Visible;
                 MediaContent.Visibility = Visibility.Collapsed;
                 NoMediaPanel.Visibility = Visibility.Visible;
                 SetEqualizer(false);
@@ -504,6 +525,8 @@ namespace IslandBar
             {
                 CompactMedia.Visibility = Visibility.Visible;
                 CompactIdle.Visibility = Visibility.Collapsed;
+                SideMedia.Visibility = Visibility.Visible;
+                SideIdle.Visibility = Visibility.Collapsed;
                 MediaContent.Visibility = Visibility.Visible;
                 NoMediaPanel.Visibility = Visibility.Collapsed;
 
@@ -519,15 +542,19 @@ namespace IslandBar
                     brush.Freeze();
                     MediaArt.Background = brush;
                     CompactArt.Background = brush;
+                    SideArt.Background = brush;
                     MediaArtPlaceholder.Visibility = Visibility.Collapsed;
                     CompactArtPlaceholder.Visibility = Visibility.Collapsed;
+                    SideArtPlaceholder.Visibility = Visibility.Collapsed;
                 }
                 else
                 {
                     MediaArt.Background = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF));
                     CompactArt.Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
+                    SideArt.Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
                     MediaArtPlaceholder.Visibility = Visibility.Visible;
                     CompactArtPlaceholder.Visibility = Visibility.Visible;
+                    SideArtPlaceholder.Visibility = Visibility.Visible;
                 }
 
                 SetEqualizer(info.IsPlaying);
@@ -569,7 +596,10 @@ namespace IslandBar
             _eqRunning = running;
             double[] durations = { 0.42, 0.55, 0.36, 0.48 };
             int i = 0;
-            foreach (var child in EqBars.Children)
+            var bars = new System.Collections.Generic.List<UIElement>();
+            foreach (UIElement c in EqBars.Children) bars.Add(c);
+            foreach (UIElement c in SideEqBars.Children) bars.Add(c);
+            foreach (var child in bars)
             {
                 if (child is Rectangle rect && rect.RenderTransform is ScaleTransform st)
                 {
@@ -622,6 +652,8 @@ namespace IslandBar
             var now = DateTime.Now;
             string clock = _settings.Use24Hour ? now.ToString("HH:mm") : now.ToString("h:mm tt", ZhTw);
             CompactClock.Text = clock;
+            SideClockH.Text = _settings.Use24Hour ? now.ToString("HH") : now.ToString("%h");
+            SideClockM.Text = now.ToString("mm");
             HeaderTime.Text = clock;
             HeaderDate.Text = now.ToString("M月d日 dddd", ZhTw);
 
@@ -896,10 +928,13 @@ namespace IslandBar
             {
                 CompactTimer.Text = GTimer + " " + text;
                 CompactTimer.Visibility = Visibility.Visible;
+                SideTimer.Text = text;
+                SideTimer.Visibility = Visibility.Visible;
             }
             else
             {
                 CompactTimer.Visibility = Visibility.Collapsed;
+                SideTimer.Visibility = Visibility.Collapsed;
             }
         }
 

@@ -278,6 +278,54 @@
                     </Grid>
                 </Grid>
 
+                <!-- ================= 側邊收合（左側 / 右側）：直式窄條 ================= -->
+                <StackPanel x:Name="SideCompactView" Width="40" HorizontalAlignment="Center" VerticalAlignment="Top"
+                            Margin="0,10,0,0" Visibility="Collapsed">
+                    <StackPanel x:Name="SideIdle" HorizontalAlignment="Center">
+                        <TextBlock x:Name="SideClockH" Text="23" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="SideClockM" Text="44" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   Foreground="{StaticResource Secondary}" />
+                    </StackPanel>
+                    <StackPanel x:Name="SideMedia" HorizontalAlignment="Center" Visibility="Collapsed">
+                        <Border x:Name="SideArt" Width="26" Height="26" CornerRadius="7" Background="#26FFFFFF" HorizontalAlignment="Center">
+                            <TextBlock x:Name="SideArtPlaceholder" Style="{StaticResource Glyph}" Text="&#xE8D6;" FontSize="12" />
+                        </Border>
+                        <StackPanel x:Name="SideEqBars" Orientation="Horizontal" HorizontalAlignment="Center" Height="14" Margin="0,8,0,0">
+                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
+                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                            </Rectangle>
+                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
+                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                            </Rectangle>
+                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
+                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                            </Rectangle>
+                            <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource Accent}" Margin="1,0" RenderTransformOrigin="0.5,1">
+                                <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
+                            </Rectangle>
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock x:Name="SideTimer" Text="" FontSize="10" FontWeight="SemiBold" Foreground="#FFB454"
+                               HorizontalAlignment="Center" Margin="0,8,0,0" Visibility="Collapsed" />
+                </StackPanel>
+
+                <!-- ================= 側邊 HUD：直式音量條 ================= -->
+                <Grid x:Name="SideHudView" Width="44" Height="180" HorizontalAlignment="Center" VerticalAlignment="Top" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="34" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="38" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="SideHudValue" Text="50" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Grid Grid.Row="1" Width="5" HorizontalAlignment="Center">
+                        <Border CornerRadius="2.5" Background="{StaticResource TrackBg}" />
+                        <Border CornerRadius="2.5" Background="White" RenderTransformOrigin="0.5,1">
+                            <Border.RenderTransform><ScaleTransform x:Name="SideHudBarScale" ScaleY="0.5" /></Border.RenderTransform>
+                        </Border>
+                    </Grid>
+                    <TextBlock x:Name="SideHudGlyph" Grid.Row="2" Style="{StaticResource Glyph}" Text="&#xE767;" FontSize="14" />
+                </Grid>
+
                 <!-- ================= HUD（音量 / 計時結束） ================= -->
                 <Grid x:Name="HudView" Height="40" Width="300" VerticalAlignment="Top" HorizontalAlignment="Center"
                       Visibility="Collapsed">
