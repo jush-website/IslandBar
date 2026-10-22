@@ -168,8 +168,27 @@ namespace IslandBar
 
         private bool IsSide => _settings.Position == IslandPosition.Left || _settings.Position == IslandPosition.Right;
 
+        public const double MinScale = 0.7;
+        public const double MaxScale = 1.6;
+        private const double BaseWindowWidth = 560;
+        private const double BaseWindowHeight = 310;
+
+        /// <summary>設定變更時（例如 Ctrl+滾輪縮放）通知系統匣選單同步</summary>
+        public event Action SettingsChanged;
+
+        /// <summary>整體縮放（文字、圖示、動態島大小一起放大縮小）</summary>
+        private void ApplyScale()
+        {
+            double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
+            Island.LayoutTransform = Math.Abs(sc - 1.0) < 0.001 ? Transform.Identity : new ScaleTransform(sc, sc);
+            TextOptions.SetTextFormattingMode(this, Math.Abs(sc - 1.0) < 0.001 ? TextFormattingMode.Display : TextFormattingMode.Ideal);
+            Width = BaseWindowWidth * sc;
+            Height = BaseWindowHeight * sc;
+        }
+
         private void PositionWindow()
         {
+            ApplyScale();
             double sw = SystemParameters.PrimaryScreenWidth;
             double sh = SystemParameters.PrimaryScreenHeight;
             double off = Math.Max(0, _settings.TopOffset);
@@ -418,6 +437,21 @@ namespace IslandBar
 
         private void Island_MouseWheel(object sender, MouseWheelEventArgs e)
         {
+            // Ctrl + 滾輪 = 放大縮小
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            {
+                double sc = Math.Round(Math.Clamp(_settings.Scale + (e.Delta > 0 ? 0.1 : -0.1), MinScale, MaxScale), 2);
+                if (Math.Abs(sc - _settings.Scale) > 0.001)
+                {
+                    _settings.Scale = sc;
+                    _settings.Save();
+                    PositionWindow();
+                    SettingsChanged?.Invoke();
+                }
+                e.Handled = true;
+                return;
+            }
+
             // 在動態島上滾滾輪 = 調整音量（展開時滑桿區塊以外也適用）
             _audio.Step(e.Delta > 0 ? 0.02f : -0.02f);
             e.Handled = true;

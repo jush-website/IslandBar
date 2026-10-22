@@ -20,6 +20,9 @@ namespace IslandBar
         /// <summary>動態島位置：TopCenter / TopLeft / TopRight / Left / Right</summary>
         public IslandPosition Position { get; set; } = IslandPosition.TopCenter;
 
+        /// <summary>整體大小（文字與圖示一起縮放），1.0 = 100%，範圍 0.7 ~ 1.6</summary>
+        public double Scale { get; set; } = 1.0;
+
         /// <summary>自動隱藏到螢幕邊緣，滑鼠碰到才滑出來</summary>
         public bool AutoHide { get; set; } = false;
 

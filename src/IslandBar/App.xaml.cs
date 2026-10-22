@@ -25,6 +25,8 @@ namespace IslandBar
 
         private readonly Dictionary<IslandPosition, Forms.ToolStripMenuItem> _positionItems =
             new Dictionary<IslandPosition, Forms.ToolStripMenuItem>();
+        private readonly Dictionary<double, Forms.ToolStripMenuItem> _scaleItems =
+            new Dictionary<double, Forms.ToolStripMenuItem>();
         private Forms.ToolStripMenuItem _autoHideItem;
         private Forms.ToolStripMenuItem _autoUpdateItem;
         private Forms.ToolStripMenuItem _installUpdateItem;
@@ -46,6 +48,7 @@ namespace IslandBar
 
             _settings = AppSettings.Load();
             _window = new MainWindow(_settings);
+            _window.SettingsChanged += () => SyncMenu();
             _window.Show();
 
             CreateTrayIcon();
@@ -78,6 +81,23 @@ namespace IslandBar
             AddPosition(position, IslandPosition.TopRight, "右上");
             AddPosition(position, IslandPosition.Left, "左側");
             AddPosition(position, IslandPosition.Right, "右側");
+
+            // 大小
+            var size = new Forms.ToolStripMenuItem("文字／大小");
+            foreach (var sc in new[] { 0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6 })
+            {
+                double value = sc;
+                var item = new Forms.ToolStripMenuItem($"{value * 100:0}%");
+                item.Click += (s, e) =>
+                {
+                    _settings.Scale = value;
+                    SaveAndApply();
+                };
+                _scaleItems[value] = item;
+                size.DropDownItems.Add(item);
+            }
+            size.DropDownItems.Add(new Forms.ToolStripSeparator());
+            size.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在動態島上按住 Ctrl 滾滾輪也能縮放") { Enabled = false });
 
             _autoHideItem = new Forms.ToolStripMenuItem("自動隱藏到螢幕邊緣") { CheckOnClick = true };
             _autoHideItem.CheckedChanged += (s, e) =>
@@ -152,6 +172,7 @@ namespace IslandBar
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(toggle);
             menu.Items.Add(position);
+            menu.Items.Add(size);
             menu.Items.Add(_autoHideItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(autoStart);
@@ -196,6 +217,7 @@ namespace IslandBar
         private void SyncMenu()
         {
             foreach (var kv in _positionItems) kv.Value.Checked = kv.Key == _settings.Position;
+            foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
             if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
             if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
         }
