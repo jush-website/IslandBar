@@ -224,7 +224,7 @@
                 HorizontalAlignment="Center" VerticalAlignment="Top"
                 Width="150" Height="34"
                 Background="#F50D0D0F"
-                BorderBrush="#1AFFFFFF" BorderThickness="1,0,1,1"
+                BorderBrush="Transparent" BorderThickness="0"
                 CornerRadius="0,0,18,18"
                 ClipToBounds="True"
                 MouseEnter="Island_MouseEnter"
@@ -371,6 +371,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="30" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!-- 頂列：日期時間 + 分頁 -->
@@ -391,6 +392,9 @@
                         <RadioButton x:Name="TabQuick" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE713;"
                                      ToolTip="快速設定" Checked="Tab_Checked" />
                     </StackPanel>
+
+                    <!-- 固定顯示的 AI 額度列（可在系統匣關閉） -->
+                    <WrapPanel x:Name="QuotaStrip" Grid.Row="2" Margin="0,6,0,0" Visibility="Collapsed" />
 
                     <!-- == 音樂 == -->
                     <Grid x:Name="PageMedia" Grid.Row="1" Margin="0,10,0,0">

@@ -189,7 +189,7 @@ namespace IslandBar
         public const double MinScale = 0.7;
         public const double MaxScale = 1.6;
         private const double BaseWindowWidth = 560;
-        private const double BaseWindowHeight = 310;
+        private const double BaseWindowHeight = 400; // 展開＋固定額度列時最高約 340
 
         /// <summary>設定變更時（例如 Ctrl+滾輪縮放）通知系統匣選單同步</summary>
         public event Action SettingsChanged;
@@ -219,7 +219,7 @@ namespace IslandBar
                 along = Math.Clamp(along, 0, 1);
                 if (IsSide)
                 {
-                    double half = 135 * sc; // 展開面板高度的一半，避免超出螢幕
+                    double half = (128 + _stripExtra / 2) * sc; // 展開面板高度的一半，避免超出螢幕
                     double cy = Math.Clamp(along * sh, half, sh - half);
                     Top = cy - Height / 2;
                     bool left = _settings.Position == IslandPosition.Left;
@@ -227,7 +227,7 @@ namespace IslandBar
                     Island.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
                     Island.VerticalAlignment = VerticalAlignment.Center;
                     Island.Margin = new Thickness(0);
-                    Island.BorderThickness = left ? new Thickness(0, 1, 1, 1) : new Thickness(1, 1, 0, 1);
+                    Island.BorderThickness = new Thickness(0);
                 }
                 else
                 {
@@ -238,7 +238,7 @@ namespace IslandBar
                     Island.HorizontalAlignment = HorizontalAlignment.Center;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(0);
-                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                    Island.BorderThickness = new Thickness(0);
                 }
                 return;
             }
@@ -250,35 +250,35 @@ namespace IslandBar
                     Island.HorizontalAlignment = HorizontalAlignment.Left;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(topSideMargin, 0, 0, 0);
-                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                    Island.BorderThickness = new Thickness(0);
                     break;
                 case IslandPosition.TopRight:
                     Left = sw - Width; Top = off;
                     Island.HorizontalAlignment = HorizontalAlignment.Right;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(0, 0, topSideMargin, 0);
-                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                    Island.BorderThickness = new Thickness(0);
                     break;
                 case IslandPosition.Left:
                     Left = off; Top = (sh - Height) / 2;
                     Island.HorizontalAlignment = HorizontalAlignment.Left;
                     Island.VerticalAlignment = VerticalAlignment.Center;
                     Island.Margin = new Thickness(0);
-                    Island.BorderThickness = new Thickness(0, 1, 1, 1);
+                    Island.BorderThickness = new Thickness(0);
                     break;
                 case IslandPosition.Right:
                     Left = sw - Width - off; Top = (sh - Height) / 2;
                     Island.HorizontalAlignment = HorizontalAlignment.Right;
                     Island.VerticalAlignment = VerticalAlignment.Center;
                     Island.Margin = new Thickness(0);
-                    Island.BorderThickness = new Thickness(1, 1, 0, 1);
+                    Island.BorderThickness = new Thickness(0);
                     break;
                 default: // TopCenter
                     Left = (sw - Width) / 2; Top = off;
                     Island.HorizontalAlignment = HorizontalAlignment.Center;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(0);
-                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                    Island.BorderThickness = new Thickness(0);
                     break;
             }
         }
@@ -372,7 +372,7 @@ namespace IslandBar
             switch (_mode)
             {
                 case IslandMode.Expanded:
-                    return new Size(480, 256);
+                    return new Size(480, 256 + _stripExtra);
                 case IslandMode.Hud:
                     if (IsSide && !_hudIsMessage) return new Size(44, 180);
                     return new Size(_hudIsMessage ? 380 : 300, 40);
@@ -743,6 +743,7 @@ namespace IslandBar
             PageQuick.Visibility = TabQuick.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageQuota.Visibility = TabQuota.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             if (TabQuota.IsChecked == true) BuildQuotaList();
+            UpdateQuotaStrip();
 
             if (TabStats.IsChecked == true) UpdateStatsUi();
             if (TabQuick.IsChecked == true) UpdateDarkModeTile();
@@ -904,7 +905,9 @@ namespace IslandBar
         {
             double a = Math.Clamp(_settings.BackgroundOpacity, 0.2, 1.0);
             Island.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(a * 255), 0x0D, 0x0D, 0x0F));
-            Island.BorderBrush = new SolidColorBrush(Color.FromArgb((byte)Math.Round(a * 0x1A), 0xFF, 0xFF, 0xFF));
+            // 不畫描邊：WPF 的圓角配上半透明白邊會在弧線處出現白色光暈
+            Island.BorderBrush = Brushes.Transparent;
+            Island.BorderThickness = new Thickness(0);
             if (Island.Effect is System.Windows.Media.Effects.DropShadowEffect shadow) shadow.Opacity = 0.45 * a;
         }
 
@@ -970,7 +973,7 @@ namespace IslandBar
             Island.HorizontalAlignment = HorizontalAlignment.Center;
             Island.VerticalAlignment = VerticalAlignment.Center;
             Island.Margin = new Thickness(0);
-            Island.BorderThickness = new Thickness(1);
+            Island.BorderThickness = new Thickness(0);
             Island.Opacity = 0.9;
             ApplyMode(animate: false);
         }
@@ -1097,6 +1100,7 @@ namespace IslandBar
             else UpdateDots();
 
             if (_mode == IslandMode.Expanded && TabQuota.IsChecked == true) BuildQuotaList();
+            UpdateQuotaStrip();
         }
 
         private void RebuildDots()
@@ -1152,6 +1156,60 @@ namespace IslandBar
                         set[i] = (dot, alert);
                     }
                 }
+            }
+        }
+
+        // ---------------- 展開面板底部固定的 AI 額度列 ----------------
+
+        private double _stripExtra;
+        private string _stripSignature = "";
+
+        private void UpdateQuotaStrip()
+        {
+            var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
+            var items = _settings.PinQuotaStrip && TabQuota.IsChecked != true
+                ? _allItems.Where(i => i.Group != "sys" && !hidden.Contains(i.Label)).ToList()
+                : new List<QuotaItem>();
+
+            string sig = string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}"));
+            if (sig != _stripSignature)
+            {
+                _stripSignature = sig;
+                QuotaStrip.Children.Clear();
+                var secondary = (Brush)FindResource("Secondary");
+                foreach (var it in items)
+                {
+                    var color = LevelColor(it.Percent);
+                    var chip = new Border
+                    {
+                        CornerRadius = new CornerRadius(8),
+                        Background = (Brush)FindResource("TileBg"),
+                        Padding = new Thickness(7, 2, 7, 2),
+                        Margin = new Thickness(0, 0, 4, 4),
+                        ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "
+" + it.Tip
+                    };
+                    var sp = new StackPanel { Orientation = Orientation.Horizontal };
+                    sp.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
+                    sp.Children.Add(new TextBlock { Text = it.Label, FontSize = 10, Foreground = secondary, Margin = new Thickness(5, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
+                    sp.Children.Add(new TextBlock { Text = it.Text, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
+                    chip.Child = sp;
+                    QuotaStrip.Children.Add(chip);
+                }
+            }
+
+            QuotaStrip.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            double extra = 0;
+            if (items.Count > 0)
+            {
+                QuotaStrip.Measure(new Size(448, double.PositiveInfinity));
+                extra = Math.Ceiling(QuotaStrip.DesiredSize.Height); // 已含上方 6px 間距
+            }
+            if (Math.Abs(extra - _stripExtra) > 0.5)
+            {
+                _stripExtra = extra;
+                ExpandedView.Height = 226 + _stripExtra;
+                if (_mode == IslandMode.Expanded) ApplyMode(true);
             }
         }
 

@@ -26,6 +26,9 @@ namespace IslandBar
         /// <summary>背景不透明度 0.2 ~ 1.0</summary>
         public double BackgroundOpacity { get; set; } = 0.96;
 
+        /// <summary>展開面板的每個分頁底部固定顯示 AI 額度</summary>
+        public bool PinQuotaStrip { get; set; } = true;
+
         /// <summary>收合時顯示 AI 額度點點</summary>
         public bool ShowQuotaDots { get; set; } = true;
 

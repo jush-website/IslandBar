@@ -32,6 +32,7 @@ namespace IslandBar
         private Forms.ToolStripMenuItem _recentItem;
         private readonly List<string> _recent = new List<string>();
         private Forms.ToolStripMenuItem _dotsItem;
+        private Forms.ToolStripMenuItem _pinItem;
         private Forms.ToolStripMenuItem _titleItem;
         private Forms.ToolStripMenuItem _fullscreenItem;
         private Forms.ToolStripMenuItem _autoHideItem;
@@ -130,6 +131,14 @@ namespace IslandBar
             showItems.DropDown.Closing += (s, e) =>
             {
                 if (e.CloseReason == Forms.ToolStripDropDownCloseReason.ItemClicked) e.Cancel = true;
+            };
+
+            _pinItem = new Forms.ToolStripMenuItem("展開時固定顯示 AI 額度") { CheckOnClick = true };
+            _pinItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.PinQuotaStrip == _pinItem.Checked) return;
+                _settings.PinQuotaStrip = _pinItem.Checked;
+                SaveAndApply();
             };
 
             _titleItem = new Forms.ToolStripMenuItem("收合時顯示歌名") { CheckOnClick = true };
@@ -247,6 +256,7 @@ namespace IslandBar
             menu.Items.Add(_fullscreenItem);
             menu.Items.Add(_dotsItem);
             menu.Items.Add(showItems);
+            menu.Items.Add(_pinItem);
             menu.Items.Add(_titleItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(autoStart);
@@ -294,6 +304,7 @@ namespace IslandBar
             foreach (var kv in _positionItems) kv.Value.Checked = _settings.AlongEdge == null && kv.Key == _settings.Position;
             foreach (var kv in _opacityItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.BackgroundOpacity) < 0.001;
             if (_dotsItem != null) _dotsItem.Checked = _settings.ShowQuotaDots;
+            if (_pinItem != null) _pinItem.Checked = _settings.PinQuotaStrip;
             if (_titleItem != null) _titleItem.Checked = _settings.ShowCompactTitle;
             if (_fullscreenItem != null) _fullscreenItem.Checked = _settings.HideOnFullscreen;
             foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
