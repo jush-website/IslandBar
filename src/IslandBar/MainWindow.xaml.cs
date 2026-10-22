@@ -1186,8 +1186,7 @@ namespace IslandBar
                         Background = (Brush)FindResource("TileBg"),
                         Padding = new Thickness(7, 2, 7, 2),
                         Margin = new Thickness(0, 0, 4, 4),
-                        ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "
-" + it.Tip
+                        ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "\n" + it.Tip
                     };
                     var sp = new StackPanel { Orientation = Orientation.Horizontal };
                     sp.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
