@@ -5,6 +5,12 @@
 
 > 第一次執行若出現「Windows 已保護您的電腦」，點「其他資訊 → 仍要執行」。
 
+## v1.4.2 新功能：Word / PowerPoint 轉 PDF
+
+- 把 **.docx、.doc、.pptx、.ppt** 拖到動態島上 → 朝「PDF」放開，就會在原檔旁邊產生 PDF（可以一次拖多個，Word 和 PowerPoint 混在一起也可以）。
+- 會依序使用電腦上有裝的 **Microsoft Office → WPS Office → LibreOffice**，版面跟原檔一樣。三個都沒裝的話會提示安裝。
+- 如果你本來就開著 Word / PowerPoint，轉完不會把它關掉。
+
 ## v1.4.1 修正：AI 額度和原本的 ai-quota-widget 一致
 
 - **所有額度都會顯示**：Codex（5 小時、每週，以及各模型的額度）、Claude（5 小時、每週、各模型）、Antigravity（每個模型一項，同模型的 High/Medium/Low 合併）。

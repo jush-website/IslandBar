@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace IslandBar.Conversion
 {
-    public enum FileKind { Image, Pdf, Video, Audio, Other }
+    public enum FileKind { Image, Pdf, Video, Audio, Document, Other }
 
     public sealed class WheelAction
     {
@@ -24,6 +24,7 @@ namespace IslandBar.Conversion
         private static readonly HashSet<string> PdfExt = new HashSet<string> { "pdf" };
         private static readonly HashSet<string> VideoExt = new HashSet<string>
             { "mp4", "mov", "m4v", "mkv", "avi", "wmv", "webm", "3gp", "mpg", "mpeg", "ts", "mts", "m2ts" };
+        private static readonly HashSet<string> DocExt = new HashSet<string> { "doc", "docx", "ppt", "pptx" };
         private static readonly HashSet<string> AudioExt = new HashSet<string>
             { "mp3", "m4a", "aac", "wav", "wma", "flac", "ogg", "opus", "aiff", "aif", "alac", "amr" };
 
@@ -37,6 +38,7 @@ namespace IslandBar.Conversion
                 if (PdfExt.Contains(e)) return FileKind.Pdf;
                 if (VideoExt.Contains(e)) return FileKind.Video;
                 if (AudioExt.Contains(e)) return FileKind.Audio;
+                if (DocExt.Contains(e)) return FileKind.Document;
                 return FileKind.Other;
             }).Distinct().ToList();
             return kinds.Count == 1 ? kinds[0] : FileKind.Other;
@@ -48,6 +50,7 @@ namespace IslandBar.Conversion
             FileKind.Pdf => "PDF",
             FileKind.Video => "影片",
             FileKind.Audio => "音訊",
+            FileKind.Document => "文件",
             _ => "檔案"
         };
 
@@ -57,6 +60,7 @@ namespace IslandBar.Conversion
             FileKind.Pdf => G(0xE8A5),
             FileKind.Video => G(0xE714),
             FileKind.Audio => G(0xE8D6),
+            FileKind.Document => G(0xE8A5),
             _ => G(0xE8B7)
         };
 
@@ -152,6 +156,13 @@ namespace IslandBar.Conversion
                         A("單聲道", "MP3", 0xE767, (f, p) => MediaOps.Mono(f, p)),
                         Zip, CopyPath, Hash,
                     });
+
+                case FileKind.Document:
+                    return (new List<WheelAction>
+                    {
+                        A("PDF", "保留版面", 0xE8A5, (f, p) => OfficeOps.ToPdf(f, p)),
+                        Zip, CopyPath, CopyName, Hash,
+                    }, null);
 
                 default:
                     return (new List<WheelAction> { Zip, CopyPath, CopyName, Hash }, null);
