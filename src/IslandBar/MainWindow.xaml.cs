@@ -32,6 +32,7 @@ namespace IslandBar
         private static readonly string GDisk = char.ConvertFromUtf32(0xEDA2);
         private static readonly string GBattery = char.ConvertFromUtf32(0xE83F);
         private static readonly string GCharging = char.ConvertFromUtf32(0xEA93);
+        private static readonly string GInfo = char.ConvertFromUtf32(0xE946);
 
         private static readonly CultureInfo ZhTw = new CultureInfo("zh-TW");
 
@@ -55,6 +56,9 @@ namespace IslandBar
         private readonly DispatcherTimer _expandDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
         private readonly DispatcherTimer _collapseDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
         private readonly DispatcherTimer _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1600) };
+        private readonly DispatcherTimer _autoHideDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+        private bool _hiddenToEdge;
+        private DateTime _peekUntil = DateTime.MinValue;
 
         // 計時器
         private TimeSpan _timerSet = TimeSpan.Zero;
@@ -82,6 +86,7 @@ namespace IslandBar
             _expandDelay.Tick += (s, e) => { _expandDelay.Stop(); SetMode(IslandMode.Expanded); };
             _collapseDelay.Tick += (s, e) => { _collapseDelay.Stop(); if (_mode == IslandMode.Expanded) SetMode(IslandMode.Compact); };
             _hudTimer.Tick += (s, e) => { _hudTimer.Stop(); if (_mode == IslandMode.Hud) SetMode(IslandMode.Compact); };
+            _autoHideDelay.Tick += (s, e) => AutoHideTick();
 
             SystemEvents.DisplaySettingsChanged += (s, e) => Dispatcher.BeginInvoke(new Action(PositionWindow));
         }
@@ -126,12 +131,21 @@ namespace IslandBar
             await RefreshWeatherAsync();
         }
 
-        public void ReloadSettings(AppSettings settings)
+        public void ApplySettings(AppSettings settings)
         {
             _settings = settings;
             PositionWindow();
+            ApplyMode(animate: false);
+            if (!_settings.AutoHide) SetEdgeHidden(false, animate: true);
             UiTick();
             _ = RefreshWeatherAsync();
+        }
+
+        /// <summary>在動態島上短暫顯示一則訊息（例如更新進度）</summary>
+        public void ShowNotice(string text, TimeSpan duration)
+        {
+            if (_userHidden || _fullscreenHidden) return;
+            ShowHud(GInfo, null, null, text, duration);
         }
 
         public void ToggleUserHidden()
@@ -150,11 +164,125 @@ namespace IslandBar
             Close();
         }
 
+        private bool IsSide => _settings.Position == IslandPosition.Left || _settings.Position == IslandPosition.Right;
+
         private void PositionWindow()
         {
-            var wa = SystemParameters.PrimaryScreenWidth;
-            Left = (wa - Width) / 2;
-            Top = _settings.TopOffset;
+            double sw = SystemParameters.PrimaryScreenWidth;
+            double sh = SystemParameters.PrimaryScreenHeight;
+            double off = Math.Max(0, _settings.TopOffset);
+            const double topSideMargin = 24; // 左上 / 右上 離左右邊的距離
+
+            switch (_settings.Position)
+            {
+                case IslandPosition.TopLeft:
+                    Left = 0; Top = off;
+                    Island.HorizontalAlignment = HorizontalAlignment.Left;
+                    Island.VerticalAlignment = VerticalAlignment.Top;
+                    Island.Margin = new Thickness(topSideMargin, 0, 0, 0);
+                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                    break;
+                case IslandPosition.TopRight:
+                    Left = sw - Width; Top = off;
+                    Island.HorizontalAlignment = HorizontalAlignment.Right;
+                    Island.VerticalAlignment = VerticalAlignment.Top;
+                    Island.Margin = new Thickness(0, 0, topSideMargin, 0);
+                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                    break;
+                case IslandPosition.Left:
+                    Left = off; Top = (sh - Height) / 2;
+                    Island.HorizontalAlignment = HorizontalAlignment.Left;
+                    Island.VerticalAlignment = VerticalAlignment.Center;
+                    Island.Margin = new Thickness(0);
+                    Island.BorderThickness = new Thickness(0, 1, 1, 1);
+                    break;
+                case IslandPosition.Right:
+                    Left = sw - Width - off; Top = (sh - Height) / 2;
+                    Island.HorizontalAlignment = HorizontalAlignment.Right;
+                    Island.VerticalAlignment = VerticalAlignment.Center;
+                    Island.Margin = new Thickness(0);
+                    Island.BorderThickness = new Thickness(1, 1, 0, 1);
+                    break;
+                default: // TopCenter
+                    Left = (sw - Width) / 2; Top = off;
+                    Island.HorizontalAlignment = HorizontalAlignment.Center;
+                    Island.VerticalAlignment = VerticalAlignment.Top;
+                    Island.Margin = new Thickness(0);
+                    Island.BorderThickness = new Thickness(1, 0, 1, 1);
+                    break;
+            }
+        }
+
+        private CornerRadius CornersFor(double r)
+        {
+            switch (_settings.Position)
+            {
+                case IslandPosition.Left: return new CornerRadius(0, r, r, 0);
+                case IslandPosition.Right: return new CornerRadius(r, 0, 0, r);
+                default: return new CornerRadius(0, 0, r, r);
+            }
+        }
+
+        // ================================================================
+        //  自動隱藏到螢幕邊緣
+        // ================================================================
+
+        private const double EdgePeek = 4; // 隱藏時露出的寬度
+
+        private bool ShouldHideToEdge() =>
+            _settings.AutoHide && _mode == IslandMode.Compact && !Island.IsMouseOver && DateTime.Now >= _peekUntil;
+
+        private void ScheduleAutoHide()
+        {
+            _autoHideDelay.Stop();
+            if (_settings.AutoHide && _mode == IslandMode.Compact) _autoHideDelay.Start();
+        }
+
+        private void AutoHideTick()
+        {
+            _autoHideDelay.Stop();
+            if (ShouldHideToEdge()) SetEdgeHidden(true, animate: true);
+            else ScheduleAutoHide(); // 還在顯示中（滑鼠在上面 / 剛換歌），稍後再檢查
+        }
+
+        private void SetEdgeHidden(bool hide, bool animate)
+        {
+            _hiddenToEdge = hide;
+            var size = TargetSize();
+            double x = 0, y = 0;
+            if (hide)
+            {
+                switch (_settings.Position)
+                {
+                    case IslandPosition.Left: x = -(size.Width - EdgePeek); break;
+                    case IslandPosition.Right: x = size.Width - EdgePeek; break;
+                    default: y = -(size.Height - EdgePeek); break;
+                }
+            }
+
+            if (animate)
+            {
+                var dur = TimeSpan.FromMilliseconds(hide ? 320 : 220);
+                var ease = new CubicEase { EasingMode = hide ? EasingMode.EaseIn : EasingMode.EaseOut };
+                HideTransform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, dur) { EasingFunction = ease });
+                HideTransform.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, dur) { EasingFunction = ease });
+            }
+            else
+            {
+                HideTransform.BeginAnimation(TranslateTransform.XProperty, null);
+                HideTransform.BeginAnimation(TranslateTransform.YProperty, null);
+                HideTransform.X = x;
+                HideTransform.Y = y;
+            }
+        }
+
+        /// <summary>短暫露出（例如換歌時），之後再自動收回</summary>
+        private void Peek(TimeSpan duration)
+        {
+            if (!_settings.AutoHide) return;
+            _peekUntil = DateTime.Now + duration;
+            if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
+            ScheduleAutoHide();
         }
 
         // ================================================================
@@ -187,7 +315,7 @@ namespace IslandBar
         {
             var size = TargetSize();
             double radius = _mode == IslandMode.Expanded ? 26 : (_mode == IslandMode.Hud ? 20 : 18);
-            Island.CornerRadius = new CornerRadius(0, 0, radius, radius);
+            Island.CornerRadius = CornersFor(radius);
 
             if (animate)
             {
@@ -207,6 +335,21 @@ namespace IslandBar
             ShowView(CompactView, _mode == IslandMode.Compact, animate);
             ShowView(HudView, _mode == IslandMode.Hud, animate);
             ShowView(ExpandedView, _mode == IslandMode.Expanded, animate);
+
+            // 自動隱藏：非收合狀態一律露出；收合狀態排程收回
+            if (_mode != IslandMode.Compact)
+            {
+                _autoHideDelay.Stop();
+                if (_hiddenToEdge || HideTransform.X != 0 || HideTransform.Y != 0) SetEdgeHidden(false, animate);
+            }
+            else if (_hiddenToEdge && _settings.AutoHide)
+            {
+                SetEdgeHidden(true, animate); // 尺寸可能變了，重新計算位移
+            }
+            else
+            {
+                ScheduleAutoHide();
+            }
 
             if (_mode == IslandMode.Expanded)
             {
@@ -248,6 +391,8 @@ namespace IslandBar
         private void Island_MouseEnter(object sender, MouseEventArgs e)
         {
             _collapseDelay.Stop();
+            _autoHideDelay.Stop();
+            if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
             if (_mode != IslandMode.Expanded) _expandDelay.Start();
         }
 
@@ -255,6 +400,7 @@ namespace IslandBar
         {
             _expandDelay.Stop();
             if (_mode == IslandMode.Expanded) _collapseDelay.Start();
+            else if (_mode == IslandMode.Compact) ScheduleAutoHide();
         }
 
         private void Island_MouseWheel(object sender, MouseWheelEventArgs e)
@@ -337,7 +483,10 @@ namespace IslandBar
         private void OnMediaChanged(MediaInfo info)
         {
             bool hadMedia = _currentMedia != null;
+            string oldTitle = _currentMedia?.Title;
             _currentMedia = info;
+            if (info != null && info.Title != oldTitle && !string.IsNullOrEmpty(info.Title))
+                Peek(TimeSpan.FromSeconds(3)); // 換歌時短暫露出
 
             if (info == null)
             {

@@ -2,11 +2,30 @@ using System;
 using System.IO;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace IslandBar
 {
+    public enum IslandPosition
+    {
+        TopCenter,
+        TopLeft,
+        TopRight,
+        Left,
+        Right
+    }
+
     public class AppSettings
     {
+        /// <summary>動態島位置：TopCenter / TopLeft / TopRight / Left / Right</summary>
+        public IslandPosition Position { get; set; } = IslandPosition.TopCenter;
+
+        /// <summary>自動隱藏到螢幕邊緣，滑鼠碰到才滑出來</summary>
+        public bool AutoHide { get; set; } = false;
+
+        /// <summary>有新版本時自動下載並安裝</summary>
+        public bool AutoUpdate { get; set; } = true;
+
         /// <summary>天氣顯示的城市名稱（僅顯示用）</summary>
         public string City { get; set; } = "台北";
 
@@ -22,7 +41,7 @@ namespace IslandBar
         /// <summary>全螢幕應用程式（遊戲、影片）時自動隱藏</summary>
         public bool HideOnFullscreen { get; set; } = true;
 
-        /// <summary>動態島收合時離螢幕頂端的距離（px），0 = 貼齊頂端</summary>
+        /// <summary>動態島離螢幕邊緣的距離（px），0 = 貼齊</summary>
         public double TopOffset { get; set; } = 0;
 
         private static string Dir =>
@@ -33,7 +52,8 @@ namespace IslandBar
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Converters = { new JsonStringEnumConverter() }
         };
 
         public static AppSettings Load()
@@ -43,7 +63,11 @@ namespace IslandBar
                 if (File.Exists(FilePath))
                 {
                     var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions);
-                    if (s != null) return s;
+                    if (s != null)
+                    {
+                        s.Save(); // 補上新版本新增的欄位
+                        return s;
+                    }
                 }
             }
             catch { }

@@ -6,7 +6,7 @@
     <Platform>x64</Platform>
     <InstallerPlatform>x64</InstallerPlatform>
     <SuppressValidation>true</SuppressValidation>
-    <ProductVersion Condition="'$(ProductVersion)' == ''">1.0.0</ProductVersion>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\version.txt').Trim())</ProductVersion>
     <PublishDir Condition="'$(PublishDir)' == ''">$(MSBuildThisFileDirectory)..\publish\</PublishDir>
     <DefineConstants>PublishDir=$(PublishDir);ProductVersion=$(ProductVersion);AssetsDir=$(MSBuildThisFileDirectory)..\src\IslandBar\Assets\</DefineConstants>
   </PropertyGroup>

@@ -11,7 +11,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>IslandBar</AssemblyName>
     <RootNamespace>IslandBar</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version Condition="'$(Version)' == '' Or '$(Version)' == '1.0.0'">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\..\version.txt').Trim())</Version>
     <ApplicationIcon>Assets\island.ico</ApplicationIcon>
     <Product>IslandBar</Product>
     <Description>Dynamic Island for Windows</Description>

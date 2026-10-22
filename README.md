@@ -14,6 +14,9 @@
 | 展開 → ⚙ 快速設定 | 音量滑桿、靜音、深色模式切換、Wi‑Fi、藍牙、截圖、鎖定、設定 |
 
 其他：
+- **自動更新**：有新版本會自動下載安裝並重開（系統匣選單可關閉／手動檢查）
+- **自動隱藏**：收進螢幕邊緣只露出細邊，滑鼠碰到才滑出
+- **位置**：上方置中／左上／右上／左側／右側
 - 在動態島上滾滑鼠滾輪＝調整音量
 - 全螢幕（遊戲、影片）時自動隱藏
 - 系統匣圖示：隱藏／顯示、開機自動啟動、編輯設定、結束
@@ -21,7 +24,7 @@
 
 ## 安裝
 
-到 [Releases](../../releases) 或 [Actions](../../actions) 下載 `IslandBar-Setup-x.y.z.msi`，雙擊安裝即可
+到 [Releases](../../releases/latest) 下載 `IslandBar-Setup-x.y.z.msi`，雙擊安裝即可
 （安裝在目前使用者，不需要系統管理員權限；安裝完會自動啟動並設定開機啟動）。
 
 不想安裝的話，可以直接執行 `IslandBar-portable.exe`。
@@ -32,8 +35,13 @@
 
 系統匣圖示右鍵 →「編輯設定」，會開啟 `%AppData%\IslandBar\settings.json`：
 
+位置、自動隱藏、自動更新可以直接在系統匣選單切換；其他進階設定：
+
 ```json
 {
+  "Position": "TopCenter",
+  "AutoHide": false,
+  "AutoUpdate": true,
   "City": "台北",
   "Latitude": 25.033,
   "Longitude": 121.565,
@@ -50,8 +58,13 @@
 需要 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)，然後雙擊 `build.bat`，
 會產生 `publish\IslandBar.exe` 和 `dist\IslandBar-Setup.msi`。
 
-每次 push 到 `main`，GitHub Actions 會自動編譯並把 MSI 放在該次 Action 的 Artifacts；
-推一個 `v1.2.3` 這種 tag 會自動建立 Release。
+## 發新版本
+
+1. 改 `version.txt`（例如 `1.2.0`），並更新 `CHANGELOG-latest.md`
+2. push 到 `main`
+
+GitHub Actions 會自動編譯，發現這個版本還沒有 Release 就會建立 `v1.2.0` Release 並附上 MSI；
+已安裝的 IslandBar 會在幾小時內自動更新。版本號沒變的 push 只會編譯（檔案在 Actions 的 Artifacts）。
 
 ## 技術
 

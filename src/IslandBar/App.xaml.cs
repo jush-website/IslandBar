@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
+using IslandBar.Services;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 
@@ -17,6 +21,17 @@ namespace IslandBar
         private Mutex _mutex;
         private Forms.NotifyIcon _tray;
         private MainWindow _window;
+        private AppSettings _settings;
+
+        private readonly Dictionary<IslandPosition, Forms.ToolStripMenuItem> _positionItems =
+            new Dictionary<IslandPosition, Forms.ToolStripMenuItem>();
+        private Forms.ToolStripMenuItem _autoHideItem;
+        private Forms.ToolStripMenuItem _autoUpdateItem;
+        private Forms.ToolStripMenuItem _installUpdateItem;
+
+        private readonly DispatcherTimer _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(4) };
+        private UpdateInfo _pendingUpdate;
+        private bool _updating;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -29,16 +44,48 @@ namespace IslandBar
                 return;
             }
 
-            AppSettings settings = AppSettings.Load();
-            _window = new MainWindow(settings);
+            _settings = AppSettings.Load();
+            _window = new MainWindow(_settings);
             _window.Show();
 
             CreateTrayIcon();
+
+            // 啟動 30 秒後檢查一次更新，之後每 4 小時一次
+            var first = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            first.Tick += async (s, ev) => { first.Stop(); await CheckForUpdatesAsync(false); };
+            first.Start();
+            _updateTimer.Tick += async (s, ev) => await CheckForUpdatesAsync(false);
+            _updateTimer.Start();
         }
+
+        // ================================================================
+        //  系統匣選單
+        // ================================================================
 
         private void CreateTrayIcon()
         {
             var menu = new Forms.ContextMenuStrip();
+
+            var header = new Forms.ToolStripMenuItem($"IslandBar v{UpdateService.CurrentVersion}") { Enabled = false };
+
+            var toggle = new Forms.ToolStripMenuItem("隱藏 / 顯示動態島");
+            toggle.Click += (s, e) => _window?.ToggleUserHidden();
+
+            // 位置
+            var position = new Forms.ToolStripMenuItem("位置");
+            AddPosition(position, IslandPosition.TopCenter, "上方置中");
+            AddPosition(position, IslandPosition.TopLeft, "左上");
+            AddPosition(position, IslandPosition.TopRight, "右上");
+            AddPosition(position, IslandPosition.Left, "左側");
+            AddPosition(position, IslandPosition.Right, "右側");
+
+            _autoHideItem = new Forms.ToolStripMenuItem("自動隱藏到螢幕邊緣") { CheckOnClick = true };
+            _autoHideItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.AutoHide == _autoHideItem.Checked) return;
+                _settings.AutoHide = _autoHideItem.Checked;
+                SaveAndApply();
+            };
 
             var autoStart = new Forms.ToolStripMenuItem("開機時自動啟動")
             {
@@ -47,7 +94,22 @@ namespace IslandBar
             };
             autoStart.CheckedChanged += (s, e) => SetAutoStart(autoStart.Checked);
 
-            var editSettings = new Forms.ToolStripMenuItem("編輯設定（天氣城市、時間格式）");
+            // 更新
+            _autoUpdateItem = new Forms.ToolStripMenuItem("自動更新") { CheckOnClick = true };
+            _autoUpdateItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.AutoUpdate == _autoUpdateItem.Checked) return;
+                _settings.AutoUpdate = _autoUpdateItem.Checked;
+                _settings.Save();
+            };
+
+            var checkUpdate = new Forms.ToolStripMenuItem("檢查更新");
+            checkUpdate.Click += async (s, e) => await CheckForUpdatesAsync(true);
+
+            _installUpdateItem = new Forms.ToolStripMenuItem("立即更新") { Visible = false, Font = new Font(menu.Font, System.Drawing.FontStyle.Bold) };
+            _installUpdateItem.Click += async (s, e) => { if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate); };
+
+            var editSettings = new Forms.ToolStripMenuItem("編輯進階設定（天氣城市、時間格式）");
             editSettings.Click += (s, e) =>
             {
                 try
@@ -58,16 +120,26 @@ namespace IslandBar
             };
 
             var reload = new Forms.ToolStripMenuItem("重新載入設定");
-            reload.Click += (s, e) => _window?.ReloadSettings(AppSettings.Load());
-
-            var toggle = new Forms.ToolStripMenuItem("隱藏 / 顯示動態島");
-            toggle.Click += (s, e) => _window?.ToggleUserHidden();
+            reload.Click += (s, e) =>
+            {
+                _settings = AppSettings.Load();
+                SyncMenu();
+                _window?.ApplySettings(_settings);
+            };
 
             var exit = new Forms.ToolStripMenuItem("結束");
             exit.Click += (s, e) => ExitApp();
 
+            menu.Items.Add(header);
+            menu.Items.Add(_installUpdateItem);
+            menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(toggle);
+            menu.Items.Add(position);
+            menu.Items.Add(_autoHideItem);
+            menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(autoStart);
+            menu.Items.Add(_autoUpdateItem);
+            menu.Items.Add(checkUpdate);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(editSettings);
             menu.Items.Add(reload);
@@ -82,7 +154,117 @@ namespace IslandBar
                 Visible = true
             };
             _tray.DoubleClick += (s, e) => _window?.ToggleUserHidden();
+            _tray.BalloonTipClicked += async (s, e) =>
+            {
+                if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate);
+            };
+
+            SyncMenu();
         }
+
+        private void AddPosition(Forms.ToolStripMenuItem parent, IslandPosition pos, string text)
+        {
+            var item = new Forms.ToolStripMenuItem(text);
+            item.Click += (s, e) =>
+            {
+                _settings.Position = pos;
+                SaveAndApply();
+            };
+            _positionItems[pos] = item;
+            parent.DropDownItems.Add(item);
+        }
+
+        private void SyncMenu()
+        {
+            foreach (var kv in _positionItems) kv.Value.Checked = kv.Key == _settings.Position;
+            if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
+            if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
+        }
+
+        private void SaveAndApply()
+        {
+            _settings.Save();
+            SyncMenu();
+            _window?.ApplySettings(_settings);
+        }
+
+        // ================================================================
+        //  自動更新
+        // ================================================================
+
+        private async Task CheckForUpdatesAsync(bool manual)
+        {
+            if (_updating) return;
+
+            var latest = await UpdateService.GetLatestAsync();
+            if (latest == null)
+            {
+                if (manual) Balloon("檢查更新失敗", "無法連線到 GitHub，請稍後再試。", Forms.ToolTipIcon.Warning);
+                return;
+            }
+
+            if (latest.Version <= UpdateService.CurrentVersion)
+            {
+                if (manual) Balloon("已是最新版本", $"目前版本 v{UpdateService.CurrentVersion}", Forms.ToolTipIcon.Info);
+                return;
+            }
+
+            _pendingUpdate = latest;
+            if (_installUpdateItem != null)
+            {
+                _installUpdateItem.Text = $"立即更新到 v{latest.Version}";
+                _installUpdateItem.Visible = true;
+            }
+
+            bool canAutoInstall = UpdateService.IsInstalled && latest.MsiUrl != null;
+            if (_settings.AutoUpdate && canAutoInstall)
+            {
+                await InstallUpdateAsync(latest);
+            }
+            else
+            {
+                Balloon($"有新版本 v{latest.Version}",
+                    canAutoInstall ? "點這裡立即更新。" : "點這裡開啟下載頁面。",
+                    Forms.ToolTipIcon.Info);
+            }
+        }
+
+        private async Task InstallUpdateAsync(UpdateInfo info)
+        {
+            if (_updating) return;
+
+            if (!UpdateService.IsInstalled || info.MsiUrl == null)
+            {
+                // 免安裝版：開啟下載頁
+                UpdateService.OpenReleasesPage(info.PageUrl);
+                return;
+            }
+
+            _updating = true;
+            try
+            {
+                _window?.ShowNotice($"正在下載更新 v{info.Version}…", TimeSpan.FromSeconds(4));
+                string msi = await UpdateService.DownloadAsync(info);
+                _window?.ShowNotice($"正在安裝 v{info.Version}，馬上回來", TimeSpan.FromSeconds(3));
+                await Task.Delay(1200);
+                UpdateService.RunInstaller(msi);
+                ExitApp();
+            }
+            catch
+            {
+                _updating = false;
+                Balloon("更新失敗", "下載或安裝失敗，點這裡再試一次。", Forms.ToolTipIcon.Warning);
+            }
+        }
+
+        private void Balloon(string title, string text, Forms.ToolTipIcon icon)
+        {
+            try { _tray?.ShowBalloonTip(5000, title, text, icon); } catch { }
+        }
+
+        // ================================================================
+        //  其他
+        // ================================================================
 
         private static Icon CreateTrayIconImage()
         {
@@ -139,6 +321,7 @@ namespace IslandBar
 
         private void ExitApp()
         {
+            _updateTimer.Stop();
             if (_tray != null)
             {
                 _tray.Visible = false;

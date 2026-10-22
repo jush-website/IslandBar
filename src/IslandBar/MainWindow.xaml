@@ -233,6 +233,9 @@
             <Border.Effect>
                 <DropShadowEffect BlurRadius="20" ShadowDepth="3" Direction="270" Opacity="0.45" Color="Black" />
             </Border.Effect>
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="HideTransform" X="0" Y="0" />
+            </Border.RenderTransform>
 
             <Grid>
                 <!-- ================= 收合狀態 ================= -->
