@@ -323,7 +323,7 @@
                                      ToolTip="快速設定" Checked="Tab_Checked" />
                     </StackPanel>
 
-                    <!-- ---------- 音樂 ---------- -->
+                    <!-- == 音樂 == -->
                     <Grid x:Name="PageMedia" Grid.Row="1" Margin="0,10,0,0">
                         <Grid x:Name="MediaContent">
                             <Grid.ColumnDefinitions>
@@ -391,7 +391,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- ---------- 日曆 + 計時器 ---------- -->
+                    <!-- == 日曆 + 計時器 == -->
                     <Grid x:Name="PageCalendar" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="246" />
@@ -461,7 +461,7 @@
                         </Border>
                     </Grid>
 
-                    <!-- ---------- 系統資訊 ---------- -->
+                    <!-- == 系統資訊 == -->
                     <UniformGrid x:Name="PageStats" Grid.Row="1" Columns="3" Rows="2" Margin="-4,6,-4,-4" Visibility="Collapsed">
                         <!-- 天氣 -->
                         <Border Style="{StaticResource StatTile}">
@@ -553,7 +553,7 @@
                         </Border>
                     </UniformGrid>
 
-                    <!-- ---------- 快速設定 ---------- -->
+                    <!-- == 快速設定 == -->
                     <Grid x:Name="PageQuick" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
