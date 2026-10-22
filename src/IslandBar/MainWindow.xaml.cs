@@ -20,7 +20,7 @@ namespace IslandBar
 {
     public partial class MainWindow : Window
     {
-        private enum IslandMode { Compact, Expanded, Hud }
+        private enum IslandMode { Compact, Expanded, Hud, Wheel }
 
         // Segoe Fluent / MDL2 圖示
         private static readonly string GPlay = char.ConvertFromUtf32(0xE768);
@@ -90,7 +90,7 @@ namespace IslandBar
             _weatherTimer.Tick += async (s, e) => await RefreshWeatherAsync();
             _watchTimer.Tick += (s, e) => WatchTick();
             _expandDelay.Tick += (s, e) => { _expandDelay.Stop(); SetMode(IslandMode.Expanded); };
-            _collapseDelay.Tick += (s, e) => { _collapseDelay.Stop(); if (_mode == IslandMode.Expanded) SetMode(IslandMode.Compact); };
+            _collapseDelay.Tick += (s, e) => { _collapseDelay.Stop(); if (_mode == IslandMode.Expanded || (_mode == IslandMode.Wheel && _wheelClickMode)) SetMode(IslandMode.Compact); };
             _hudTimer.Tick += (s, e) => { _hudTimer.Stop(); if (_mode == IslandMode.Hud) SetMode(IslandMode.Compact); };
             _autoHideDelay.Tick += (s, e) => AutoHideTick();
 
@@ -373,7 +373,9 @@ namespace IslandBar
                     return new Size(480, 256);
                 case IslandMode.Hud:
                     if (IsSide && !_hudIsMessage) return new Size(44, 180);
-                    return new Size(300, 40);
+                    return new Size(_hudIsMessage ? 380 : 300, 40);
+                case IslandMode.Wheel:
+                    return new Size(440, 300);
                 default:
                 {
                     int dots = _settings.ShowQuotaDots ? _dotCount : 0;
@@ -424,6 +426,8 @@ namespace IslandBar
             ShowView(HudView, _mode == IslandMode.Hud && (!side || _hudIsMessage), animate);
             ShowView(SideHudView, _mode == IslandMode.Hud && side && !_hudIsMessage, animate);
             ShowView(ExpandedView, _mode == IslandMode.Expanded, animate);
+            ShowView(WheelView, _mode == IslandMode.Wheel, animate);
+            HudView.Width = _hudIsMessage ? 380 : 300;
 
             // 自動隱藏：非收合狀態一律露出；收合狀態排程收回
             if (_mode != IslandMode.Compact)
@@ -483,6 +487,7 @@ namespace IslandBar
             _collapseDelay.Stop();
             _autoHideDelay.Stop();
             if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
+            if (_mode == IslandMode.Wheel) { _wheelMouseEntered = true; return; }
             if (_mode != IslandMode.Expanded) _expandDelay.Start();
         }
 
@@ -490,7 +495,7 @@ namespace IslandBar
         {
             if (_dragging) return;
             _expandDelay.Stop();
-            if (_mode == IslandMode.Expanded) _collapseDelay.Start();
+            if (_mode == IslandMode.Expanded || (_mode == IslandMode.Wheel && _wheelClickMode && _wheelMouseEntered)) _collapseDelay.Start();
             else if (_mode == IslandMode.Compact) ScheduleAutoHide();
         }
 
@@ -930,7 +935,7 @@ namespace IslandBar
 
         private void Island_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (IsInteractive(e.OriginalSource)) return;
+            if (_mode == IslandMode.Wheel || IsInteractive(e.OriginalSource)) return;
             _dragPending = true;
             _dragStart = CursorDip();
         }

@@ -6,6 +6,7 @@
 
 | 狀態 | 內容 |
 |---|---|
+| 🔄 格式轉換輪盤 | 把檔案拖到動態島上，朝格子方向放開就轉換（圖片／PDF／影片／音訊／ZIP／SHA-256），Shift 翻頁 |
 | 收合 | 時鐘；播放音樂時顯示封面、歌名與跳動音量條；計時器進行中顯示倒數 |
 | 音量 HUD | 用鍵盤／滾輪調整音量時自動彈出音量條 |
 | 展開 → 🎵 音樂 | 封面、歌名、歌手、進度條（可點擊跳轉）、上一首／播放／下一首 |
@@ -72,4 +73,6 @@ GitHub Actions 會自動編譯，發現這個版本還沒有 Release 就會建�
 
 ## 技術
 
-C# / WPF（.NET 8）、Windows SMTC（媒體）、NAudio（音量）、WiX v5（MSI）。
+C# / WPF（.NET 8）、Windows SMTC（媒體）、NAudio（音量）、Windows.Data.Pdf + PDFsharp + PdfPig（PDF）、MediaTranscoder（影音）、Windows.Media.Ocr（OCR）、WiX v5（MSI）。
+
+格式轉換輪盤的概念來自 [FormatWheel](https://github.com/Elise616/FormatWheel)（MIT License, © Elise616）。

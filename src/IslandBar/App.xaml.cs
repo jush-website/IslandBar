@@ -29,6 +29,8 @@ namespace IslandBar
             new Dictionary<double, Forms.ToolStripMenuItem>();
         private readonly Dictionary<double, Forms.ToolStripMenuItem> _opacityItems =
             new Dictionary<double, Forms.ToolStripMenuItem>();
+        private Forms.ToolStripMenuItem _recentItem;
+        private readonly List<string> _recent = new List<string>();
         private Forms.ToolStripMenuItem _dotsItem;
         private Forms.ToolStripMenuItem _titleItem;
         private Forms.ToolStripMenuItem _fullscreenItem;
@@ -54,6 +56,7 @@ namespace IslandBar
             _settings = AppSettings.Load();
             _window = new MainWindow(_settings);
             _window.SettingsChanged += () => SyncMenu();
+            _window.Converted += path => AddRecent(path);
             _window.Show();
 
             CreateTrayIcon();
@@ -75,6 +78,14 @@ namespace IslandBar
             var menu = new Forms.ContextMenuStrip();
 
             var header = new Forms.ToolStripMenuItem($"IslandBar v{UpdateService.CurrentVersion}") { Enabled = false };
+
+            var openWheel = new Forms.ToolStripMenuItem("格式轉換：選擇檔案…");
+            openWheel.Click += (s, e) =>
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "選擇要轉換的檔案（也可以直接把檔案拖到動態島上）" };
+                if (dlg.ShowDialog() == true) _window?.OpenWheelForFiles(dlg.FileNames);
+            };
+            _recentItem = new Forms.ToolStripMenuItem("最近轉換") { Enabled = false };
 
             var toggle = new Forms.ToolStripMenuItem("隱藏 / 顯示動態島");
             toggle.Click += (s, e) => _window?.ToggleUserHidden();
@@ -216,6 +227,9 @@ namespace IslandBar
             menu.Items.Add(header);
             menu.Items.Add(_installUpdateItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add(openWheel);
+            menu.Items.Add(_recentItem);
+            menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(toggle);
             menu.Items.Add(position);
             menu.Items.Add(size);
@@ -275,6 +289,31 @@ namespace IslandBar
             foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
             if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
             if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
+        }
+
+        private void AddRecent(string path)
+        {
+            _recent.Remove(path);
+            _recent.Insert(0, path);
+            while (_recent.Count > 8) _recent.RemoveAt(_recent.Count - 1);
+            if (_recentItem == null) return;
+            _recentItem.DropDownItems.Clear();
+            foreach (var p in _recent)
+            {
+                string target = p;
+                var item = new Forms.ToolStripMenuItem(System.IO.Path.GetFileName(target.TrimEnd('\\')) + "    " + System.IO.Path.GetDirectoryName(target));
+                item.Click += (s, e) =>
+                {
+                    try
+                    {
+                        // 在檔案總管中選取
+                        Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + target + "\"") { UseShellExecute = true });
+                    }
+                    catch { }
+                };
+                _recentItem.DropDownItems.Add(item);
+            }
+            _recentItem.Enabled = _recent.Count > 0;
         }
 
         private void SaveAndApply()

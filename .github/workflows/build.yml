@@ -39,18 +39,28 @@ jobs:
           Write-Host "version=$v publish=$publish"
 
       - name: Publish IslandBar.exe
-        run: >
-          dotnet publish src/IslandBar/IslandBar.csproj -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none
-          -p:Version=${{ steps.ver.outputs.version }}
-          -o publish
+        shell: pwsh
+        run: |
+          dotnet publish src/IslandBar/IslandBar.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none `
+            -p:Version=${{ steps.ver.outputs.version }} -o publish 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path build.log -Pattern ': error |error NU|error MSB|warning NU' | Select-Object -First 40 |
+              ForEach-Object { Write-Host ("::error::" + $_.Line.Trim()) }
+            exit 1
+          }
 
       - name: Build MSI
-        run: >
-          dotnet build installer/IslandBar.Installer.wixproj -c Release
-          -p:ProductVersion=${{ steps.ver.outputs.version }}
-          -p:PublishDir=${{ github.workspace }}\publish\
-          -o dist
+        shell: pwsh
+        run: |
+          dotnet build installer/IslandBar.Installer.wixproj -c Release `
+            -p:ProductVersion=${{ steps.ver.outputs.version }} `
+            -p:PublishDir=${{ github.workspace }}\publish\ -o dist 2>&1 | Tee-Object -FilePath msi.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path msi.log -Pattern ': error |error WIX|error NU|error MSB' | Select-Object -First 40 |
+              ForEach-Object { Write-Host ("::error::" + $_.Line.Trim()) }
+            exit 1
+          }
 
       - name: Collect
         shell: pwsh

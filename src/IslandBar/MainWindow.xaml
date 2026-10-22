@@ -233,7 +233,12 @@
                 PreviewMouseLeftButtonDown="Island_PreviewMouseLeftButtonDown"
                 PreviewMouseMove="Island_PreviewMouseMove"
                 PreviewMouseLeftButtonUp="Island_PreviewMouseLeftButtonUp"
-                LostMouseCapture="Island_LostMouseCapture">
+                LostMouseCapture="Island_LostMouseCapture"
+                AllowDrop="True"
+                DragEnter="Island_DragEnter"
+                DragOver="Island_DragOver"
+                DragLeave="Island_DragLeave"
+                Drop="Island_Drop">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="20" ShadowDepth="3" Direction="270" Opacity="0.45" Color="Black" />
             </Border.Effect>
@@ -353,7 +358,8 @@
                             </Border>
                         </Grid>
                         <TextBlock x:Name="HudMessage" Grid.Column="1" Grid.ColumnSpan="2" Margin="10,0,0,0" FontSize="13"
-                                   FontWeight="SemiBold" VerticalAlignment="Center" Visibility="Collapsed" />
+                                   FontWeight="SemiBold" VerticalAlignment="Center" Visibility="Collapsed"
+                                   TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="HudValue" Grid.Column="2" Text="50" FontSize="12" FontWeight="SemiBold"
                                    HorizontalAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
@@ -696,6 +702,13 @@
                             </Button>
                         </UniformGrid>
                     </Grid>
+                </Grid>
+
+                <!-- ================= 格式轉換輪盤（拖檔案進來時） ================= -->
+                <Grid x:Name="WheelView" Width="440" Height="300" HorizontalAlignment="Center" VerticalAlignment="Top"
+                      Visibility="Collapsed">
+                    <Canvas x:Name="WheelCanvas" Width="440" Height="300" Background="Transparent"
+                            MouseMove="WheelCanvas_MouseMove" MouseLeftButtonUp="WheelCanvas_MouseLeftButtonUp" />
                 </Grid>
             </Grid>
         </Border>
