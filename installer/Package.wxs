@@ -1,0 +1,65 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <!-- 安裝到目前使用者（不需要系統管理員權限）：%LocalAppData%\Programs\IslandBar -->
+  <Package Name="IslandBar"
+           Manufacturer="JUSH"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="6F2C7A51-3B8E-4D5A-9C1E-8B7F0D2A4E63"
+           Scope="perUser"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of IslandBar is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon" SourceFile="$(var.AssetsDir)island.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- 安裝 / 升級 / 移除前先關掉執行中的 IslandBar -->
+    <util:CloseApplication Id="CloseIslandBar" Target="IslandBar.exe" CloseMessage="no"
+                           TerminateProcess="0" RebootPrompt="no" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDir" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="IslandBar" />
+      </Directory>
+    </StandardDirectory>
+
+    <ComponentGroup Id="AppComponents">
+      <Component Id="MainExe" Directory="INSTALLFOLDER" Guid="3D9B6E2A-7C41-4F0B-A5E8-1F2D3C4B5A60">
+        <File Id="IslandBarExe" Source="$(var.PublishDir)IslandBar.exe" />
+        <RegistryValue Root="HKCU" Key="Software\IslandBar" Name="InstallDir" Type="string"
+                       Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsDir" Directory="ProgramsDir" On="uninstall" />
+      </Component>
+
+      <!-- 開始功能表捷徑 -->
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder" Guid="8A1E4C7B-2D5F-4E9A-B3C6-0F7D8E9A1B24">
+        <Shortcut Id="IslandBarShortcut" Name="IslandBar" Description="Dynamic Island for Windows"
+                  Target="[INSTALLFOLDER]IslandBar.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" />
+        <RegistryValue Root="HKCU" Key="Software\IslandBar" Name="StartMenuShortcut" Type="integer"
+                       Value="1" KeyPath="yes" />
+      </Component>
+
+      <!-- 開機自動啟動（之後可在系統匣圖示的選單裡關掉） -->
+      <Component Id="AutoStart" Directory="INSTALLFOLDER" Guid="C5F3A9D1-6B2E-4A7C-8D0F-2E4B6A8C0D13">
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="IslandBar"
+                       Type="string" Value="&quot;[INSTALLFOLDER]IslandBar.exe&quot;" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="IslandBar" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+
+    <!-- 安裝完成後自動啟動 -->
+    <CustomAction Id="LaunchIslandBar" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]IslandBar.exe&quot;"
+                  Return="asyncNoWait" Execute="immediate" Impersonate="yes" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchIslandBar" After="InstallFinalize" Condition="NOT REMOVE" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>
