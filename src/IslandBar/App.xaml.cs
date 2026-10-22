@@ -127,6 +127,23 @@ namespace IslandBar
                 _window?.ApplySettings(_settings);
             };
 
+            var openLog = new Forms.ToolStripMenuItem("開啟記錄檔（回報問題用）");
+            openLog.Click += (s, e) =>
+            {
+                try
+                {
+                    Log.Write("Open log requested");
+                    Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Log.FilePath + "\"") { UseShellExecute = true });
+                }
+                catch { }
+            };
+
+            var soundSettings = new Forms.ToolStripMenuItem("Windows 音效設定");
+            soundSettings.Click += (s, e) =>
+            {
+                try { Process.Start(new ProcessStartInfo("ms-settings:sound") { UseShellExecute = true }); } catch { }
+            };
+
             var exit = new Forms.ToolStripMenuItem("結束");
             exit.Click += (s, e) => ExitApp();
 
@@ -143,6 +160,8 @@ namespace IslandBar
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(editSettings);
             menu.Items.Add(reload);
+            menu.Items.Add(soundSettings);
+            menu.Items.Add(openLog);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(exit);
 

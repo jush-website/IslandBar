@@ -64,8 +64,9 @@ namespace IslandBar.Services
                 _manager.SessionsChanged += OnSessionsChanged;
                 AttachSession(_manager.GetCurrentSession());
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Error("Media.Init", ex);
                 _manager = null;
             }
         }
@@ -100,6 +101,7 @@ namespace IslandBar.Services
             }
 
             _session = session;
+            Log.Write("Media session: " + (session?.SourceAppUserModelId ?? "(none)"));
 
             if (_session != null)
             {
@@ -229,22 +231,39 @@ namespace IslandBar.Services
 
         public async Task TogglePlayPauseAsync()
         {
-            try { if (_session != null) await _session.TryTogglePlayPauseAsync(); } catch { }
+            try { var s = _session; if (s != null) { bool ok = await s.TryTogglePlayPauseAsync(); Log.Write("Media TryTogglePlayPauseAsync -> " + ok); } }
+            catch (Exception ex) { Log.Error("Media.TogglePlayPauseAsync", ex); }
         }
 
         public async Task NextAsync()
         {
-            try { if (_session != null) await _session.TrySkipNextAsync(); } catch { }
+            try { var s = _session; if (s != null) { bool ok = await s.TrySkipNextAsync(); Log.Write("Media TrySkipNextAsync -> " + ok); } }
+            catch (Exception ex) { Log.Error("Media.NextAsync", ex); }
         }
 
         public async Task PreviousAsync()
         {
-            try { if (_session != null) await _session.TrySkipPreviousAsync(); } catch { }
+            try { var s = _session; if (s != null) { bool ok = await s.TrySkipPreviousAsync(); Log.Write("Media TrySkipPreviousAsync -> " + ok); } }
+            catch (Exception ex) { Log.Error("Media.PreviousAsync", ex); }
         }
 
         public async Task SeekAsync(TimeSpan position)
         {
-            try { if (_session != null) await _session.TryChangePlaybackPositionAsync(position.Ticks); } catch { }
+            try
+            {
+                var s = _session;
+                if (s == null) return;
+                var controls = s.GetPlaybackInfo()?.Controls;
+                if (controls == null || !controls.IsPlaybackPositionEnabled) return; // 播放器不支援跳轉就不要送
+                var tl = s.GetTimelineProperties();
+                if (tl == null || tl.EndTime <= tl.StartTime) return;
+                var target = tl.StartTime + position;
+                if (target < tl.StartTime) target = tl.StartTime;
+                if (target > tl.EndTime - TimeSpan.FromSeconds(1)) target = tl.EndTime - TimeSpan.FromSeconds(1);
+                Log.Write($"Media seek to {target}");
+                await s.TryChangePlaybackPositionAsync(target.Ticks);
+            }
+            catch (Exception ex) { Log.Error("Media.Seek", ex); }
         }
     }
 }

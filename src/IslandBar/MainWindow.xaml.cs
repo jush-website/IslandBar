@@ -119,6 +119,7 @@ namespace IslandBar
 
             // 音量
             _audio.VolumeChanged += (vol, muted) => Dispatcher.BeginInvoke(new Action(() => OnVolumeChanged(vol, muted, true)));
+            Log.Write($"IslandBar v{UpdateService.CurrentVersion} started (installed={UpdateService.IsInstalled})");
             _audio.Init();
             OnVolumeChanged(_audio.Volume, _audio.Muted, false);
 
@@ -406,9 +407,7 @@ namespace IslandBar
         private void Island_MouseWheel(object sender, MouseWheelEventArgs e)
         {
             // 在動態島上滾滾輪 = 調整音量（展開時滑桿區塊以外也適用）
-            if (!_audio.Available) return;
-            float step = e.Delta > 0 ? 0.02f : -0.02f;
-            _audio.Volume = _audio.Volume + step;
+            _audio.Step(e.Delta > 0 ? 0.02f : -0.02f);
             e.Handled = true;
         }
 
@@ -467,8 +466,13 @@ namespace IslandBar
         private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (_updatingVolumeUi) return;
+            if (!_audio.Available)
+            {
+                VolumeText.Text = "—";
+                return;
+            }
             _audio.Volume = (float)(e.NewValue / 100.0);
-            if (_audio.Muted && e.NewValue > 0) _audio.Muted = false;
+            if (e.NewValue > 0 && _audio.Muted) _audio.Muted = false;
         }
 
         private void Mute_Click(object sender, RoutedEventArgs e)
