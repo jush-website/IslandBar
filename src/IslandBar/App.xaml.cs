@@ -123,6 +123,15 @@ namespace IslandBar
                 SaveAndApply();
             };
 
+            // 顯示項目：每次打開時依目前的項目重建，打勾＝顯示；點了不關選單，可以連續勾
+            var showItems = new Forms.ToolStripMenuItem("點點顯示項目");
+            showItems.DropDownItems.Add(new Forms.ToolStripMenuItem("（讀取中）") { Enabled = false });
+            showItems.DropDownOpening += (s, e) => BuildShowItemsMenu(showItems);
+            showItems.DropDown.Closing += (s, e) =>
+            {
+                if (e.CloseReason == Forms.ToolStripDropDownCloseReason.ItemClicked) e.Cancel = true;
+            };
+
             _titleItem = new Forms.ToolStripMenuItem("收合時顯示歌名") { CheckOnClick = true };
             _titleItem.CheckedChanged += (s, e) =>
             {
@@ -237,6 +246,7 @@ namespace IslandBar
             menu.Items.Add(_autoHideItem);
             menu.Items.Add(_fullscreenItem);
             menu.Items.Add(_dotsItem);
+            menu.Items.Add(showItems);
             menu.Items.Add(_titleItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(autoStart);
@@ -289,6 +299,41 @@ namespace IslandBar
             foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
             if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
             if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
+        }
+
+        private void BuildShowItemsMenu(Forms.ToolStripMenuItem parent)
+        {
+            parent.DropDownItems.Clear();
+            var labels = _window?.AllItemLabels ?? new List<(string group, string label)>();
+            _settings.HiddenItems ??= new List<string>();
+
+            var all = new Forms.ToolStripMenuItem("全部顯示");
+            all.Click += (s, e) =>
+            {
+                _settings.HiddenItems.Clear();
+                _settings.Save();
+                foreach (Forms.ToolStripItem it in parent.DropDownItems)
+                    if (it is Forms.ToolStripMenuItem mi && mi.CheckOnClick) mi.Checked = true;
+                _window?.RefreshItemsFromSettings();
+            };
+            parent.DropDownItems.Add(all);
+
+            string lastGroup = null;
+            foreach (var (group, label) in labels)
+            {
+                if (group != lastGroup) { parent.DropDownItems.Add(new Forms.ToolStripSeparator()); lastGroup = group; }
+                string name = label;
+                var item = new Forms.ToolStripMenuItem(name) { CheckOnClick = true, Checked = !_settings.HiddenItems.Contains(name) };
+                item.CheckedChanged += (s, e) =>
+                {
+                    if (item.Checked) _settings.HiddenItems.Remove(name);
+                    else if (!_settings.HiddenItems.Contains(name)) _settings.HiddenItems.Add(name);
+                    _settings.Save();
+                    _window?.RefreshItemsFromSettings();
+                };
+                parent.DropDownItems.Add(item);
+            }
+            if (labels.Count == 0) parent.DropDownItems.Add(new Forms.ToolStripMenuItem("（還沒有資料）") { Enabled = false });
         }
 
         private void AddRecent(string path)

@@ -385,7 +385,7 @@
                         <RadioButton x:Name="TabCalendar" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE787;"
                                      ToolTip="日曆與計時器" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabQuota" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE945;"
-                                     ToolTip="AI 額度" Checked="Tab_Checked" />
+                                     ToolTip="AI 額度與系統資源" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabStats" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9D9;"
                                      ToolTip="系統資訊" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabQuick" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE713;"

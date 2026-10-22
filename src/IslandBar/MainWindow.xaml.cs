@@ -148,7 +148,8 @@ namespace IslandBar
         {
             _settings = settings;
             ApplyBackground();
-            RebuildDots();
+            _dotSignature = "#";
+            RefreshItems();
             if (_currentMedia != null) CompactTitle.Visibility = _settings.ShowCompactTitle ? Visibility.Visible : Visibility.Collapsed;
             PositionWindow();
             ApplyMode(animate: false);
@@ -778,6 +779,7 @@ namespace IslandBar
         {
             _stats.Update();
             if (_mode == IslandMode.Expanded && TabStats.IsChecked == true) UpdateStatsUi();
+            RefreshItems(); // 系統資源點點每秒更新
         }
 
         private void UpdateStatsUi()
@@ -1024,184 +1026,216 @@ namespace IslandBar
         }
 
         // ================================================================
-        //  AI 額度
+        //  AI 額度 + 系統資源點點（照 ai-quota-widget：每個項目一顆）
         // ================================================================
+
+        private List<QuotaItem> _allItems = new List<QuotaItem>();
+        private List<QuotaItem> _shownItems = new List<QuotaItem>();
+        private string _dotSignature = "";
+        private readonly List<(Ellipse dot, bool? alert)>[] _dotSets = { new List<(Ellipse, bool?)>(), new List<(Ellipse, bool?)>(), new List<(Ellipse, bool?)>() };
+
+        /// <summary>目前所有項目名稱（給系統匣「顯示項目」選單）</summary>
+        public IReadOnlyList<(string group, string label)> AllItemLabels => _allItems.Select(i => (i.Group, i.Label)).ToList();
+
+        // 四段：藍 <50 充裕、綠 50–74 用掉一半、黃 75–89 注意、紅 ≥90 快用完（燈號快閃）。GPU 溫度同刻度（°C）
+        private const double AlertLevel = 90;
 
         private static Color LevelColor(double? p)
         {
             if (p == null) return Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF);
-            if (p >= 90) return Color.FromRgb(0xFF, 0x5C, 0x5C);
+            if (p >= AlertLevel) return Color.FromRgb(0xFF, 0x5C, 0x5C);
             if (p >= 75) return Color.FromRgb(0xFA, 0xCC, 0x15);
             if (p >= 50) return Color.FromRgb(0x4A, 0xDE, 0x80);
             return Color.FromRgb(0x60, 0xA5, 0xFA);
         }
 
-        private static string ResetText(DateTimeOffset? resets)
+        private List<QuotaItem> SystemItems()
         {
-            if (resets == null) return "";
-            var span = resets.Value - DateTimeOffset.Now;
-            if (span <= TimeSpan.Zero) return "已重置";
-            if (span.TotalHours < 24) return span.TotalHours >= 1 ? $"{(int)span.TotalHours} 時 {span.Minutes} 分後重置" : $"{Math.Max(1, span.Minutes)} 分後重置";
-            return resets.Value.ToLocalTime().ToString("M/d HH:mm") + " 重置";
-        }
-
-        private static string DotTip(QuotaItem it)
-        {
-            string pct = it.UsedPercent.HasValue ? $"{it.UsedPercent.Value:0}%" : "—";
-            string tip = $"{it.Label}  已用 {pct}";
-            string reset = ResetText(it.ResetsAt);
-            if (reset.Length > 0) tip += "\n" + reset;
-            if (it.Stale) tip += "\n（舊資料）";
-            return tip;
+            var list = new List<QuotaItem>();
+            QuotaItem Item(string label, double? pct, string tip = "", string text = null) => new QuotaItem
+            {
+                Group = "sys", Label = label, Percent = pct.HasValue ? Math.Clamp(pct.Value, 0, 100) : (double?)null,
+                Text = text ?? (pct.HasValue ? $"{Math.Round(pct.Value)}%" : "—"), Tip = tip
+            };
+            list.Add(Item("CPU", _stats.CpuPercent));
+            list.Add(Item("GPU", _gpu.Usage));
+            list.Add(Item("GPU 溫度", _gpu.Temperature, _gpu.Temperature == null ? "此顯示卡未提供溫度（目前支援 NVIDIA）" : "",
+                _gpu.Temperature.HasValue ? $"{_gpu.Temperature}°C" : "—"));
+            if (_gpu.VramTotalGb is double total && total > 0 && _gpu.VramUsedGb is double used)
+            {
+                string kind = _gpu.VramShared ? "共用 GPU 記憶體" : "專用顯示卡記憶體";
+                list.Add(Item("顯存", 100 * used / total, $"{kind}：{used:0.0} / {total:0.0} GB", $"{used:0.0}/{total:0}G"));
+            }
+            else list.Add(Item("顯存", null));
+            list.Add(Item("RAM", _stats.RamPercent, $"{_stats.RamUsedGb:0.0} / {_stats.RamTotalGb:0} GB"));
+            return list;
         }
 
         private void OnQuotaUpdated(QuotaSnapshot snap)
         {
             _quotaSnap = snap;
-            int before = _dotCount;
-            RebuildDots();
+            RefreshItems();
+        }
+
+        /// <summary>重新計算項目；項目清單變了才重建點點，否則只更新顏色（每秒呼叫）</summary>
+        private void RefreshItems()
+        {
+            _allItems = QuotaService.BuildItems(_quotaSnap);
+            _allItems.AddRange(SystemItems());
+            var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
+            _shownItems = _settings.ShowQuotaDots ? _allItems.Where(i => !hidden.Contains(i.Label)).ToList() : new List<QuotaItem>();
+
+            string sig = string.Join(",", _shownItems.Select(i => i.Group + "/" + i.Label));
+            if (sig != _dotSignature)
+            {
+                _dotSignature = sig;
+                int before = _dotCount;
+                RebuildDots();
+                if (_mode == IslandMode.Compact && before != _dotCount) ApplyMode(true);
+            }
+            else UpdateDots();
+
             if (_mode == IslandMode.Expanded && TabQuota.IsChecked == true) BuildQuotaList();
-            if (_mode == IslandMode.Compact && before != _dotCount) ApplyMode(true);
         }
 
         private void RebuildDots()
         {
-            var items = _settings.ShowQuotaDots ? _quotaSnap.Items : new List<QuotaItem>();
-            _dotCount = items.Count;
-            foreach (var panel in new Panel[] { IdleDots, MediaDots, SideDots })
+            _dotCount = _shownItems.Count;
+            var panels = new Panel[] { IdleDots, MediaDots, SideDots };
+            for (int p = 0; p < panels.Length; p++)
             {
-                panel.Children.Clear();
-                bool vertical = panel == SideDots;
-                int i = 0;
-                foreach (var it in items) panel.Children.Add(MakeDot(it, i++, vertical));
-                panel.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                panels[p].Children.Clear();
+                _dotSets[p].Clear();
+                bool vertical = panels[p] == SideDots;
+                foreach (var _ in _shownItems)
+                {
+                    var dot = new Ellipse
+                    {
+                        Width = 6, Height = 6,
+                        Margin = vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0)
+                    };
+                    panels[p].Children.Add(dot);
+                    _dotSets[p].Add((dot, null));
+                }
+                panels[p].Visibility = _shownItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            UpdateDots();
+        }
+
+        private void UpdateDots()
+        {
+            for (int p = 0; p < _dotSets.Length; p++)
+            {
+                var set = _dotSets[p];
+                for (int i = 0; i < set.Count && i < _shownItems.Count; i++)
+                {
+                    var it = _shownItems[i];
+                    var (dot, wasAlert) = set[i];
+                    var color = LevelColor(it.Percent);
+                    if (!(dot.Fill is SolidColorBrush b) || b.Color != color) dot.Fill = new SolidColorBrush(color);
+                    string tip = $"{it.Label}  {it.Text}" + (string.IsNullOrEmpty(it.Tip) ? "" : "\n" + it.Tip);
+                    if (!Equals(dot.ToolTip, tip)) dot.ToolTip = tip;
+
+                    // 平常依序慢慢呼吸（波浪），到 90% 以上改成快閃
+                    bool alert = it.Percent >= AlertLevel;
+                    if (wasAlert != alert)
+                    {
+                        var anim = new DoubleAnimation(1.0, 0.3, TimeSpan.FromMilliseconds(alert ? 350 : 1400))
+                        {
+                            AutoReverse = true,
+                            RepeatBehavior = RepeatBehavior.Forever,
+                            BeginTime = TimeSpan.FromMilliseconds(i * 160)
+                        };
+                        Timeline.SetDesiredFrameRate(anim, 20);
+                        dot.BeginAnimation(OpacityProperty, anim);
+                        set[i] = (dot, alert);
+                    }
+                }
             }
         }
 
-        private static Ellipse MakeDot(QuotaItem it, int index, bool vertical)
+        /// <summary>系統匣「顯示項目」改了之後重新整理</summary>
+        public void RefreshItemsFromSettings()
         {
-            var dot = new Ellipse
-            {
-                Width = 6,
-                Height = 6,
-                Fill = new SolidColorBrush(LevelColor(it.UsedPercent)),
-                Margin = vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
-                ToolTip = DotTip(it)
-            };
-            // 平常依序慢慢呼吸；90% 以上快閃
-            bool alert = it.UsedPercent >= 90;
-            var anim = new DoubleAnimation(1.0, it.Stale ? 0.15 : 0.3, TimeSpan.FromMilliseconds(alert ? 350 : 1400))
-            {
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                BeginTime = TimeSpan.FromMilliseconds(index * 160)
-            };
-            Timeline.SetDesiredFrameRate(anim, 20);
-            dot.BeginAnimation(OpacityProperty, anim);
-            return dot;
+            _dotSignature = "#";
+            RefreshItems();
         }
 
         private void BuildQuotaList()
         {
+            var scroller = QuotaList.Parent as ScrollViewer;
+            double offset = scroller?.VerticalOffset ?? 0;
             QuotaList.Children.Clear();
-            var items = _quotaSnap.Items;
-            if (items.Count == 0)
-            {
-                QuotaEmpty.Visibility = Visibility.Visible;
-                QuotaEmptyHint.Text = _quotaSnap.Messages.Count > 0
-                    ? string.Join("\n", _quotaSnap.Messages)
-                    : "這台電腦需要安裝並登入 Codex、Claude Code 或 Antigravity（每分鐘更新一次）";
-                return;
-            }
-            QuotaEmpty.Visibility = Visibility.Collapsed;
+            if (scroller != null) Dispatcher.BeginInvoke(new Action(() => scroller.ScrollToVerticalOffset(offset)), DispatcherPriority.Loaded);
+            var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
+            var items = _allItems.Where(i => !hidden.Contains(i.Label)).ToList();
+            QuotaEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (items.Count == 0) return;
 
             var secondary = (Brush)FindResource("Secondary");
             var tertiary = (Brush)FindResource("Tertiary");
             var track = (Brush)FindResource("TrackBg");
-            string lastProvider = null;
+            var groupNames = new Dictionary<string, string> { ["codex"] = "Codex", ["claude"] = "Claude", ["antigravity"] = "Antigravity", ["sys"] = "系統資源" };
+            string lastGroup = null;
 
             foreach (var it in items)
             {
-                if (it.Provider != lastProvider)
+                if (it.Group != lastGroup)
                 {
-                    lastProvider = it.Provider;
+                    lastGroup = it.Group;
+                    var prov = _quotaSnap.Providers.FirstOrDefault(p => p.Id == it.Group);
+                    string head = groupNames.TryGetValue(it.Group, out var gn) ? gn : it.Group;
+                    if (prov != null && prov.Stale) head += "（舊資料）";
+                    if (prov != null && !string.IsNullOrEmpty(prov.Attention)) head += "  ⚠ " + prov.Attention;
                     QuotaList.Children.Add(new TextBlock
                     {
-                        Text = it.Provider + (it.Stale ? "（舊資料）" : ""),
-                        FontSize = 11,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = secondary,
-                        Margin = new Thickness(2, QuotaList.Children.Count == 0 ? 0 : 8, 0, 2)
+                        Text = head, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = secondary,
+                        Margin = new Thickness(2, QuotaList.Children.Count == 0 ? 0 : 8, 0, 2),
+                        ToolTip = prov?.Message
                     });
                 }
 
-                var row = new Grid { Margin = new Thickness(2, 3, 2, 3) };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+                var row = new Grid { Margin = new Thickness(2, 3, 2, 3), ToolTip = string.IsNullOrEmpty(it.Tip) ? null : it.Tip, Background = Brushes.Transparent };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(122) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(74) });
 
-                string label = it.Label.StartsWith(it.Provider) ? it.Label.Substring(it.Provider.Length).Trim() : it.Label;
-                var name = new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-                row.Children.Add(name);
+                row.Children.Add(new TextBlock { Text = it.Label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
 
-                var color = LevelColor(it.UsedPercent);
+                var color = LevelColor(it.Percent);
                 var bar = new Grid { Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 8, 0) };
                 bar.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = track });
-                var fill = new Border
+                bar.Children.Add(new Border
                 {
-                    CornerRadius = new CornerRadius(3),
-                    Background = new SolidColorBrush(color),
+                    CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(color),
                     RenderTransformOrigin = new Point(0, 0.5),
-                    RenderTransform = new ScaleTransform(Math.Clamp((it.UsedPercent ?? 0) / 100.0, 0, 1), 1)
-                };
-                bar.Children.Add(fill);
+                    RenderTransform = new ScaleTransform(Math.Clamp((it.Percent ?? 0) / 100.0, 0, 1), 1)
+                });
                 Grid.SetColumn(bar, 1);
                 row.Children.Add(bar);
 
-                var pct = new TextBlock
+                var val = new TextBlock
                 {
-                    Text = it.UsedPercent.HasValue ? $"{it.UsedPercent.Value:0}%" : "—",
-                    FontSize = 12,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(color),
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center
+                    Text = it.Text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color),
+                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(pct, 2);
-                row.Children.Add(pct);
-
-                var reset = new TextBlock
-                {
-                    Text = ResetText(it.ResetsAt),
-                    FontSize = 10,
-                    Foreground = tertiary,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                Grid.SetColumn(reset, 3);
-                row.Children.Add(reset);
-
+                Grid.SetColumn(val, 2);
+                row.Children.Add(val);
                 QuotaList.Children.Add(row);
             }
 
-            foreach (var msg in _quotaSnap.Messages)
+            foreach (var p in _quotaSnap.Providers.Where(p => p.Installed && !string.IsNullOrEmpty(p.Message) && (p.Stale || !p.Available)))
             {
                 QuotaList.Children.Add(new TextBlock
                 {
-                    Text = msg,
-                    FontSize = 10,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB4, 0x54)),
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(2, 8, 2, 0)
+                    Text = $"{p.Name}：{p.Message}", FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB4, 0x54)),
+                    TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 8, 2, 0)
                 });
             }
             QuotaList.Children.Add(new TextBlock
             {
-                Text = $"更新於 {_quotaSnap.UpdatedAt:HH:mm:ss}（每分鐘更新）",
-                FontSize = 10,
-                Foreground = tertiary,
-                Margin = new Thickness(2, 8, 2, 0)
+                Text = $"額度更新於 {_quotaSnap.UpdatedAt:HH:mm:ss}（每分鐘）· 滑鼠停在列上看重置時間",
+                FontSize = 10, Foreground = tertiary, Margin = new Thickness(2, 8, 2, 0)
             });
         }
 

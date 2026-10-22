@@ -29,6 +29,9 @@ namespace IslandBar
         /// <summary>收合時顯示 AI 額度點點</summary>
         public bool ShowQuotaDots { get; set; } = true;
 
+        /// <summary>不想顯示的額度 / 資源項目名稱（例如 "GPU 溫度"）</summary>
+        public System.Collections.Generic.List<string> HiddenItems { get; set; } = new System.Collections.Generic.List<string>();
+
         /// <summary>收合時顯示歌名（關掉就只剩封面，比較不擋路）</summary>
         public bool ShowCompactTitle { get; set; } = true;
 

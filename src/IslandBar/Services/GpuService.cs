@@ -24,6 +24,8 @@ namespace IslandBar.Services
         public int? Temperature { get; private set; }
         public double? VramUsedGb { get; private set; }
         public double? VramTotalGb { get; private set; }
+        public bool VramShared { get; private set; }
+        private double? _dedicatedTotalGb;
 
         public void Start()
         {
@@ -42,7 +44,11 @@ namespace IslandBar.Services
                 while (!token.IsCancellationRequested)
                 {
                     SampleUsage();
-                    if (_smi != null && _tick++ % 2 == 0) SampleSmi();
+                    if (_tick++ % 2 == 0)
+                    {
+                        if (_smi != null) SampleSmi();
+                        else SampleAdapterMemory();
+                    }
                     try { await Task.Delay(2000, token); } catch { }
                 }
             });
@@ -98,6 +104,58 @@ namespace IslandBar.Services
                 Log.Error("Gpu.Usage", ex);
                 Usage = null;
             }
+        }
+
+        /// <summary>非 NVIDIA：用效能計數器取顯存用量；總量取登錄檔最大的 qwMemorySize（多張獨顯可能不準）</summary>
+        private void SampleAdapterMemory()
+        {
+            try
+            {
+                if (_dedicatedTotalGb == null)
+                {
+                    _dedicatedTotalGb = 0;
+                    using var cls = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
+                    if (cls != null)
+                    {
+                        foreach (var sub in cls.GetSubKeyNames().Where(n => n.StartsWith("0")))
+                        {
+                            try
+                            {
+                                using var k = cls.OpenSubKey(sub);
+                                object v = k?.GetValue("HardwareInformation.qwMemorySize");
+                                double bytes = v is long l ? l : v is byte[] b && b.Length >= 8 ? BitConverter.ToInt64(b, 0) : 0;
+                                _dedicatedTotalGb = Math.Max(_dedicatedTotalGb.Value, bytes / 1024 / 1024 / 1024);
+                            }
+                            catch { }
+                        }
+                    }
+                }
+
+                if (!PerformanceCounterCategory.Exists("GPU Adapter Memory")) return;
+                var cat = new PerformanceCounterCategory("GPU Adapter Memory");
+                double bestDed = 0, bestShared = 0;
+                foreach (var inst in cat.GetInstanceNames())
+                {
+                    using var ded = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", inst, true);
+                    using var sh = new PerformanceCounter("GPU Adapter Memory", "Shared Usage", inst, true);
+                    double d = ded.RawValue, s = sh.RawValue;
+                    if (d + s > bestDed + bestShared) { bestDed = d; bestShared = s; }
+                }
+                if (bestDed > 0 && _dedicatedTotalGb > 0)
+                {
+                    VramUsedGb = bestDed / 1024 / 1024 / 1024; VramTotalGb = _dedicatedTotalGb; VramShared = false;
+                }
+                else
+                {
+                    // Windows 共用 GPU 記憶體上限 = RAM 的一半
+                    var mem = new NativeMethods.MEMORYSTATUSEX { dwLength = (uint)System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MEMORYSTATUSEX>() };
+                    if (NativeMethods.GlobalMemoryStatusEx(ref mem))
+                    {
+                        VramUsedGb = bestShared / 1024 / 1024 / 1024; VramTotalGb = mem.ullTotalPhys / 2.0 / 1024 / 1024 / 1024; VramShared = true;
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Error("Gpu.AdapterMemory", ex); }
         }
 
         private void SampleSmi()
