@@ -58,6 +58,12 @@ namespace IslandBar
             _window = new MainWindow(_settings);
             _window.SettingsChanged += () => SyncMenu();
             _window.Converted += path => AddRecent(path);
+            // 偵測到要重新登入：跳通知，點通知直接開登入
+            _window.AttentionRaised += (text, action) =>
+            {
+                Balloon("IslandBar · AI 額度", text + "。點這裡重新登入。", Forms.ToolTipIcon.Warning);
+                _balloonLoginAction = action;
+            };
             _window.Show();
 
             CreateTrayIcon();
@@ -79,6 +85,32 @@ namespace IslandBar
             var menu = new Forms.ContextMenuStrip();
 
             var header = new Forms.ToolStripMenuItem($"IslandBar v{UpdateService.CurrentVersion}") { Enabled = false };
+
+            // 需要時才出現在最上面的粗體「重新登入」
+            var bold = new Font(menu.Font, System.Drawing.FontStyle.Bold);
+            var claudeLoginTop = new Forms.ToolStripMenuItem("⚠ 重新登入 Claude…") { Font = bold, Visible = false };
+            claudeLoginTop.Click += (s, e) => _window?.RunLoginAction("claude-login");
+            var codexLoginTop = new Forms.ToolStripMenuItem("⚠ 重新登入 Codex…") { Font = bold, Visible = false };
+            codexLoginTop.Click += (s, e) => _window?.RunLoginAction("codex-login");
+            menu.Opening += (s, e) =>
+            {
+                var pending = _window?.PendingLoginActions ?? new HashSet<string>();
+                claudeLoginTop.Visible = pending.Contains("claude-login");
+                codexLoginTop.Visible = pending.Contains("codex-login");
+            };
+
+            // 隨時都可以用的帳號登入
+            var accounts = new Forms.ToolStripMenuItem("AI 帳號登入");
+            var claudeLogin = new Forms.ToolStripMenuItem("登入 Claude Code…");
+            claudeLogin.Click += (s, e) => _window?.RunLoginAction("claude-login");
+            var codexLogin = new Forms.ToolStripMenuItem("登入 Codex…");
+            codexLogin.Click += (s, e) => _window?.RunLoginAction("codex-login");
+            var refreshQuota = new Forms.ToolStripMenuItem("立即重新整理額度");
+            refreshQuota.Click += (s, e) => _window?.RefreshQuotaNow();
+            accounts.DropDownItems.Add(claudeLogin);
+            accounts.DropDownItems.Add(codexLogin);
+            accounts.DropDownItems.Add(new Forms.ToolStripSeparator());
+            accounts.DropDownItems.Add(refreshQuota);
 
             var openWheel = new Forms.ToolStripMenuItem("格式轉換：選擇檔案…");
             openWheel.Click += (s, e) =>
@@ -243,6 +275,8 @@ namespace IslandBar
             exit.Click += (s, e) => ExitApp();
 
             menu.Items.Add(header);
+            menu.Items.Add(claudeLoginTop);
+            menu.Items.Add(codexLoginTop);
             menu.Items.Add(_installUpdateItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(openWheel);
@@ -256,6 +290,7 @@ namespace IslandBar
             menu.Items.Add(_fullscreenItem);
             menu.Items.Add(_dotsItem);
             menu.Items.Add(showItems);
+            menu.Items.Add(accounts);
             menu.Items.Add(_pinItem);
             menu.Items.Add(_titleItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
@@ -280,6 +315,13 @@ namespace IslandBar
             _tray.DoubleClick += (s, e) => _window?.ToggleUserHidden();
             _tray.BalloonTipClicked += async (s, e) =>
             {
+                if (_balloonLoginAction != null)
+                {
+                    string action = _balloonLoginAction;
+                    _balloonLoginAction = null;
+                    _window?.RunLoginAction(action);
+                    return;
+                }
                 if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate);
             };
 
@@ -448,8 +490,11 @@ namespace IslandBar
             }
         }
 
+        private string _balloonLoginAction;
+
         private void Balloon(string title, string text, Forms.ToolTipIcon icon)
         {
+            _balloonLoginAction = null;
             try { _tray?.ShowBalloonTip(5000, title, text, icon); } catch { }
         }
 

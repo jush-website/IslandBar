@@ -32,6 +32,8 @@ namespace IslandBar.Services
         public bool Stale { get; set; }
         public string Message { get; set; }
         public string Attention { get; set; }          // 需要使用者處理的事（例如「Claude 需重新登入」）
+        public string AttentionAction { get; set; }    // claude-login / codex-login
+        public bool AttentionNotify { get; set; }      // true = 跳 Windows 通知
         public List<QuotaWindow> Windows { get; set; } = new List<QuotaWindow>();
         public DateTimeOffset? UpdatedAt { get; set; }
     }
@@ -79,6 +81,7 @@ namespace IslandBar.Services
         private ProviderUsage _claudeLive;
         private DateTime _claudeNextFetch = DateTime.MinValue;
         private string _claudeProblem = ClaudeTemporaryProblem;
+        private bool _claudeAuthFailed;   // 刷新後還是 401 = 真的要重新登入
         private DateTime _codexRefreshFailedAt = DateTime.MinValue;
         private (int port, string token, bool secure)? _agConn;
         private DateTime _agNextDiscovery = DateTime.MinValue;
@@ -106,6 +109,19 @@ namespace IslandBar.Services
         }
 
         public void Stop() => _cts?.Cancel();
+
+        /// <summary>重新登入後立刻重查（不等每分鐘的排程，也清掉失敗冷卻）</summary>
+        public void RefreshSoon()
+        {
+            _claudeNextFetch = DateTime.MinValue;
+            _claudeLive = null;
+            _codexRefreshFailedAt = DateTime.MinValue;
+            lock (WhereCache) WhereCache.Clear();
+            Task.Run(async () =>
+            {
+                try { await RefreshAsync(); } catch (Exception ex) { Log.Error("Quota.RefreshSoon", ex); }
+            });
+        }
 
         public async Task RefreshAsync()
         {
@@ -299,7 +315,17 @@ namespace IslandBar.Services
                         return new ProviderUsage { Id = "codex", Name = "Codex", Installed = true, Available = true, Windows = windows, UpdatedAt = DateTimeOffset.Now };
                 }
             }
-            catch (Exception ex) { return CodexLogFallback(fromLogs, ex as QuotaHttpException); }
+            catch (Exception ex)
+            {
+                var r = CodexLogFallback(fromLogs, ex as QuotaHttpException);
+                if (r.Attention == null && (ex.Message.Contains("access token not found") || ex is FileNotFoundException))
+                {
+                    r.Attention = "Codex 尚未登入";
+                    r.AttentionAction = "codex-login";
+                    r.AttentionNotify = false;
+                }
+                return r;
+            }
             return CodexLogFallback(fromLogs, null);
         }
 
@@ -326,7 +352,7 @@ namespace IslandBar.Services
             return JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         }
 
-        private static string FindCodexCli()
+        internal static string FindCodexCli()
         {
             string found = Where("codex");
             if (found != null) return found;
@@ -411,11 +437,15 @@ namespace IslandBar.Services
             if (error != null && error.Status == 401 && error.NeedsLogin)
             {
                 r.Attention = "Codex 需重新登入";
+                r.AttentionAction = "codex-login";
+                r.AttentionNotify = true;
                 r.Message = $"Codex 的登入已失效，自動刷新也失敗，{shown}請重新登入 Codex。";
             }
             else if (error != null && error.Status == 401)
             {
                 r.Attention = "Codex 憑證過期";
+                r.AttentionAction = "codex-login";
+                r.AttentionNotify = false;
                 r.Message = $"Codex 的登入憑證已過期，{shown}開啟 Codex 使用一次就會恢復即時資料。";
             }
             else r.Message = $"無法即時查詢 Codex 額度，{shown}";
@@ -503,7 +533,7 @@ namespace IslandBar.Services
 
         private static string ClaudeHome => Environment.GetEnvironmentVariable("CLAUDE_HOME") ?? Path.Combine(Home, ".claude");
 
-        private static string FindClaudeCli()
+        internal static string FindClaudeCli()
         {
             string direct = FirstExisting(new[]
             {
@@ -658,8 +688,12 @@ namespace IslandBar.Services
         private async Task<ProviderUsage> ReadClaudeAsync()
         {
             var result = await ReadClaudeInner();
-            if (result.Installed && !(result.Available && !result.Stale) && !ClaudeLoggedIn())
+            if (result.Installed && !(result.Available && !result.Stale) && (!ClaudeLoggedIn() || _claudeAuthFailed))
+            {
                 result.Attention = "Claude 需重新登入";
+                result.AttentionAction = "claude-login";
+                result.AttentionNotify = true;
+            }
             return result;
         }
 
@@ -695,6 +729,7 @@ namespace IslandBar.Services
                                 Windows = windows, UpdatedAt = DateTimeOffset.Now
                             };
                             _claudeNextFetch = DateTime.UtcNow + ClaudeInterval;
+                            _claudeAuthFailed = false;
                             _claudeLive = live;
                             SaveClaudeCache(live);
                             return live;
@@ -704,6 +739,7 @@ namespace IslandBar.Services
                 catch (Exception ex)
                 {
                     int status = (ex as QuotaHttpException)?.Status ?? 0;
+                    if (status == 401 || status == 403) _claudeAuthFailed = true;
                     _claudeNextFetch = DateTime.UtcNow + (status == 429 ? TimeSpan.FromMinutes(5) : ClaudeInterval);
                     _claudeProblem = ClaudeLoggedIn() ? ClaudeTemporaryProblem : ClaudeLoginHint;
                     Log.Write("Claude usage fetch failed: " + ex.Message);

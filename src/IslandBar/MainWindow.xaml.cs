@@ -1078,7 +1078,9 @@ namespace IslandBar
         private void OnQuotaUpdated(QuotaSnapshot snap)
         {
             _quotaSnap = snap;
+            _stripSignature = "#"; // 登入狀態可能變了，額度列重建
             RefreshItems();
+            CheckAttention();
         }
 
         /// <summary>重新計算項目；項目清單變了才重建點點，否則只更新顏色（每秒呼叫）</summary>
@@ -1171,11 +1173,15 @@ namespace IslandBar
                 ? _allItems.Where(i => i.Group != "sys" && !hidden.Contains(i.Label)).ToList()
                 : new List<QuotaItem>();
 
-            string sig = string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}"));
+            var logins = _settings.PinQuotaStrip && TabQuota.IsChecked != true
+                ? _quotaSnap.Providers.Where(p => p.AttentionAction != null).ToList()
+                : new List<ProviderUsage>();
+            string sig = string.Join("|", logins.Select(p => p.Attention)) + "||" + string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}"));
             if (sig != _stripSignature)
             {
                 _stripSignature = sig;
                 QuotaStrip.Children.Clear();
+                foreach (var p in logins) QuotaStrip.Children.Add(MakeLoginChip(p));
                 var secondary = (Brush)FindResource("Secondary");
                 foreach (var it in items)
                 {
@@ -1197,9 +1203,10 @@ namespace IslandBar
                 }
             }
 
-            QuotaStrip.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            bool anyStrip = items.Count > 0 || logins.Count > 0;
+            QuotaStrip.Visibility = anyStrip ? Visibility.Visible : Visibility.Collapsed;
             double extra = 0;
-            if (items.Count > 0)
+            if (anyStrip)
             {
                 QuotaStrip.Measure(new Size(448, double.PositiveInfinity));
                 extra = Math.Ceiling(QuotaStrip.DesiredSize.Height); // 已含上方 6px 間距
@@ -1244,13 +1251,19 @@ namespace IslandBar
                     var prov = _quotaSnap.Providers.FirstOrDefault(p => p.Id == it.Group);
                     string head = groupNames.TryGetValue(it.Group, out var gn) ? gn : it.Group;
                     if (prov != null && prov.Stale) head += "（舊資料）";
-                    if (prov != null && !string.IsNullOrEmpty(prov.Attention)) head += "  ⚠ " + prov.Attention;
-                    QuotaList.Children.Add(new TextBlock
+                    var headRow = new WrapPanel { Margin = new Thickness(2, QuotaList.Children.Count == 0 ? 0 : 8, 0, 2) };
+                    headRow.Children.Add(new TextBlock
                     {
                         Text = head, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = secondary,
-                        Margin = new Thickness(2, QuotaList.Children.Count == 0 ? 0 : 8, 0, 2),
-                        ToolTip = prov?.Message
+                        ToolTip = prov?.Message, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0)
                     });
+                    if (prov?.AttentionAction != null)
+                    {
+                        var chip = MakeLoginChip(prov);
+                        chip.Margin = new Thickness(0);
+                        headRow.Children.Add(chip);
+                    }
+                    QuotaList.Children.Add(headRow);
                 }
 
                 var row = new Grid { Margin = new Thickness(2, 3, 2, 3), ToolTip = string.IsNullOrEmpty(it.Tip) ? null : it.Tip, Background = Brushes.Transparent };
