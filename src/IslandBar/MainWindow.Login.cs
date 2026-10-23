@@ -39,6 +39,7 @@ namespace IslandBar
                 {
                     if (_notifiedAttention.Add(p.Id))
                     {
+                        if (_focusPhase == FocusPhase.Focus) { _focusMissed++; continue; } // 專注中不打擾
                         Log.Write($"Attention: {p.Attention} ({p.AttentionAction})");
                         AttentionRaised?.Invoke(p.Attention, p.AttentionAction);
                     }

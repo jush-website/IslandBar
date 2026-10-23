@@ -25,6 +25,9 @@ namespace IslandBar.Services
         public double? VramUsedGb { get; private set; }
         public double? VramTotalGb { get; private set; }
         public bool VramShared { get; private set; }
+
+        /// <summary>正在用 GPU 的程式（NVIDIA：nvidia-smi --query-compute-apps）</summary>
+        public List<(string name, double usedMb)> Processes { get; private set; } = new List<(string, double)>();
         private double? _dedicatedTotalGb;
 
         public void Start()
@@ -46,7 +49,7 @@ namespace IslandBar.Services
                     SampleUsage();
                     if (_tick++ % 2 == 0)
                     {
-                        if (_smi != null) SampleSmi();
+                        if (_smi != null) { SampleSmi(); SampleSmiProcesses(); }
                         else SampleAdapterMemory();
                     }
                     try { await Task.Delay(2000, token); } catch { }
@@ -156,6 +159,31 @@ namespace IslandBar.Services
                 }
             }
             catch (Exception ex) { Log.Error("Gpu.AdapterMemory", ex); }
+        }
+
+        private void SampleSmiProcesses()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(_smi, "--query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits")
+                {
+                    CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8
+                };
+                using var p = Process.Start(psi);
+                string output = p.StandardOutput.ReadToEnd();
+                if (!p.WaitForExit(3000)) { try { p.Kill(); } catch { } }
+                var list = new List<(string, double)>();
+                foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split(',').Select(x => x.Trim()).ToArray();
+                    if (parts.Length < 3) continue;
+                    string name = Path.GetFileNameWithoutExtension(parts[1]);
+                    double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double mb);
+                    list.Add((name, mb));
+                }
+                Processes = list.OrderByDescending(x => x.Item2).ToList();
+            }
+            catch { }
         }
 
         private void SampleSmi()

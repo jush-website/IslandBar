@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using NAudio.CoreAudioApi;
@@ -16,6 +17,10 @@ namespace IslandBar.Services
         private MMDeviceEnumerator _enumerator;
         private MMDevice _device;
         private DateTime _lastAttachAttempt = DateTime.MinValue;
+
+        /// <summary>(裝置名稱, 是否連上) — 播放裝置連上 / 中斷（例如藍牙耳機），背景執行緒觸發</summary>
+        public event Action<string, bool> DeviceConnectionChanged;
+        private readonly Dictionary<string, DateTime> _lastDeviceEvent = new Dictionary<string, DateTime>();
 
         /// <summary>(音量 0~1, 是否靜音) — 在背景執行緒觸發</summary>
         public event Action<float, bool> VolumeChanged;
@@ -228,7 +233,31 @@ namespace IslandBar.Services
             }
         }
 
-        public void OnDeviceStateChanged(string deviceId, DeviceState newState) { }
+        public void OnDeviceStateChanged(string deviceId, DeviceState newState)
+        {
+            bool connected = newState == DeviceState.Active;
+            bool gone = newState == DeviceState.Unplugged || newState == DeviceState.NotPresent;
+            if (!connected && !gone) return;
+            Task.Run(() =>
+            {
+                try
+                {
+                    lock (_lastDeviceEvent)
+                    {
+                        // 同一個裝置 3 秒內只報一次（藍牙連線時常常連續觸發）
+                        string key = deviceId + connected;
+                        if (_lastDeviceEvent.TryGetValue(key, out var t) && (DateTime.UtcNow - t).TotalSeconds < 3) return;
+                        _lastDeviceEvent[key] = DateTime.UtcNow;
+                    }
+                    using var en = new MMDeviceEnumerator();
+                    using var dev = en.GetDevice(deviceId);
+                    if (dev.DataFlow != DataFlow.Render) return;
+                    DeviceConnectionChanged?.Invoke(dev.FriendlyName, connected);
+                }
+                catch { }
+            });
+        }
+
         public void OnDeviceAdded(string pwstrDeviceId) { }
         public void OnDeviceRemoved(string deviceId) { }
         public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }

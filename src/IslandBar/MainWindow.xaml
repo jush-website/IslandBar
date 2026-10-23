@@ -255,6 +255,8 @@
                         <TextBlock x:Name="CompactClock" Text="20:14" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                         <TextBlock x:Name="CompactTimer" Text="" FontSize="12" FontWeight="SemiBold"
                                    Foreground="#FFB454" Margin="10,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
+                        <TextBlock x:Name="CompactEvent" Text="" FontSize="11" FontWeight="SemiBold" Foreground="#7AB8FF"
+                                   Margin="10,0,0,0" VerticalAlignment="Center" MaxWidth="120" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
                         <StackPanel x:Name="IdleDots" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0" />
                     </StackPanel>
 
@@ -389,6 +391,8 @@
                                      ToolTip="AI 額度與系統資源" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabStats" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9D9;"
                                      ToolTip="系統資訊" Checked="Tab_Checked" />
+                        <RadioButton x:Name="TabClip" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE77F;"
+                                     ToolTip="剪貼簿歷史" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabQuick" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE713;"
                                      ToolTip="快速設定" Checked="Tab_Checked" />
                     </StackPanel>
@@ -499,10 +503,16 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="12" Foreground="{StaticResource Secondary}" />
-                                    <TextBlock Text="計時器" FontSize="11" Foreground="{StaticResource Secondary}" Margin="6,0,0,0" />
-                                </StackPanel>
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="12" Foreground="{StaticResource Secondary}" />
+                                        <TextBlock x:Name="TimerTitle" Text="計時器" FontSize="11" Foreground="{StaticResource Secondary}" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                    <Button x:Name="FocusButton" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Height="22" Padding="8,0"
+                                            Background="#1FFFFFFF" Click="Focus_Click" ToolTip="專注 25 分鐘＋休息 5 分鐘；專注時暫停通知、動態島變暗">
+                                        <TextBlock x:Name="FocusButtonText" Text="專注 25" FontSize="10" />
+                                    </Button>
+                                </Grid>
                                 <TextBlock x:Name="TimerText" Grid.Row="1" Text="00:00" FontSize="36" FontWeight="SemiBold"
                                            FontFamily="Segoe UI Variable Display, Segoe UI"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -645,6 +655,23 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- == 剪貼簿歷史 == -->
+                    <Grid x:Name="PageClip" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="24" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="最近複製的內容（點一下再複製）" FontSize="11" Foreground="{StaticResource Secondary}" VerticalAlignment="Center" Margin="2,0,0,0" />
+                        <Button HorizontalAlignment="Right" Style="{StaticResource IconButton}" Height="22" Padding="8,0" Click="ClipClear_Click">
+                            <TextBlock Text="清除" FontSize="11" />
+                        </Button>
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" Focusable="False">
+                            <StackPanel x:Name="ClipList" />
+                        </ScrollViewer>
+                        <TextBlock x:Name="ClipEmpty" Grid.Row="1" Text="還沒有複製過東西（密碼管理器複製的內容不會被記錄）" FontSize="11"
+                                   Foreground="{StaticResource Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+
                     <!-- == 快速設定 == -->
                     <Grid x:Name="PageQuick" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
                         <Grid.RowDefinitions>
@@ -714,6 +741,13 @@
                     <Canvas x:Name="WheelCanvas" Width="440" Height="300" Background="Transparent"
                             MouseMove="WheelCanvas_MouseMove" MouseLeftButtonUp="WheelCanvas_MouseLeftButtonUp" />
                 </Grid>
+
+                <!-- 麥克風 / 鏡頭使用中（像 iPhone 的橘點、綠點） -->
+                <StackPanel x:Name="PrivacyDots" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,5,9,0" Background="Transparent">
+                    <Ellipse x:Name="MicDot" Width="6" Height="6" Fill="#FF9F0A" Margin="2,0" Visibility="Collapsed" />
+                    <Ellipse x:Name="CamDot" Width="6" Height="6" Fill="#30D158" Margin="2,0" Visibility="Collapsed" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

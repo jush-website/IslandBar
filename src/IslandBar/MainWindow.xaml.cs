@@ -109,6 +109,7 @@ namespace IslandBar
             long ex = NativeMethods.GetWindowLong(_hwnd, NativeMethods.GWL_EXSTYLE);
             ex |= NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE;
             NativeMethods.SetWindowLong(_hwnd, NativeMethods.GWL_EXSTYLE, ex);
+            InitExtras();
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -140,6 +141,7 @@ namespace IslandBar
             _quota.Start();
             _gpu.Start();
 
+            StartExtras();
             StatsTick();
             UpdateDarkModeTile();
             await RefreshWeatherAsync();
@@ -181,6 +183,7 @@ namespace IslandBar
             _audio.Dispose();
             _quota.Stop();
             _gpu.Stop();
+            StopExtras();
             Close();
         }
 
@@ -395,7 +398,7 @@ namespace IslandBar
                         double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW;
                         return new Size(Math.Max(w, 74), 34);
                     }
-                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW;
+                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0);
                     return new Size(Math.Max(iw, 130), 34);
                 }
             }
@@ -489,6 +492,7 @@ namespace IslandBar
             _collapseDelay.Stop();
             _autoHideDelay.Stop();
             if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
+            if (_focusPhase == FocusPhase.Focus) Island.Opacity = 1;
             if (_mode == IslandMode.Wheel) { _wheelMouseEntered = true; return; }
             if (_mode != IslandMode.Expanded) _expandDelay.Start();
         }
@@ -742,6 +746,8 @@ namespace IslandBar
             PageStats.Visibility = TabStats.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageQuick.Visibility = TabQuick.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageQuota.Visibility = TabQuota.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageClip.Visibility = TabClip.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            if (TabClip.IsChecked == true) BuildClipList();
             if (TabQuota.IsChecked == true) BuildQuotaList();
             UpdateQuotaStrip();
 
@@ -763,6 +769,7 @@ namespace IslandBar
             SideClockM.Text = now.ToString("mm");
             HeaderTime.Text = clock;
             HeaderDate.Text = now.ToString("M月d日 dddd", ZhTw);
+            UpdateHeaderEvent();
 
             // 日期變了就重畫日曆
             if (_lastDay != now.Date)
@@ -782,6 +789,7 @@ namespace IslandBar
             _stats.Update();
             if (_mode == IslandMode.Expanded && TabStats.IsChecked == true) UpdateStatsUi();
             RefreshItems(); // 系統資源點點每秒更新
+            ExtrasTick();
         }
 
         private void UpdateStatsUi()
@@ -818,6 +826,7 @@ namespace IslandBar
             if (_gpu.Temperature.HasValue) gpuExtra += $"{_gpu.Temperature}°C";
             if (_gpu.VramTotalGb.HasValue) gpuExtra += (gpuExtra.Length > 0 ? " · " : "") + $"{_gpu.VramUsedGb:0.0}/{_gpu.VramTotalGb:0}G";
             GpuLabel.Text = gpuExtra.Length > 0 ? "GPU  " + gpuExtra : "GPU";
+            ApplyTrainingToGpuTile();
         }
 
         private async Task RefreshWeatherAsync()
@@ -1366,6 +1375,7 @@ namespace IslandBar
                     VerticalAlignment = VerticalAlignment.Center,
                     Child = tb
                 };
+                DecorateCalendarDay(day, cell, tb);
                 CalGrid.Children.Add(cell);
             }
         }
@@ -1437,6 +1447,7 @@ namespace IslandBar
                 _timerRunning = false;
                 _timerSet = TimeSpan.Zero;
                 UpdateTimerUi();
+                if (OnFocusTimerDone()) return; // 專注 / 休息結束
                 try { SystemSounds.Exclamation.Play(); } catch { }
                 if (!_userHidden)
                     ShowHud(GTimer, null, null, "時間到！", TimeSpan.FromSeconds(5));
@@ -1460,7 +1471,7 @@ namespace IslandBar
 
             if (_timerRunning)
             {
-                CompactTimer.Text = GTimer + " " + text;
+                CompactTimer.Text = FocusPrefix() + text;
                 CompactTimer.Visibility = Visibility.Visible;
                 SideTimer.Text = text;
                 SideTimer.Visibility = Visibility.Visible;

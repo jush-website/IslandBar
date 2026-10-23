@@ -47,6 +47,24 @@ namespace IslandBar
         /// <summary>有新版本時自動下載並安裝</summary>
         public bool AutoUpdate { get; set; } = true;
 
+        /// <summary>剪貼簿歷史（只存在記憶體）</summary>
+        public bool ClipboardHistory { get; set; } = true;
+
+        /// <summary>Google 日曆等的 iCal 私人網址</summary>
+        public string CalendarIcsUrl { get; set; } = "";
+
+        /// <summary>要讀 epoch / loss 的訓練 log 檔</summary>
+        public string TrainingLogPath { get; set; } = "";
+
+        /// <summary>GPU 工作結束時通知</summary>
+        public bool NotifyTrainingDone { get; set; } = true;
+
+        /// <summary>麥克風 / 鏡頭使用中指示燈</summary>
+        public bool MicCamIndicator { get; set; } = true;
+
+        /// <summary>耳機等播放裝置連上 / 中斷時提示</summary>
+        public bool DeviceConnectHud { get; set; } = true;
+
         /// <summary>天氣顯示的城市名稱（僅顯示用）</summary>
         public string City { get; set; } = "台北";
 

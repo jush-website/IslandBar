@@ -38,6 +38,11 @@ namespace IslandBar
         private Forms.ToolStripMenuItem _autoHideItem;
         private Forms.ToolStripMenuItem _autoUpdateItem;
         private Forms.ToolStripMenuItem _installUpdateItem;
+        private Forms.ToolStripMenuItem _clipItem;
+        private Forms.ToolStripMenuItem _micCamItem;
+        private Forms.ToolStripMenuItem _deviceHudItem;
+        private Forms.ToolStripMenuItem _trainNotifyItem;
+        private Forms.ToolStripMenuItem _focusItem;
 
         private readonly DispatcherTimer _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(4) };
         private UpdateInfo _pendingUpdate;
@@ -46,6 +51,14 @@ namespace IslandBar
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            // Claude Code / Codex 的 hook 呼叫：把事件轉給正在執行的動態島就結束
+            if (e.Args.Length >= 1 && e.Args[0] == "--hook")
+            {
+                try { HookBridge.RunClient(e.Args); } catch { }
+                Shutdown();
+                return;
+            }
 
             _mutex = new Mutex(true, "IslandBar_SingleInstance_Mutex", out bool isNew);
             if (!isNew)
@@ -64,6 +77,8 @@ namespace IslandBar
                 Balloon("IslandBar · AI 額度", text + "。點這裡重新登入。", Forms.ToolTipIcon.Warning);
                 _balloonLoginAction = action;
             };
+            _window.TrainingFinished += text =>
+                Balloon("IslandBar · GPU", text, Forms.ToolTipIcon.Info);
             _window.Show();
 
             CreateTrayIcon();
@@ -97,6 +112,7 @@ namespace IslandBar
                 var pending = _window?.PendingLoginActions ?? new HashSet<string>();
                 claudeLoginTop.Visible = pending.Contains("claude-login");
                 codexLoginTop.Visible = pending.Contains("codex-login");
+                if (_focusItem != null) _focusItem.Text = _window?.FocusRunning == true ? "結束專注模式" : "專注模式（25 分鐘 + 休息 5 分鐘）";
             };
 
             // 隨時都可以用的帳號登入
@@ -119,6 +135,92 @@ namespace IslandBar
                 if (dlg.ShowDialog() == true) _window?.OpenWheelForFiles(dlg.FileNames);
             };
             _recentItem = new Forms.ToolStripMenuItem("最近轉換") { Enabled = false };
+
+            // ---- v1.5 小工具 ----
+            var ocr = new Forms.ToolStripMenuItem("螢幕識字（Ctrl+Shift+O）");
+            ocr.Click += (s, e) => _window?.StartScreenOcr();
+            _focusItem = new Forms.ToolStripMenuItem("專注模式（25 分鐘 + 休息 5 分鐘）");
+            _focusItem.Click += (s, e) => _window?.ToggleFocus();
+
+            var agentHooks = new Forms.ToolStripMenuItem("AI 任務完成通知");
+            var claudeHook = new Forms.ToolStripMenuItem("Claude Code 完成時通知我");
+            claudeHook.Click += (s, e) =>
+            {
+                try
+                {
+                    if (HookBridge.IsClaudeInstalled()) { HookBridge.UninstallClaude(); Balloon("IslandBar", "已移除 Claude Code 的完成通知", Forms.ToolTipIcon.Info); }
+                    else { string path = HookBridge.InstallClaude(); Balloon("IslandBar", "已加入 Claude Code 完成通知（" + path + "，原檔已備份）。新開的 Claude Code 才會生效。", Forms.ToolTipIcon.Info); }
+                }
+                catch (Exception ex) { Log.Error("ClaudeHook", ex); Balloon("IslandBar", "設定失敗：" + ex.Message, Forms.ToolTipIcon.Warning); }
+            };
+            var codexHook = new Forms.ToolStripMenuItem("Codex 完成時通知我");
+            codexHook.Click += (s, e) =>
+            {
+                try
+                {
+                    if (HookBridge.IsCodexInstalled()) { HookBridge.UninstallCodex(); Balloon("IslandBar", "已移除 Codex 的完成通知", Forms.ToolTipIcon.Info); }
+                    else { string path = HookBridge.InstallCodex(); Balloon("IslandBar", "已加入 Codex 完成通知（" + path + "，原檔已備份）。新開的 Codex 才會生效。", Forms.ToolTipIcon.Info); }
+                }
+                catch (Exception ex) { Log.Error("CodexHook", ex); Balloon("IslandBar", "設定失敗：" + ex.Message, Forms.ToolTipIcon.Warning); }
+            };
+            agentHooks.DropDownItems.Add(claudeHook);
+            agentHooks.DropDownItems.Add(codexHook);
+            agentHooks.DropDownItems.Add(new Forms.ToolStripSeparator());
+            agentHooks.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：專注模式中只記數量，結束時一次告訴你") { Enabled = false });
+            agentHooks.DropDownOpening += (s, e) =>
+            {
+                claudeHook.Checked = HookBridge.IsClaudeInstalled();
+                codexHook.Checked = HookBridge.IsCodexInstalled();
+            };
+
+            var calendar = new Forms.ToolStripMenuItem("行程（Google 日曆）");
+            var calSet = new Forms.ToolStripMenuItem("設定 iCal 私人網址…");
+            calSet.Click += (s, e) =>
+            {
+                string url = Microsoft.VisualBasic.Interaction.InputBox(
+                    "貼上 Google 日曆的「iCal 格式的私人網址」\n（日曆設定 → 整合日曆 → iCal 格式的私人網址）",
+                    "IslandBar · 行程", _settings.CalendarIcsUrl ?? "");
+                if (string.IsNullOrWhiteSpace(url)) return; // 取消
+                _settings.CalendarIcsUrl = url.Trim();
+                _settings.Save();
+                _window?.RefreshCalendarNow();
+            };
+            var calRefresh = new Forms.ToolStripMenuItem("立即重新整理行程");
+            calRefresh.Click += (s, e) => _window?.RefreshCalendarNow();
+            calendar.DropDownItems.Add(calSet);
+            calendar.DropDownItems.Add(calRefresh);
+            var calClear = new Forms.ToolStripMenuItem("不顯示行程");
+            calClear.Click += (s, e) => { _settings.CalendarIcsUrl = ""; _settings.Save(); _window?.RefreshCalendarNow(); };
+            calendar.DropDownItems.Add(calClear);
+
+            var training = new Forms.ToolStripMenuItem("GPU 訓練監控");
+            var trainLog = new Forms.ToolStripMenuItem("選擇訓練 log 檔（讀 epoch / loss）…");
+            trainLog.Click += (s, e) =>
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Title = "選擇訓練輸出的 log 檔", Filter = "Log / 文字檔|*.log;*.txt;*.out|所有檔案|*.*" };
+                if (dlg.ShowDialog() != true) return;
+                _settings.TrainingLogPath = dlg.FileName;
+                _settings.Save();
+            };
+            var trainClear = new Forms.ToolStripMenuItem("不讀 log");
+            trainClear.Click += (s, e) => { _settings.TrainingLogPath = ""; _settings.Save(); };
+            _trainNotifyItem = new Forms.ToolStripMenuItem("GPU 工作結束時通知我") { CheckOnClick = true };
+            _trainNotifyItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.NotifyTrainingDone == _trainNotifyItem.Checked) return;
+                _settings.NotifyTrainingDone = _trainNotifyItem.Checked;
+                _settings.Save();
+            };
+            training.DropDownItems.Add(trainLog);
+            training.DropDownItems.Add(trainClear);
+            training.DropDownItems.Add(new Forms.ToolStripSeparator());
+            training.DropDownItems.Add(_trainNotifyItem);
+            training.DropDownOpening += (s, e) =>
+                trainClear.Text = string.IsNullOrEmpty(_settings.TrainingLogPath) ? "不讀 log（目前沒有）" : "不讀 log（目前：" + System.IO.Path.GetFileName(_settings.TrainingLogPath) + "）";
+
+            _clipItem = MakeToggle("剪貼簿歷史", () => _settings.ClipboardHistory, v => _settings.ClipboardHistory = v);
+            _micCamItem = MakeToggle("麥克風 / 鏡頭使用中指示燈", () => _settings.MicCamIndicator, v => _settings.MicCamIndicator = v);
+            _deviceHudItem = MakeToggle("耳機連上 / 中斷提示", () => _settings.DeviceConnectHud, v => _settings.DeviceConnectHud = v);
 
             var toggle = new Forms.ToolStripMenuItem("隱藏 / 顯示動態島");
             toggle.Click += (s, e) => _window?.ToggleUserHidden();
@@ -281,6 +383,11 @@ namespace IslandBar
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(openWheel);
             menu.Items.Add(_recentItem);
+            menu.Items.Add(ocr);
+            menu.Items.Add(_focusItem);
+            menu.Items.Add(agentHooks);
+            menu.Items.Add(calendar);
+            menu.Items.Add(training);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(toggle);
             menu.Items.Add(position);
@@ -293,6 +400,9 @@ namespace IslandBar
             menu.Items.Add(accounts);
             menu.Items.Add(_pinItem);
             menu.Items.Add(_titleItem);
+            menu.Items.Add(_clipItem);
+            menu.Items.Add(_micCamItem);
+            menu.Items.Add(_deviceHudItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(autoStart);
             menu.Items.Add(_autoUpdateItem);
@@ -352,6 +462,22 @@ namespace IslandBar
             foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
             if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
             if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
+            if (_clipItem != null) _clipItem.Checked = _settings.ClipboardHistory;
+            if (_micCamItem != null) _micCamItem.Checked = _settings.MicCamIndicator;
+            if (_deviceHudItem != null) _deviceHudItem.Checked = _settings.DeviceConnectHud;
+            if (_trainNotifyItem != null) _trainNotifyItem.Checked = _settings.NotifyTrainingDone;
+        }
+
+        private Forms.ToolStripMenuItem MakeToggle(string text, Func<bool> get, Action<bool> set)
+        {
+            var item = new Forms.ToolStripMenuItem(text) { CheckOnClick = true };
+            item.CheckedChanged += (s, e) =>
+            {
+                if (get() == item.Checked) return;
+                set(item.Checked);
+                SaveAndApply();
+            };
+            return item;
         }
 
         private void BuildShowItemsMenu(Forms.ToolStripMenuItem parent)

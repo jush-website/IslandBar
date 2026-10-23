@@ -576,6 +576,8 @@ namespace IslandBar.Services
             catch { return null; }
         }
 
+        internal static string ClaudeConfigDir => ClaudeHome;
+
         private static string ClaudeHome => ClaudeDirs().FirstOrDefault(Directory.Exists) ?? Path.Combine(Home, ".claude");
 
         internal static string FindClaudeCli()
