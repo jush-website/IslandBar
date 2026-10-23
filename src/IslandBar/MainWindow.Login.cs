@@ -80,7 +80,11 @@ namespace IslandBar
             try
             {
                 // 開一個看得到的視窗跑官方登入（會自動開瀏覽器）；跑完停在畫面上讓人看結果
-                string script = $"& '{cli.Replace("'", "''")}' {args}; Write-Host ''; Read-Host '登入完成後按 Enter 關閉此視窗'";
+                string q = cli.Replace("'", "''");
+                string script = action == "claude-login"
+                    // 新版用 `claude auth login`；舊版沒有這個子命令就改開互動模式，請使用者輸入 /login
+                    ? $"& '{q}' auth login; if ($LASTEXITCODE -ne 0) {{ Write-Host ''; Write-Host '改用互動模式：請在 Claude Code 裡輸入 /login 完成登入，再輸入 /exit 離開'; & '{q}' }}; Write-Host ''; Read-Host '登入完成後按 Enter 關閉此視窗'"
+                    : $"& '{q}' {args}; Write-Host ''; Read-Host '登入完成後按 Enter 關閉此視窗'";
                 var psi = new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"")
                 {
                     UseShellExecute = true
@@ -93,7 +97,6 @@ namespace IslandBar
                     await proc.WaitForExitAsync();
                     proc.Dispose();
                 }
-                _notifiedAttention.Clear();
                 _quota.RefreshSoon();
                 ShowNotice("正在重新整理 AI 額度…", TimeSpan.FromSeconds(2));
             }

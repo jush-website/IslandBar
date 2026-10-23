@@ -5,6 +5,13 @@
 
 > 第一次執行若出現「Windows 已保護您的電腦」，點「其他資訊 → 仍要執行」。
 
+## v1.4.5 修正：Claude 一直要求重新登入
+
+- **找 Claude 登入資料的地方變多了**：除了 `%USERPROFILE%\.claude\.credentials.json`，也會找 `CLAUDE_CONFIG_DIR` 指定的資料夾，以及 **Windows 認證管理員**（新版 Claude Code 可能把登入存在這裡）。
+- **不再反覆跳通知**：同一個問題只通知一次，處理好之後再出現才會重新通知。
+- 登入視窗：`claude auth login` 不能用的版本，會自動改開 Claude Code 互動模式讓你輸入 `/login`。
+- 記錄檔會寫下「Claude 憑證搜尋」結果（只有位置與檔名，不含任何憑證內容），方便找問題。
+
 ## v1.4.4 新功能：Codex / Claude 一鍵重新登入
 
 當 Codex 或 Claude Code 的登入失效（自動刷新也失敗）時：

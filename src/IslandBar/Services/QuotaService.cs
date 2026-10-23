@@ -76,7 +76,7 @@ namespace IslandBar.Services
 
         private static readonly TimeSpan ClaudeInterval = TimeSpan.FromSeconds(60);
         private const string ClaudeTemporaryProblem = "即時端點暫時無法更新，保留最後一次成功資料。";
-        private const string ClaudeLoginHint = "Claude Code 的登入已失效或尚未登入：請在終端機執行 claude 並依提示重新登入。";
+        private const string ClaudeLoginHint = "找不到有效的 Claude Code 登入：請點「重新登入」。如果已經登入還是出現，請在系統匣開啟記錄檔，把「Claude 憑證搜尋」那一行傳給我。";
 
         private ProviderUsage _claudeLive;
         private DateTime _claudeNextFetch = DateTime.MinValue;
@@ -115,6 +115,8 @@ namespace IslandBar.Services
         {
             _claudeNextFetch = DateTime.MinValue;
             _claudeLive = null;
+            _claudeDiagLogged = false;
+            _claudeAuthFailed = false;
             _codexRefreshFailedAt = DateTime.MinValue;
             lock (WhereCache) WhereCache.Clear();
             Task.Run(async () =>
@@ -531,7 +533,23 @@ namespace IslandBar.Services
         //  Claude Code
         // ================================================================
 
-        private static string ClaudeHome => Environment.GetEnvironmentVariable("CLAUDE_HOME") ?? Path.Combine(Home, ".claude");
+        /// <summary>Claude Code 的設定資料夾：CLAUDE_CONFIG_DIR（官方環境變數）→ CLAUDE_HOME → ~/.claude</summary>
+        private static IEnumerable<string> ClaudeDirs()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var d in new[]
+            {
+                Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR"),
+                Environment.GetEnvironmentVariable("CLAUDE_HOME"),
+                Path.Combine(Home, ".claude"),
+                Path.Combine(Home, ".config", "claude")
+            })
+            {
+                if (!string.IsNullOrWhiteSpace(d) && seen.Add(d)) yield return d;
+            }
+        }
+
+        private static string ClaudeHome => ClaudeDirs().FirstOrDefault(Directory.Exists) ?? Path.Combine(Home, ".claude");
 
         internal static string FindClaudeCli()
         {
@@ -565,22 +583,75 @@ namespace IslandBar.Services
             return null;
         }
 
-        private sealed class ClaudeCred
+        internal sealed class ClaudeCred
         {
             public string Token;
             public double? ExpiresAt;
         }
 
+        private static bool _claudeDiagLogged;
+
+        /// <summary>
+        /// 找 Claude Code 的 OAuth 憑證：先找各設定資料夾的 .credentials.json，
+        /// 再找 Windows 認證管理員（新版 Claude Code 可能存在這裡）。只回傳 token，不寫進記錄檔。
+        /// </summary>
         private static ClaudeCred ReadClaudeCred()
         {
+            var diag = new List<string>();
+            foreach (var dir in ClaudeDirs())
+            {
+                string file = Path.Combine(dir, ".credentials.json");
+                if (!File.Exists(file)) { diag.Add($"{file}: 不存在"); continue; }
+                try
+                {
+                    var cred = ParseClaudeCredJson(File.ReadAllText(file), out string keys);
+                    if (cred != null) return cred;
+                    diag.Add($"{file}: 有檔案但沒有 accessToken（欄位：{keys}）");
+                }
+                catch (Exception ex) { diag.Add($"{file}: 讀取失敗 {ex.GetType().Name}"); }
+            }
+
             try
             {
-                using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(ClaudeHome, ".credentials.json")));
-                if (doc.RootElement.TryGetProperty("claudeAiOauth", out var o) && o.TryGetProperty("accessToken", out var at) &&
-                    at.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(at.GetString()))
-                    return new ClaudeCred { Token = at.GetString(), ExpiresAt = Num(o, "expiresAt") };
+                var fromVault = CredentialVault.FindClaude(out var targets);
+                if (fromVault != null) return fromVault;
+                diag.Add(targets.Count == 0 ? "認證管理員：沒有 Claude 相關項目" : "認證管理員：" + string.Join(", ", targets) + "（沒有 accessToken）");
             }
-            catch { }
+            catch (Exception ex) { diag.Add("認證管理員：讀取失敗 " + ex.GetType().Name); }
+
+            if (!_claudeDiagLogged)
+            {
+                _claudeDiagLogged = true;
+                Log.Write("Claude 憑證搜尋：" + string.Join(" | ", diag));
+            }
+            return null;
+        }
+
+        internal static ClaudeCred ParseClaudeCredJson(string json, out string keys)
+        {
+            keys = "";
+            using var doc = JsonDocument.Parse(json.Trim('\0', '﻿', ' ', '\r', '\n'));
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
+            keys = string.Join(",", root.EnumerateObject().Select(p => p.Name));
+            foreach (var candidate in new[] { "claudeAiOauth", "claude_ai_oauth", "oauth" })
+            {
+                if (root.TryGetProperty(candidate, out var o) && o.ValueKind == JsonValueKind.Object)
+                {
+                    var c = TokenFrom(o);
+                    if (c != null) return c;
+                }
+            }
+            return TokenFrom(root);
+        }
+
+        private static ClaudeCred TokenFrom(JsonElement o)
+        {
+            foreach (var k in new[] { "accessToken", "access_token" })
+            {
+                if (o.TryGetProperty(k, out var at) && at.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(at.GetString()))
+                    return new ClaudeCred { Token = at.GetString(), ExpiresAt = Num(o, "expiresAt") ?? Num(o, "expires_at") };
+            }
             return null;
         }
 
