@@ -83,7 +83,7 @@ namespace IslandBar
                 string q = cli.Replace("'", "''");
                 string script = action == "claude-login"
                     // 新版用 `claude auth login`；舊版沒有這個子命令就改開互動模式，請使用者輸入 /login
-                    ? $"& '{q}' auth login; if ($LASTEXITCODE -ne 0) {{ Write-Host ''; Write-Host '改用互動模式：請在 Claude Code 裡輸入 /login 完成登入，再輸入 /exit 離開'; & '{q}' }}; Write-Host ''; Read-Host '登入完成後按 Enter 關閉此視窗'"
+                    ? $"& '{q}' auth login; if ($LASTEXITCODE -ne 0) {{ Write-Host ''; Write-Host '改用互動模式：請在 Claude Code 裡輸入 /login 完成登入，再輸入 /exit 離開'; & '{q}' }}; Write-Host ''; Write-Host '--- 登入狀態 ---'; & '{q}' auth status 2>&1 | Out-Host; Write-Host ''; Write-Host ('憑證檔：' + $env:USERPROFILE + '\\.claude\\.credentials.json  存在=' + (Test-Path (Join-Path $env:USERPROFILE '.claude\\.credentials.json'))); Write-Host ''; Read-Host '登入完成後按 Enter 關閉此視窗'"
                     : $"& '{q}' {args}; Write-Host ''; Read-Host '登入完成後按 Enter 關閉此視窗'";
                 var psi = new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"")
                 {

@@ -5,6 +5,11 @@
 
 > 第一次執行若出現「Windows 已保護您的電腦」，點「其他資訊 → 仍要執行」。
 
+## v1.4.6
+
+- Claude 登入資料再多找幾個位置：之後才設定的 `CLAUDE_CONFIG_DIR` 使用者環境變數、Claude 桌面版（Microsoft Store）套件資料夾。
+- 登入視窗最後會顯示 `claude auth status` 的結果，以及 `.claude\.credentials.json` 是否存在，一眼看出到底有沒有登入成功。
+
 ## v1.4.5 修正：Claude 一直要求重新登入
 
 - **找 Claude 登入資料的地方變多了**：除了 `%USERPROFILE%\.claude\.credentials.json`，也會找 `CLAUDE_CONFIG_DIR` 指定的資料夾，以及 **Windows 認證管理員**（新版 Claude Code 可能把登入存在這裡）。

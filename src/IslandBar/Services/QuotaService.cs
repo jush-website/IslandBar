@@ -537,16 +537,43 @@ namespace IslandBar.Services
         private static IEnumerable<string> ClaudeDirs()
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var d in new[]
+            var dirs = new List<string>
             {
                 Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR"),
+                UserEnv("CLAUDE_CONFIG_DIR"),   // IslandBar 啟動後才設定的使用者環境變數
                 Environment.GetEnvironmentVariable("CLAUDE_HOME"),
                 Path.Combine(Home, ".claude"),
                 Path.Combine(Home, ".config", "claude")
-            })
+            };
+            // Claude 桌面版（Microsoft Store / MSIX）內建的 Claude Code：檔案會被重新導向到套件資料夾
+            try
+            {
+                string packages = Path.Combine(LocalAppData, "Packages");
+                if (Directory.Exists(packages))
+                {
+                    foreach (var pkg in Directory.GetDirectories(packages, "Claude_*"))
+                    {
+                        dirs.Add(Path.Combine(pkg, "LocalCache", "Roaming", "Claude", ".claude"));
+                        dirs.Add(Path.Combine(pkg, "LocalCache", "Roaming", ".claude"));
+                        dirs.Add(Path.Combine(pkg, "LocalCache", "Local", ".claude"));
+                    }
+                }
+            }
+            catch { }
+            foreach (var d in dirs)
             {
                 if (!string.IsNullOrWhiteSpace(d) && seen.Add(d)) yield return d;
             }
+        }
+
+        private static string UserEnv(string name)
+        {
+            try
+            {
+                using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Environment");
+                return k?.GetValue(name) as string;
+            }
+            catch { return null; }
         }
 
         private static string ClaudeHome => ClaudeDirs().FirstOrDefault(Directory.Exists) ?? Path.Combine(Home, ".claude");
