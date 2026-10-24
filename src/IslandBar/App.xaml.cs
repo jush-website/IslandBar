@@ -338,7 +338,10 @@ namespace IslandBar
             _installUpdateItem = new Forms.ToolStripMenuItem("立即更新") { Visible = false, Font = new Font(menu.Font, System.Drawing.FontStyle.Bold) };
             _installUpdateItem.Click += async (s, e) => { if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate); };
 
-            var editSettings = new Forms.ToolStripMenuItem("編輯進階設定（天氣城市、時間格式）");
+            var weatherCity = new Forms.ToolStripMenuItem("天氣地區…");
+            weatherCity.Click += (s, e) => _window?.OpenCityPicker();
+
+            var editSettings = new Forms.ToolStripMenuItem("編輯進階設定（時間格式等）");
             editSettings.Click += (s, e) =>
             {
                 try
@@ -408,6 +411,7 @@ namespace IslandBar
             menu.Items.Add(_autoUpdateItem);
             menu.Items.Add(checkUpdate);
             menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add(weatherCity);
             menu.Items.Add(editSettings);
             menu.Items.Add(reload);
             menu.Items.Add(soundSettings);

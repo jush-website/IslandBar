@@ -829,8 +829,68 @@ namespace IslandBar
             ApplyTrainingToGpuTile();
         }
 
+        private DateTime _locatedAt = DateTime.MinValue;
+        private bool _locating;
+
+        /// <summary>開啟天氣地區選擇視窗（系統匣或點天氣磚）</summary>
+        public void OpenCityPicker()
+        {
+            var win = new CityPickerWindow(_settings.City, _settings.WeatherAuto);
+            win.Picked += place =>
+            {
+                if (place == null)
+                {
+                    _settings.WeatherAuto = true;
+                    _locatedAt = DateTime.MinValue; // 立刻重新定位
+                }
+                else
+                {
+                    _settings.WeatherAuto = false;
+                    _settings.City = place.Name;
+                    _settings.Latitude = place.Latitude;
+                    _settings.Longitude = place.Longitude;
+                }
+                _settings.Save();
+                SettingsChanged?.Invoke();
+                _ = RefreshWeatherAsync();
+            };
+            win.Show();
+        }
+
+        private void WeatherTile_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            OpenCityPicker();
+        }
+
         private async Task RefreshWeatherAsync()
         {
+            // 自動地區：每小時重新定位一次
+            if (_settings.WeatherAuto && !_locating && (DateTime.Now - _locatedAt).TotalMinutes >= 60)
+            {
+                _locating = true;
+                WeatherCity.Text = "定位中…";
+                try
+                {
+                    var found = await LocationService.LocateAsync();
+                    if (found.HasValue && _settings.WeatherAuto)
+                    {
+                        var (place, source) = found.Value;
+                        _locatedAt = DateTime.Now;
+                        Log.Write($"天氣位置：{place.Name}（{source}）");
+                        if (place.Name != _settings.City || Math.Abs(place.Latitude - _settings.Latitude) > 0.01 || Math.Abs(place.Longitude - _settings.Longitude) > 0.01)
+                        {
+                            _settings.City = place.Name;
+                            _settings.Latitude = place.Latitude;
+                            _settings.Longitude = place.Longitude;
+                            _settings.Save();
+                        }
+                    }
+                    else _locatedAt = DateTime.Now.AddMinutes(-50); // 失敗：10 分鐘後再試，先用上次的位置
+                }
+                finally { _locating = false; }
+            }
+
             WeatherCity.Text = _settings.City;
             var w = await _weather.GetAsync(_settings.Latitude, _settings.Longitude);
             if (w == null)

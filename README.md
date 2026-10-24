@@ -45,7 +45,7 @@
 
 系統匣圖示右鍵 →「編輯設定」，會開啟 `%AppData%\IslandBar\settings.json`：
 
-位置、自動隱藏、自動更新可以直接在系統匣選單切換；其他進階設定：
+位置、自動隱藏、自動更新可以直接在系統匣選單切換。天氣地區：系統匣「天氣地區…」或點系統分頁的天氣磚，可選自動定位、台灣 22 縣市，或搜尋全世界城市。其他進階設定：
 
 ```json
 {
@@ -53,6 +53,7 @@
   "Scale": 1.0,
   "AutoHide": false,
   "AutoUpdate": true,
+  "WeatherAuto": true,
   "City": "台北",
   "Latitude": 25.033,
   "Longitude": 121.565,

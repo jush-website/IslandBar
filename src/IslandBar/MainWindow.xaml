@@ -546,8 +546,9 @@
 
                     <!-- == 系統資訊 == -->
                     <UniformGrid x:Name="PageStats" Grid.Row="1" Columns="3" Rows="2" Margin="-4,6,-4,-4" Visibility="Collapsed">
-                        <!-- 天氣 -->
-                        <Border Style="{StaticResource StatTile}">
+                        <!-- 天氣（點一下選地區） -->
+                        <Border Style="{StaticResource StatTile}" Cursor="Hand" ToolTip="點一下選擇天氣地區"
+                                MouseLeftButtonUp="WeatherTile_Click">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock x:Name="WeatherGlyph" Text="&#x2600;" FontFamily="Segoe UI Symbol" FontSize="13" VerticalAlignment="Center" Foreground="#FFD166" />

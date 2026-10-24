@@ -65,6 +65,9 @@ namespace IslandBar
         /// <summary>耳機等播放裝置連上 / 中斷時提示</summary>
         public bool DeviceConnectHud { get; set; } = true;
 
+        /// <summary>true = 天氣地區依目前位置自動判斷（Windows 定位，失敗改用網路位置）</summary>
+        public bool WeatherAuto { get; set; } = true;
+
         /// <summary>天氣顯示的城市名稱（僅顯示用）</summary>
         public string City { get; set; } = "台北";
 
