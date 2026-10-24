@@ -290,7 +290,9 @@ namespace IslandBar
 
                 RadarCanvas.Children.Clear();
                 _radarLayers.Clear();
-                var loads = new List<Task>();
+                var loads = new List<Task<bool>>();
+                var baseLoads = new List<Task<bool>>();
+                var latestImages = new List<Image>();
 
                 void AddTiles(Canvas layer, Func<int, int, string> url, double opacity)
                 {
@@ -302,16 +304,19 @@ namespace IslandBar
                             Canvas.SetLeft(img, Math.Round(tx * 256 - left));
                             Canvas.SetTop(img, Math.Round(ty * 256 - top));
                             layer.Children.Add(img);
-                            loads.Add(LoadInto(img, url(wx, ty)));
+                            var t = LoadInto(img, url(wx, ty));
+                            loads.Add(t);
+                            if (layer.Tag as string == "base") baseLoads.Add(t);
+                            if (layer.Tag as string == "latest") latestImages.Add(img);
                         }
                 }
 
-                var baseLayer = new Canvas();
+                var baseLayer = new Canvas { Tag = "base" };
                 AddTiles(baseLayer, RadarService.BaseTileUrl, 1);
                 RadarCanvas.Children.Add(baseLayer);
                 foreach (var f in frames)
                 {
-                    var layer = new Canvas { Visibility = Visibility.Collapsed };
+                    var layer = new Canvas { Visibility = Visibility.Collapsed, Tag = f == frames[frames.Count - 1] ? "latest" : null };
                     var frame = f;
                     AddTiles(layer, (x, y) => RadarService.RadarTileUrl(host, frame, x, y), 0.85);
                     RadarCanvas.Children.Add(layer);
@@ -329,8 +334,23 @@ namespace IslandBar
                 _radarTick = _radarLayers.Count - 1;
                 ShowRadarFrame(_radarTick);
 
-                await Task.WhenAll(loads);
-                RadarStatus.Visibility = Visibility.Collapsed;
+                var results = await Task.WhenAll(loads);
+                int failed = results.Count(ok => !ok);
+                bool baseOk = (await Task.WhenAll(baseLoads)).Any(ok => ok);
+                bool rain = latestImages.Any(i => i.Source is System.Windows.Media.Imaging.BitmapSource b && RadarService.HasEcho(b));
+                Log.Write($"Radar loaded: {frames.Count} frames, {results.Length} tiles, {failed} failed, rain nearby={rain}");
+
+                if (!baseOk)
+                {
+                    RadarStatus.Text = "地圖載入失敗（可能被防火牆或網路擋住）";
+                    RadarStatus.Visibility = Visibility.Visible;
+                }
+                else if (!rain)
+                {
+                    RadarStatus.Text = "目前附近沒有降雨回波";
+                    RadarStatus.Visibility = Visibility.Visible;
+                }
+                else RadarStatus.Visibility = Visibility.Collapsed;
                 StartRadarAnim();
             }
             catch (Exception ex)
@@ -342,10 +362,10 @@ namespace IslandBar
             finally { _radarLoading = false; }
         }
 
-        private static async Task LoadInto(Image img, string url)
+        private static async Task<bool> LoadInto(Image img, string url)
         {
-            try { img.Source = await RadarService.LoadImageAsync(url); }
-            catch (Exception ex) { Log.Write("Radar tile failed: " + ex.Message); }
+            try { img.Source = await RadarService.LoadImageAsync(url); return true; }
+            catch (Exception ex) { Log.Write("Radar tile failed: " + url + " — " + ex.Message); return false; }
         }
 
         private void StartRadarAnim()

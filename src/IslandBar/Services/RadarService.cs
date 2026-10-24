@@ -60,8 +60,26 @@ namespace IslandBar.Services
         public static string RadarTileUrl(string host, RadarFrame f, int x, int y) =>
             $"{host}{f.Path}/256/{Zoom}/{x}/{y}/2/1_1.png"; // 2 = Universal Blue（免費版唯一的配色）
 
+        /// <summary>CARTO Voyager 底圖（淺色、有海岸線與地名，雨區比較看得清楚）</summary>
         public static string BaseTileUrl(int x, int y) =>
-            $"https://basemaps.cartocdn.com/dark_all/{Zoom}/{x}/{y}.png";
+            $"https://{Subdomains[(x + y) & 3]}.basemaps.cartocdn.com/rastertiles/voyager/{Zoom}/{x}/{y}.png";
+
+        private static readonly string[] Subdomains = { "a", "b", "c", "d" };
+
+        /// <summary>圖片裡有沒有不透明的像素（雷達圖塊沒下雨時是全透明的）</summary>
+        public static bool HasEcho(BitmapSource img)
+        {
+            try
+            {
+                var bgra = new FormatConvertedBitmap(img, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                int w = bgra.PixelWidth, h = bgra.PixelHeight, stride = w * 4;
+                var px = new byte[stride * h];
+                bgra.CopyPixels(px, stride, 0);
+                for (int i = 3; i < px.Length; i += 4) if (px[i] > 40) return true;
+            }
+            catch { }
+            return false;
+        }
 
         // Web Mercator：經緯度 → 縮放 7 的世界像素座標
         public static (double x, double y) ToPixel(double lat, double lon)
