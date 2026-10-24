@@ -82,6 +82,7 @@ namespace IslandBar
         {
             _settings = settings;
             InitializeComponent();
+            Island.SizeChanged += (s, e) => UpdateIslandClip();
 
             SourceInitialized += OnSourceInitialized;
             Loaded += OnLoaded;
@@ -192,7 +193,7 @@ namespace IslandBar
         public const double MinScale = 0.7;
         public const double MaxScale = 1.6;
         private const double BaseWindowWidth = 560;
-        private const double BaseWindowHeight = 400; // 展開＋固定額度列時最高約 340
+        private const double BaseWindowHeight = 460; // 展開＋固定額度列時最高約 340
 
         /// <summary>設定變更時（例如 Ctrl+滾輪縮放）通知系統匣選單同步</summary>
         public event Action SettingsChanged;
@@ -222,7 +223,7 @@ namespace IslandBar
                 along = Math.Clamp(along, 0, 1);
                 if (IsSide)
                 {
-                    double half = (128 + _stripExtra / 2) * sc; // 展開面板高度的一半，避免超出螢幕
+                    double half = (128 + (_stripExtra + _pageExtra) / 2) * sc; // 展開面板高度的一半，避免超出螢幕
                     double cy = Math.Clamp(along * sh, half, sh - half);
                     Top = cy - Height / 2;
                     bool left = _settings.Position == IslandPosition.Left;
@@ -375,7 +376,7 @@ namespace IslandBar
             switch (_mode)
             {
                 case IslandMode.Expanded:
-                    return new Size(480, 256 + _stripExtra);
+                    return new Size(480, 256 + _stripExtra + _pageExtra);
                 case IslandMode.Hud:
                     if (IsSide && !_hudIsMessage) return new Size(44, 180);
                     return new Size(_hudIsMessage ? 380 : 300, 40);
@@ -409,6 +410,7 @@ namespace IslandBar
             var size = TargetSize();
             double radius = _mode == IslandMode.Expanded ? 26 : (_mode == IslandMode.Hud ? 20 : 18);
             Island.CornerRadius = CornersFor(radius);
+            UpdateIslandClip();
 
             if (animate)
             {
@@ -747,6 +749,9 @@ namespace IslandBar
             PageQuick.Visibility = TabQuick.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageQuota.Visibility = TabQuota.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageClip.Visibility = TabClip.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageWeather.Visibility = TabWeather.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            SetPageExtra(TabWeather.IsChecked == true ? WeatherPageExtra : 0);
+            if (TabWeather.IsChecked == true) OnWeatherTabShown();
             if (TabClip.IsChecked == true) BuildClipList();
             if (TabQuota.IsChecked == true) BuildQuotaList();
             UpdateQuotaStrip();
@@ -794,6 +799,7 @@ namespace IslandBar
 
         private void UpdateStatsUi()
         {
+            UpdateUptime();
             CpuValue.Text = $"{_stats.CpuPercent:0}%";
             CpuBar.ScaleX = _stats.CpuPercent / 100.0;
 
@@ -869,7 +875,7 @@ namespace IslandBar
             if (_settings.WeatherAuto && !_locating && (DateTime.Now - _locatedAt).TotalMinutes >= 60)
             {
                 _locating = true;
-                WeatherCity.Text = "定位中…";
+                WxCity.Text = "定位中…";
                 try
                 {
                     var found = await LocationService.LocateAsync();
@@ -891,16 +897,15 @@ namespace IslandBar
                 finally { _locating = false; }
             }
 
-            WeatherCity.Text = _settings.City;
-            var w = await _weather.GetAsync(_settings.Latitude, _settings.Longitude);
-            if (w == null)
+            WxCity.Text = _settings.City;
+            var f = await _weather.GetForecastAsync(_settings.Latitude, _settings.Longitude);
+            if (f == null)
             {
-                WeatherDesc.Text = "無法取得天氣";
+                if (_forecast == null) WxDesc.Text = "無法取得天氣";
                 return;
             }
-            WeatherGlyph.Text = w.Glyph;
-            WeatherTemp.Text = $"{w.Temperature:0}°";
-            WeatherDesc.Text = $"{w.Description}  {w.Low:0}°~{w.High:0}°";
+            _forecast = f;
+            ApplyForecast(f);
         }
 
         // ================================================================
@@ -970,6 +975,34 @@ namespace IslandBar
         //  背景不透明度
         // ================================================================
 
+        /// <summary>
+        /// 依圓角裁切整個動態島：不用陰影，也不讓子元素或抗鋸齒邊緣露出圓弧外，
+        /// 避免在淺色背景上看到圓角處的灰 / 白色光暈。
+        /// </summary>
+        private void UpdateIslandClip()
+        {
+            double w = Island.ActualWidth, h = Island.ActualHeight;
+            if (w <= 0 || h <= 0) return;
+            var c = Island.CornerRadius;
+            double m = Math.Min(w, h) / 2;
+            double tl = Math.Min(c.TopLeft, m), tr = Math.Min(c.TopRight, m), br = Math.Min(c.BottomRight, m), bl = Math.Min(c.BottomLeft, m);
+            var g = new StreamGeometry();
+            using (var ctx = g.Open())
+            {
+                ctx.BeginFigure(new Point(tl, 0), true, true);
+                ctx.LineTo(new Point(w - tr, 0), false, false);
+                if (tr > 0) ctx.ArcTo(new Point(w, tr), new Size(tr, tr), 0, false, SweepDirection.Clockwise, false, false);
+                ctx.LineTo(new Point(w, h - br), false, false);
+                if (br > 0) ctx.ArcTo(new Point(w - br, h), new Size(br, br), 0, false, SweepDirection.Clockwise, false, false);
+                ctx.LineTo(new Point(bl, h), false, false);
+                if (bl > 0) ctx.ArcTo(new Point(0, h - bl), new Size(bl, bl), 0, false, SweepDirection.Clockwise, false, false);
+                ctx.LineTo(new Point(0, tl), false, false);
+                if (tl > 0) ctx.ArcTo(new Point(tl, 0), new Size(tl, tl), 0, false, SweepDirection.Clockwise, false, false);
+            }
+            g.Freeze();
+            Island.Clip = g;
+        }
+
         private void ApplyBackground()
         {
             double a = Math.Clamp(_settings.BackgroundOpacity, 0.2, 1.0);
@@ -977,7 +1010,6 @@ namespace IslandBar
             // 不畫描邊：WPF 的圓角配上半透明白邊會在弧線處出現白色光暈
             Island.BorderBrush = Brushes.Transparent;
             Island.BorderThickness = new Thickness(0);
-            if (Island.Effect is System.Windows.Media.Effects.DropShadowEffect shadow) shadow.Opacity = 0.45 * a;
         }
 
         // ================================================================
@@ -1283,7 +1315,7 @@ namespace IslandBar
             if (Math.Abs(extra - _stripExtra) > 0.5)
             {
                 _stripExtra = extra;
-                ExpandedView.Height = 226 + _stripExtra;
+                ExpandedView.Height = 226 + _stripExtra + _pageExtra;
                 if (_mode == IslandMode.Expanded) ApplyMode(true);
             }
         }

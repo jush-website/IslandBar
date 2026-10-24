@@ -135,6 +135,33 @@
             </Setter>
         </Style>
 
+        <!-- 文字小分頁（天氣：預報 / 雷達） -->
+        <Style x:Key="PillButton" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#A6FFFFFF" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="#14FFFFFF" CornerRadius="9" Padding="10,3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#24FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#40FFFFFF" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- 扁平滑桿 -->
         <Style x:Key="SliderFillButton" TargetType="RepeatButton">
             <Setter Property="Focusable" Value="False" />
@@ -239,9 +266,6 @@
                 DragOver="Island_DragOver"
                 DragLeave="Island_DragLeave"
                 Drop="Island_Drop">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="20" ShadowDepth="3" Direction="270" Opacity="0.45" Color="Black" />
-            </Border.Effect>
             <Border.RenderTransform>
                 <TranslateTransform x:Name="HideTransform" X="0" Y="0" />
             </Border.RenderTransform>
@@ -387,6 +411,8 @@
                                      ToolTip="音樂" IsChecked="True" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabCalendar" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE787;"
                                      ToolTip="日曆與計時器" Checked="Tab_Checked" />
+                        <RadioButton x:Name="TabWeather" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9CA;"
+                                     ToolTip="天氣" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabQuota" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE945;"
                                      ToolTip="AI 額度與系統資源" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabStats" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9D9;"
@@ -546,19 +572,6 @@
 
                     <!-- == 系統資訊 == -->
                     <UniformGrid x:Name="PageStats" Grid.Row="1" Columns="3" Rows="2" Margin="-4,6,-4,-4" Visibility="Collapsed">
-                        <!-- 天氣（點一下選地區） -->
-                        <Border Style="{StaticResource StatTile}" Cursor="Hand" ToolTip="點一下選擇天氣地區"
-                                MouseLeftButtonUp="WeatherTile_Click">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="WeatherGlyph" Text="&#x2600;" FontFamily="Segoe UI Symbol" FontSize="13" VerticalAlignment="Center" Foreground="#FFD166" />
-                                    <TextBlock x:Name="WeatherCity" Style="{StaticResource StatLabel}" Text="台北" />
-                                </StackPanel>
-                                <TextBlock x:Name="WeatherTemp" Style="{StaticResource StatValue}" Text="--°" />
-                                <TextBlock x:Name="WeatherDesc" Text="載入中…" FontSize="11" Foreground="{StaticResource Tertiary}" Margin="0,2,0,0"
-                                           TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </Border>
                         <!-- CPU -->
                         <Border Style="{StaticResource StatTile}">
                             <StackPanel>
@@ -640,7 +653,98 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
+                        <!-- 已開機時間 -->
+                        <Border Style="{StaticResource StatTile}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE823;" FontSize="13" Foreground="#64D2FF" />
+                                    <TextBlock Style="{StaticResource StatLabel}" Text="已開機" />
+                                </StackPanel>
+                                <TextBlock x:Name="UptimeValue" Style="{StaticResource StatValue}" Text="—" />
+                                <TextBlock x:Name="UptimeSince" Text="" FontSize="11" Foreground="{StaticResource Tertiary}" Margin="0,2,0,0"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Border>
                     </UniformGrid>
+
+                    <!-- == 天氣 == -->
+                    <Grid x:Name="PageWeather" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 現在天氣 -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="WxGlyph" Text="&#x2600;" FontFamily="Segoe UI Symbol" FontSize="30" Foreground="#FFD166"
+                                       VerticalAlignment="Center" Margin="2,0,0,0" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="WxTemp" Text="--°" FontSize="30" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="WxCity" Text="定位中…" FontSize="13" FontWeight="SemiBold" Cursor="Hand"
+                                               ToolTip="點一下選擇天氣地區" MouseLeftButtonUp="WeatherTile_Click" TextTrimming="CharacterEllipsis" MaxWidth="150" />
+                                    <TextBlock x:Name="WxDesc" Text="載入中…" FontSize="11" Foreground="{StaticResource Secondary}" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <RadioButton x:Name="WxModeForecast" GroupName="WxMode" Style="{StaticResource PillButton}" Content="預報"
+                                                 IsChecked="True" Checked="WxMode_Checked" />
+                                    <RadioButton x:Name="WxModeRadar" GroupName="WxMode" Style="{StaticResource PillButton}" Content="雷達"
+                                                 Checked="WxMode_Checked" />
+                                </StackPanel>
+                                <TextBlock x:Name="WxDetail1" Text="" FontSize="11" Foreground="{StaticResource Secondary}" HorizontalAlignment="Right" Margin="0,4,0,0" />
+                                <TextBlock x:Name="WxDetail2" Text="" FontSize="11" Foreground="{StaticResource Secondary}" HorizontalAlignment="Right" Margin="0,1,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 預報：逐時 + 一週 -->
+                        <Grid x:Name="WxForecastView" Grid.Row="1" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Border Background="{StaticResource TileBg}" CornerRadius="12" Padding="4,6">
+                                <ScrollViewer x:Name="WxHourScroll" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                              PreviewMouseWheel="WxHourScroll_PreviewMouseWheel">
+                                    <StackPanel x:Name="WxHours" Orientation="Horizontal" />
+                                </ScrollViewer>
+                            </Border>
+                            <Border Grid.Row="1" Background="{StaticResource TileBg}" CornerRadius="12" Padding="10,4" Margin="0,6,0,0">
+                                <StackPanel x:Name="WxDays" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+
+                        <!-- 雷達 -->
+                        <Grid x:Name="WxRadarView" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
+                            <Border x:Name="RadarHost" CornerRadius="12" Background="#101114" ClipToBounds="True">
+                                <Grid>
+                                    <Canvas x:Name="RadarCanvas" ClipToBounds="True" />
+                                    <TextBlock x:Name="RadarStatus" Text="載入雷達中…" FontSize="12" Foreground="{StaticResource Secondary}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Border Background="#B0000000" CornerRadius="9" Padding="6,3,10,3" Margin="8"
+                                            HorizontalAlignment="Left" VerticalAlignment="Top">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="RadarPlay" Style="{StaticResource IconButton}" Width="20" Height="20" Click="RadarPlay_Click" ToolTip="播放 / 暫停">
+                                                <TextBlock x:Name="RadarPlayGlyph" Style="{StaticResource Glyph}" Text="&#xE769;" FontSize="11" />
+                                            </Button>
+                                            <TextBlock x:Name="RadarTime" Text="--:--" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Button x:Name="CwaRadarButton" Style="{StaticResource AccentButton}" Content="氣象署雷達" Height="26" Width="96"
+                                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Click="CwaRadar_Click"
+                                            ToolTip="開啟中央氣象署雷達回波圖（較清楚）" Visibility="Collapsed" />
+                                    <TextBlock Text="RainViewer · © OpenStreetMap · © CARTO" FontSize="9" Foreground="#80FFFFFF"
+                                               HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,4" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
 
                     <!-- == AI 額度 == -->
                     <Grid x:Name="PageQuota" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
