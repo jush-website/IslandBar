@@ -39,17 +39,6 @@ namespace IslandBar
         private void OnWeatherTabShown()
         {
             if (_forecast == null) _ = RefreshWeatherAsync();
-            if (WxModeRadar.IsChecked == true) Dispatcher.BeginInvoke(new Action(() => _ = LoadRadarAsync(false)), DispatcherPriority.Loaded);
-        }
-
-        private void WxMode_Checked(object sender, RoutedEventArgs e)
-        {
-            if (WxForecastView == null || WxRadarView == null) return; // InitializeComponent 期間
-            bool radar = WxModeRadar.IsChecked == true;
-            WxForecastView.Visibility = radar ? Visibility.Collapsed : Visibility.Visible;
-            WxRadarView.Visibility = radar ? Visibility.Visible : Visibility.Collapsed;
-            if (radar) Dispatcher.BeginInvoke(new Action(() => _ = LoadRadarAsync(false)), DispatcherPriority.Loaded);
-            else _radarAnim.Stop();
         }
 
         // ================================================================
@@ -82,7 +71,7 @@ namespace IslandBar
 
             BuildHours(f);
             BuildDays(f);
-            if (PageWeather.Visibility == Visibility.Visible && WxModeRadar.IsChecked == true) _ = LoadRadarAsync(false);
+            RaiseDataChanged();
         }
 
         private static string SunText(Forecast f)
@@ -248,217 +237,27 @@ namespace IslandBar
         }
 
         // ================================================================
-        //  雷達（RainViewer 過去 1 小時動畫）
+        //  雷達：Windy（另開視窗，可以釘在桌面）
         // ================================================================
 
-        private readonly DispatcherTimer _radarAnim = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(550) };
-        private readonly List<(DateTime time, Canvas layer)> _radarLayers = new List<(DateTime, Canvas)>();
-        private bool _radarAnimHooked, _radarPlaying = true, _radarLoading;
-        private int _radarTick;
-        private DateTime _radarLoadedAt = DateTime.MinValue;
-        private double _radarLat = double.NaN, _radarLon = double.NaN, _radarW, _radarH;
+        /// <summary>開啟 Windy 雷達視窗（App 處理，因為視窗要能釘在桌面、跨重開保留）</summary>
+        public event Action OpenRadarRequested;
 
-        private async Task LoadRadarAsync(bool force)
-        {
-            double lat = _settings.Latitude, lon = _settings.Longitude;
-            CwaRadarButton.Visibility = RadarService.IsTaiwan(lat, lon) ? Visibility.Visible : Visibility.Collapsed;
-            double W = RadarHost.ActualWidth > 10 ? RadarHost.ActualWidth : 448;
-            double H = RadarHost.ActualHeight > 10 ? RadarHost.ActualHeight : 230;
-
-            bool same = Math.Abs(_radarLat - lat) < 0.01 && Math.Abs(_radarLon - lon) < 0.01 &&
-                        Math.Abs(_radarW - W) < 2 && Math.Abs(_radarH - H) < 2;
-            if (_radarLoading) return;
-            if (!force && same && _radarLayers.Count > 0 && (DateTime.Now - _radarLoadedAt).TotalMinutes < 10)
-            {
-                StartRadarAnim();
-                return;
-            }
-
-            _radarLoading = true;
-            RadarStatus.Text = "載入雷達中…";
-            RadarStatus.Visibility = Visibility.Visible;
-            try
-            {
-                var (host, frames) = await RadarService.GetFramesAsync(6);
-                if (frames.Count == 0) throw new InvalidOperationException("沒有雷達資料");
-
-                var (px, py) = RadarService.ToPixel(lat, lon);
-                double left = px - W / 2, top = py - H / 2;
-                int n = 1 << RadarService.Zoom;
-                int tx0 = (int)Math.Floor(left / 256), tx1 = (int)Math.Floor((left + W) / 256);
-                int ty0 = Math.Max(0, (int)Math.Floor(top / 256)), ty1 = Math.Min(n - 1, (int)Math.Floor((top + H) / 256));
-
-                RadarCanvas.Children.Clear();
-                _radarLayers.Clear();
-                var loads = new List<Task<bool>>();
-                var baseLoads = new List<Task<bool>>();
-                var latestImages = new List<Image>();
-
-                void AddTiles(Canvas layer, Func<int, int, string> url, double opacity)
-                {
-                    for (int ty = ty0; ty <= ty1; ty++)
-                        for (int tx = tx0; tx <= tx1; tx++)
-                        {
-                            int wx = ((tx % n) + n) % n;
-                            var img = new Image { Width = 256, Height = 256, Opacity = opacity, Stretch = Stretch.Fill };
-                            Canvas.SetLeft(img, Math.Round(tx * 256 - left));
-                            Canvas.SetTop(img, Math.Round(ty * 256 - top));
-                            layer.Children.Add(img);
-                            var t = LoadInto(img, url(wx, ty));
-                            loads.Add(t);
-                            if (layer.Tag as string == "base") baseLoads.Add(t);
-                            if (layer.Tag as string == "latest") latestImages.Add(img);
-                        }
-                }
-
-                var baseLayer = new Canvas { Tag = "base" };
-                AddTiles(baseLayer, RadarService.BaseTileUrl, 1);
-                RadarCanvas.Children.Add(baseLayer);
-                foreach (var f in frames)
-                {
-                    var layer = new Canvas { Visibility = Visibility.Collapsed, Tag = f == frames[frames.Count - 1] ? "latest" : null };
-                    var frame = f;
-                    AddTiles(layer, (x, y) => RadarService.RadarTileUrl(host, frame, x, y), 0.85);
-                    RadarCanvas.Children.Add(layer);
-                    _radarLayers.Add((f.Time, layer));
-                }
-
-                // 目前位置
-                var dot = new Ellipse { Width = 10, Height = 10, Fill = Hex("#0A84FF"), Stroke = Brushes.White, StrokeThickness = 2 };
-                Canvas.SetLeft(dot, W / 2 - 5);
-                Canvas.SetTop(dot, H / 2 - 5);
-                RadarCanvas.Children.Add(dot);
-
-                _radarLat = lat; _radarLon = lon; _radarW = W; _radarH = H;
-                _radarLoadedAt = DateTime.Now;
-                _radarTick = _radarLayers.Count - 1;
-                ShowRadarFrame(_radarTick);
-
-                var results = await Task.WhenAll(loads);
-                int failed = results.Count(ok => !ok);
-                bool baseOk = (await Task.WhenAll(baseLoads)).Any(ok => ok);
-                bool rain = latestImages.Any(i => i.Source is System.Windows.Media.Imaging.BitmapSource b && RadarService.HasEcho(b));
-                Log.Write($"Radar loaded: {frames.Count} frames, {results.Length} tiles, {failed} failed, rain nearby={rain}");
-
-                if (!baseOk)
-                {
-                    RadarStatus.Text = "地圖載入失敗（可能被防火牆或網路擋住）";
-                    RadarStatus.Visibility = Visibility.Visible;
-                }
-                else if (!rain)
-                {
-                    RadarStatus.Text = "目前附近沒有降雨回波";
-                    RadarStatus.Visibility = Visibility.Visible;
-                }
-                else RadarStatus.Visibility = Visibility.Collapsed;
-                StartRadarAnim();
-            }
-            catch (Exception ex)
-            {
-                Log.Error("Radar", ex);
-                RadarStatus.Text = "無法載入雷達：" + ex.Message;
-                RadarStatus.Visibility = Visibility.Visible;
-            }
-            finally { _radarLoading = false; }
-        }
-
-        private static async Task<bool> LoadInto(Image img, string url)
-        {
-            try { img.Source = await RadarService.LoadImageAsync(url); return true; }
-            catch (Exception ex) { Log.Write("Radar tile failed: " + url + " — " + ex.Message); return false; }
-        }
-
-        private void StartRadarAnim()
-        {
-            if (!_radarAnimHooked)
-            {
-                _radarAnimHooked = true;
-                _radarAnim.Tick += (s, e) =>
-                {
-                    if (PageWeather.Visibility != Visibility.Visible || WxModeRadar.IsChecked != true) { _radarAnim.Stop(); return; }
-                    if (_mode != IslandMode.Expanded || !_radarPlaying || _radarLayers.Count == 0) return;
-                    _radarTick = (_radarTick + 1) % (_radarLayers.Count + 3); // 最新那張多停一下
-                    ShowRadarFrame(Math.Min(_radarTick, _radarLayers.Count - 1));
-                };
-            }
-            _radarAnim.Start();
-        }
-
-        private void ShowRadarFrame(int index)
-        {
-            if (index < 0 || index >= _radarLayers.Count) return;
-            for (int i = 0; i < _radarLayers.Count; i++)
-                _radarLayers[i].layer.Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
-            var t = _radarLayers[index].time;
-            RadarTime.Text = t.ToString("HH:mm") + (index == _radarLayers.Count - 1 ? "  最新" : "");
-        }
-
-        private void RadarPlay_Click(object sender, RoutedEventArgs e)
-        {
-            _radarPlaying = !_radarPlaying;
-            RadarPlayGlyph.Text = _radarPlaying ? char.ConvertFromUtf32(0xE769) : char.ConvertFromUtf32(0xE768);
-            if (!_radarPlaying && _radarLayers.Count > 0)
-            {
-                _radarTick = _radarLayers.Count - 1;
-                ShowRadarFrame(_radarTick);
-            }
-        }
+        private void WxRadar_Click(object sender, RoutedEventArgs e) => OpenRadarRequested?.Invoke();
 
         // ================================================================
-        //  中央氣象署雷達回波（另開視窗）
+        //  給桌面小工具用的資料
         // ================================================================
 
-        private Window _cwaWindow;
+        /// <summary>天氣、行程或 AI 額度有更新</summary>
+        public event Action DataChanged;
 
-        private async void CwaRadar_Click(object sender, RoutedEventArgs e)
-        {
-            if (_cwaWindow != null) { _cwaWindow.Activate(); return; }
+        public Forecast CurrentForecast => _forecast;
+        public IReadOnlyList<CalEvent> CalendarEvents => _calendar.Events;
+        public string CalendarError => _calendar.LastError;
+        public IReadOnlyList<QuotaItem> QuotaItems => _allItems.Where(i => i.Group != "sys").ToList();
+        public static Color QuotaColor(double? percent) => LevelColor(percent);
 
-            var img = new Image { Stretch = Stretch.Uniform };
-            var status = new TextBlock
-            {
-                Text = "載入中…", Foreground = Brushes.White, FontSize = 14,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
-            };
-            var link = new TextBlock
-            {
-                Text = "資料來源：中央氣象署　·　在瀏覽器開啟", Foreground = Hex("#A6FFFFFF"), FontSize = 12, Cursor = Cursors.Hand,
-                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 12, 8)
-            };
-            link.MouseLeftButtonUp += (s, ev) =>
-            {
-                try { Process.Start(new ProcessStartInfo(RadarService.CwaPage) { UseShellExecute = true }); } catch { }
-            };
-            var grid = new Grid { Background = Hex("#101114") };
-            grid.Children.Add(img);
-            grid.Children.Add(status);
-            grid.Children.Add(link);
-
-            double size = Math.Min(SystemParameters.WorkArea.Height - 60, 900);
-            _cwaWindow = new Window
-            {
-                Title = "中央氣象署 雷達回波",
-                Width = size * 0.92, Height = size,
-                Content = grid,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                Topmost = true,
-                Background = Brushes.Black
-            };
-            _cwaWindow.Closed += (s, ev) => _cwaWindow = null;
-            _cwaWindow.KeyDown += (s, ev) => { if (ev.Key == Key.Escape) _cwaWindow?.Close(); };
-            _cwaWindow.Show();
-
-            try
-            {
-                long slot = DateTime.UtcNow.Ticks / TimeSpan.FromMinutes(5).Ticks; // 每 5 分鐘換網址，避免拿到舊圖
-                img.Source = await RadarService.LoadImageAsync(RadarService.CwaUrl + "?" + slot, cache: false);
-                status.Visibility = Visibility.Collapsed;
-            }
-            catch (Exception ex)
-            {
-                Log.Error("CwaRadar", ex);
-                status.Text = "無法載入：" + ex.Message;
-            }
-        }
+        private void RaiseDataChanged() => DataChanged?.Invoke();
     }
 }

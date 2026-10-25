@@ -1182,6 +1182,7 @@ namespace IslandBar
             _stripSignature = "#"; // 登入狀態可能變了，額度列重建
             RefreshItems();
             CheckAttention();
+            RaiseDataChanged();
         }
 
         /// <summary>重新計算項目；項目清單變了才重建點點，否則只更新顏色（每秒呼叫）</summary>

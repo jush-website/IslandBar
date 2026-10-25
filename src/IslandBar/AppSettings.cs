@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -64,6 +65,19 @@ namespace IslandBar
 
         /// <summary>耳機等播放裝置連上 / 中斷時提示</summary>
         public bool DeviceConnectHud { get; set; } = true;
+
+        /// <summary>桌面小工具</summary>
+        public bool WidgetEnabled { get; set; } = false;
+        public double? WidgetLeft { get; set; }
+        public double? WidgetTop { get; set; }
+        public List<string> WidgetSections { get; set; } = new List<string> { "clock", "weather", "events", "quota" };
+        public double WidgetOpacity { get; set; } = 0.7;
+        public bool WidgetLocked { get; set; } = false;
+
+        /// <summary>Windy 雷達視窗：圖層、是否釘在桌面、位置大小（x,y,w,h）</summary>
+        public string WindyOverlay { get; set; } = "radar";
+        public bool WindyPinned { get; set; } = false;
+        public string WindyBounds { get; set; } = "";
 
         /// <summary>true = 天氣地區依目前位置自動判斷（Windows 定位，失敗改用網路位置）</summary>
         public bool WeatherAuto { get; set; } = true;

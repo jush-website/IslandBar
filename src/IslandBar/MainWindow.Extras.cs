@@ -356,6 +356,7 @@ namespace IslandBar
             BuildCalendar();
             UpdateCalendarCountdown();
             if (_calendar.LastError != null) Log.Write("Calendar error: " + _calendar.LastError);
+            RaiseDataChanged();
         }
 
         private void UpdateCalendarCountdown()

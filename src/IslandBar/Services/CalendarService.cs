@@ -15,6 +15,7 @@ namespace IslandBar.Services
         public DateTime End { get; set; }
         public string Summary { get; set; } = "";
         public bool AllDay { get; set; }
+        public string Color { get; set; }    // Google 日曆的顏色（#RRGGBB），iCal 沒有
     }
 
     /// <summary>
@@ -47,22 +48,44 @@ namespace IslandBar.Services
 
         public void Stop() => _cts?.Cancel();
 
+        /// <summary>Google 日曆的「公開網址」（…/public/basic.ics）：日曆沒設成公開時抓不到任何行程</summary>
+        public static bool IsGooglePublicUrl(string url) =>
+            (url ?? "").Contains("calendar.google.com", StringComparison.OrdinalIgnoreCase) &&
+            (url ?? "").Contains("/public/", StringComparison.OrdinalIgnoreCase);
+
         public async Task RefreshAsync()
         {
+            var from = DateTime.Now.AddDays(-1);
+            var to = DateTime.Now.AddDays(62);
+            var all = new List<CalEvent>();
+            var errors = new List<string>();
+
+            // 1) Google 帳號（OAuth）
+            if (GoogleCalendarService.Connected)
+            {
+                try { all.AddRange(await GoogleCalendarService.GetEventsAsync(from, to)); }
+                catch (Exception ex) { errors.Add(ex.Message); Log.Error("Calendar.Google", ex); }
+            }
+
+            // 2) iCal 網址
             string url = (UrlProvider() ?? "").Trim();
-            if (string.IsNullOrEmpty(url)) { Events = new List<CalEvent>(); LastError = null; Updated?.Invoke(); return; }
-            if (url.StartsWith("webcal://", StringComparison.OrdinalIgnoreCase)) url = "https://" + url.Substring(9);
-            try
+            if (!string.IsNullOrEmpty(url))
             {
-                string ics = await Http.GetStringAsync(url);
-                Events = Parse(ics, DateTime.Now.AddDays(-1), DateTime.Now.AddDays(62));
-                LastError = null;
+                if (url.StartsWith("webcal://", StringComparison.OrdinalIgnoreCase)) url = "https://" + url.Substring(9);
+                try
+                {
+                    string ics = await Http.GetStringAsync(url);
+                    var list = Parse(ics, from, to);
+                    Log.Write($"iCal：{list.Count} 個行程" + (IsGooglePublicUrl(url) ? "（這是公開網址，日曆沒公開的話會是空的）" : ""));
+                    // Google 帳號已連結時，同一個行程不要重複
+                    foreach (var e in list)
+                        if (!all.Any(a => a.Summary == e.Summary && Math.Abs((a.Start - e.Start).TotalMinutes) < 1)) all.Add(e);
+                }
+                catch (Exception ex) { errors.Add("iCal：" + ex.Message); Log.Error("Calendar.iCal", ex); }
             }
-            catch (Exception ex)
-            {
-                LastError = ex.Message;
-                Log.Error("Calendar", ex);
-            }
+
+            Events = all.OrderBy(e => e.Start).ToList();
+            LastError = errors.Count > 0 ? string.Join("；", errors) : null;
             Updated?.Invoke();
         }
 

@@ -38,6 +38,19 @@ jobs:
           "publish=$publish" >> $env:GITHUB_OUTPUT
           Write-Host "version=$v publish=$publish"
 
+      - name: Inject build secrets
+        shell: pwsh
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          $f = 'src/IslandBar/BuildSecrets.cs'
+          $c = Get-Content $f -Raw
+          if ($env:GOOGLE_CLIENT_ID) { $c = $c.Replace('__GOOGLE_CLIENT_ID__', $env:GOOGLE_CLIENT_ID) }
+          if ($env:GOOGLE_CLIENT_SECRET) { $c = $c.Replace('__GOOGLE_CLIENT_SECRET__', $env:GOOGLE_CLIENT_SECRET) }
+          Set-Content $f $c -NoNewline
+          Write-Host ("Google OAuth client built in: " + [bool]$env:GOOGLE_CLIENT_ID)
+
       - name: Publish IslandBar.exe
         shell: pwsh
         run: |
