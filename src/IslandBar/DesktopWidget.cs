@@ -269,9 +269,10 @@ namespace IslandBar
             foreach (var it in _main.QuotaItems.Take(8))
             {
                 var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
                 row.Children.Add(new TextBlock { Text = it.Label, FontSize = 12, Foreground = Secondary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
                 var bar = new Grid { Height = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 8, 0) };
                 bar.Children.Add(new Border { CornerRadius = new CornerRadius(2.5), Background = Track });
@@ -289,6 +290,14 @@ namespace IslandBar
                 var val = new TextBlock { Text = it.Text, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(val, 2);
                 row.Children.Add(val);
+                string reset = it.ResetIn;
+                var resetTb = new TextBlock
+                {
+                    Text = reset.Length == 0 || reset == "已重置" ? reset : "↻" + reset,
+                    FontSize = 11, Foreground = Tertiary, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(resetTb, 3);
+                row.Children.Add(resetTb);
                 if (!string.IsNullOrEmpty(it.Tip)) row.ToolTip = it.Label + "\n" + it.Tip;
                 _stack.Children.Add(row);
             }

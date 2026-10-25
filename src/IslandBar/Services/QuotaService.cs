@@ -46,6 +46,22 @@ namespace IslandBar.Services
         public double? Percent { get; set; }          // 0~100（GPU 溫度用 °C 同刻度）
         public string Text { get; set; } = "";       // 顯示的數值文字
         public string Tip { get; set; } = "";
+        public DateTimeOffset? ResetsAt { get; set; }
+        public bool ResetPassed { get; set; }
+
+        /// <summary>距離重置還有多久：「45分」「3時12分」「2天5時」；已過或不明回傳 ""（ResetPassed 時回傳「已重置」）</summary>
+        public string ResetIn
+        {
+            get
+            {
+                if (ResetsAt == null) return ResetPassed ? "已重置" : "";
+                var left = ResetsAt.Value - DateTimeOffset.Now;
+                if (left.TotalSeconds <= 0) return "已重置";
+                if (left.TotalMinutes < 60) return $"{Math.Max(1, (int)Math.Ceiling(left.TotalMinutes))}分";
+                if (left.TotalHours < 24) return $"{(int)left.TotalHours}時{left.Minutes}分";
+                return $"{(int)left.TotalDays}天{left.Hours}時";
+            }
+        }
     }
 
     public sealed class QuotaSnapshot
@@ -179,7 +195,8 @@ namespace IslandBar.Services
                     items.Add(new QuotaItem
                     {
                         Group = p.Id, Label = label, Percent = w.UsedPercent,
-                        Text = w.UsedPercent.HasValue ? $"{Math.Round(w.UsedPercent.Value)}%" : "—", Tip = tip
+                        Text = w.UsedPercent.HasValue ? $"{Math.Round(w.UsedPercent.Value)}%" : "—", Tip = tip,
+                        ResetsAt = w.ResetsAt, ResetPassed = w.ResetPassed
                     });
                 }
             }

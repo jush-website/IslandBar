@@ -1278,7 +1278,7 @@ namespace IslandBar
             var logins = _settings.PinQuotaStrip && TabQuota.IsChecked != true
                 ? _quotaSnap.Providers.Where(p => p.AttentionAction != null).ToList()
                 : new List<ProviderUsage>();
-            string sig = string.Join("|", logins.Select(p => p.Attention)) + "||" + string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}"));
+            string sig = string.Join("|", logins.Select(p => p.Attention)) + "||" + string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}={i.ResetIn}"));
             if (sig != _stripSignature)
             {
                 _stripSignature = sig;
@@ -1300,6 +1300,9 @@ namespace IslandBar
                     sp.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
                     sp.Children.Add(new TextBlock { Text = it.Label, FontSize = 10, Foreground = secondary, Margin = new Thickness(5, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
                     sp.Children.Add(new TextBlock { Text = it.Text, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
+                    string resetIn = it.ResetIn;
+                    if (resetIn.Length > 0)
+                        sp.Children.Add(new TextBlock { Text = "↻" + resetIn, FontSize = 10, Foreground = (Brush)FindResource("Tertiary"), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
                     chip.Child = sp;
                     QuotaStrip.Children.Add(chip);
                 }
@@ -1371,7 +1374,8 @@ namespace IslandBar
                 var row = new Grid { Margin = new Thickness(2, 3, 2, 3), ToolTip = string.IsNullOrEmpty(it.Tip) ? null : it.Tip, Background = Brushes.Transparent };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(122) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(74) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(84) });
 
                 row.Children.Add(new TextBlock { Text = it.Label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
 
@@ -1394,6 +1398,14 @@ namespace IslandBar
                 };
                 Grid.SetColumn(val, 2);
                 row.Children.Add(val);
+                string reset = it.ResetIn;
+                var resetTb = new TextBlock
+                {
+                    Text = reset.Length == 0 ? "" : (reset == "已重置" ? reset : reset + "後重置"),
+                    FontSize = 11, Foreground = tertiary, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(resetTb, 3);
+                row.Children.Add(resetTb);
                 QuotaList.Children.Add(row);
             }
 
@@ -1407,7 +1419,7 @@ namespace IslandBar
             }
             QuotaList.Children.Add(new TextBlock
             {
-                Text = $"額度更新於 {_quotaSnap.UpdatedAt:HH:mm:ss}（每分鐘）· 滑鼠停在列上看重置時間",
+                Text = $"額度更新於 {_quotaSnap.UpdatedAt:HH:mm:ss}（每分鐘）· 滑鼠停在列上看重置的日期時間",
                 FontSize = 10, Foreground = tertiary, Margin = new Thickness(2, 8, 2, 0)
             });
         }
