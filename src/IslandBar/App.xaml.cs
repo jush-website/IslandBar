@@ -70,6 +70,10 @@ namespace IslandBar
                 return;
             }
 
+            // 上一次更新失敗，由安裝監看程式把舊版開回來
+            int failIdx = Array.IndexOf(e.Args, "--update-failed");
+            int updateFailCode = failIdx >= 0 && failIdx + 1 < e.Args.Length && int.TryParse(e.Args[failIdx + 1], out int fc) ? fc : 0;
+
             _settings = AppSettings.Load();
             _window = new MainWindow(_settings);
             _window.SettingsChanged += () => SyncMenu();
@@ -88,6 +92,14 @@ namespace IslandBar
             CreateTrayIcon();
             if (_settings.WidgetEnabled) ShowWidget();
             if (_settings.WindyPinned) OpenWindy();
+            if (updateFailCode != 0)
+            {
+                string why = UpdateService.DescribeMsiError(updateFailCode);
+                Log.Write($"Update failed: msiexec {updateFailCode}（{why}） log={UpdateService.InstallLogPath}");
+                LogMsiErrors();
+                Balloon("更新失敗", why + "。點這裡開啟下載頁手動安裝。", Forms.ToolTipIcon.Warning);
+                _balloonOpenReleases = true;
+            }
 
             // 啟動 30 秒後檢查一次更新，之後每 4 小時一次
             var first = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -483,6 +495,12 @@ namespace IslandBar
             _tray.DoubleClick += (s, e) => _window?.ToggleUserHidden();
             _tray.BalloonTipClicked += async (s, e) =>
             {
+                if (_balloonOpenReleases)
+                {
+                    _balloonOpenReleases = false;
+                    UpdateService.OpenReleasesPage();
+                    return;
+                }
                 if (_balloonLoginAction != null)
                 {
                     string action = _balloonLoginAction;
@@ -714,24 +732,50 @@ namespace IslandBar
             try
             {
                 _window?.ShowNotice($"正在下載更新 v{info.Version}…", TimeSpan.FromSeconds(4));
+                Log.Write($"Update: downloading v{info.Version} {info.MsiUrl}");
                 string msi = await UpdateService.DownloadAsync(info);
+                Log.Write($"Update: downloaded {new System.IO.FileInfo(msi).Length} bytes");
                 _window?.ShowNotice($"正在安裝 v{info.Version}，馬上回來", TimeSpan.FromSeconds(3));
                 await Task.Delay(1200);
                 UpdateService.RunInstaller(msi);
                 ExitApp();
             }
-            catch
+            catch (Exception ex)
             {
                 _updating = false;
-                Balloon("更新失敗", "下載或安裝失敗，點這裡再試一次。", Forms.ToolTipIcon.Warning);
+                Log.Error("Update", ex);
+                Balloon("更新失敗", "下載或安裝失敗（" + ex.Message + "），點這裡再試一次。", Forms.ToolTipIcon.Warning);
             }
         }
 
         private string _balloonLoginAction;
+        private bool _balloonOpenReleases;
+
+        /// <summary>把 msiexec 紀錄裡的錯誤行抄進 IslandBar 的記錄檔（方便回報）</summary>
+        private static void LogMsiErrors()
+        {
+            try
+            {
+                string path = UpdateService.InstallLogPath;
+                if (!System.IO.File.Exists(path)) return;
+                var lines = System.IO.File.ReadAllLines(path); // 依 BOM 判斷編碼
+                int n = 0;
+                foreach (var l in lines)
+                {
+                    if (l.Contains("Error ") || l.Contains("錯誤") || l.Contains("return value 3") || l.Contains("Installation failed") || l.Contains("Product: IslandBar"))
+                    {
+                        Log.Write("  msi: " + l.Trim());
+                        if (++n >= 25) break;
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Error("Update.MsiLog", ex); }
+        }
 
         private void Balloon(string title, string text, Forms.ToolTipIcon icon)
         {
             _balloonLoginAction = null;
+            _balloonOpenReleases = false;
             try { _tray?.ShowBalloonTip(5000, title, text, icon); } catch { }
         }
 

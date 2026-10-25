@@ -123,11 +123,36 @@ namespace IslandBar.Services
         /// <summary>以「只顯示進度列」模式執行安裝程式（安裝完會自動重新啟動 IslandBar）</summary>
         public static void RunInstaller(string msiPath)
         {
-            Process.Start(new ProcessStartInfo("msiexec.exe", $"/i \"{msiPath}\" /passive /norestart")
+            // 透過一個隱藏的 PowerShell 等 msiexec 結束：失敗的話把舊版重新開回來，並帶上錯誤碼，
+            // 不會「按了更新就消失」。安裝紀錄寫在 %TEMP%\IslandBar-update.log。
+            string exe = Environment.ProcessPath ?? "";
+            string script =
+                $"$p = Start-Process msiexec.exe -ArgumentList '/i \"{Ps(msiPath)}\" /passive /norestart /l*v \"{Ps(InstallLogPath)}\"' -Wait -PassThru; " +
+                $"if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {{ Start-Sleep -Seconds 1; Start-Process \"{Ps(exe)}\" -ArgumentList '--update-failed', $p.ExitCode }}";
+            Log.Write("Update: run installer " + msiPath);
+            Process.Start(new ProcessStartInfo("powershell.exe",
+                "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"" + script.Replace("\"", "\\\"") + "\"")
             {
-                UseShellExecute = true
+                UseShellExecute = false,
+                CreateNoWindow = true
             });
         }
+
+        public static string InstallLogPath => Path.Combine(Path.GetTempPath(), "IslandBar-update.log");
+
+        private static string Ps(string s) => (s ?? "").Replace("'", "''");
+
+        /// <summary>msiexec 錯誤碼的白話說明</summary>
+        public static string DescribeMsiError(int code) => code switch
+        {
+            1602 => "安裝被取消了",
+            1603 => "安裝時發生錯誤（可能被防毒軟體擋住或檔案被占用）",
+            1618 => "另一個安裝程式正在執行，請等它結束後再試",
+            1619 => "安裝檔打不開（可能下載不完整）",
+            1625 => "系統原則禁止安裝",
+            1638 => "已經安裝了另一個版本",
+            _ => "錯誤碼 " + code
+        };
 
         public static void OpenReleasesPage(string url = null)
         {
