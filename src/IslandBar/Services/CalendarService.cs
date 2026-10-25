@@ -15,7 +15,7 @@ namespace IslandBar.Services
         public DateTime End { get; set; }
         public string Summary { get; set; } = "";
         public bool AllDay { get; set; }
-        public string Color { get; set; }    // Google 日曆的顏色（#RRGGBB），iCal 沒有
+        public string Color { get; set; }    // 行程顏色（#RRGGBB），沒有就用預設色
     }
 
     /// <summary>
@@ -60,14 +60,7 @@ namespace IslandBar.Services
             var all = new List<CalEvent>();
             var errors = new List<string>();
 
-            // 1) Google 帳號（OAuth）
-            if (GoogleCalendarService.Connected)
-            {
-                try { all.AddRange(await GoogleCalendarService.GetEventsAsync(from, to)); }
-                catch (Exception ex) { errors.Add(ex.Message); Log.Error("Calendar.Google", ex); }
-            }
-
-            // 2) iCal 網址
+            // iCal 網址
             string url = (UrlProvider() ?? "").Trim();
             if (!string.IsNullOrEmpty(url))
             {
@@ -76,10 +69,8 @@ namespace IslandBar.Services
                 {
                     string ics = await Http.GetStringAsync(url);
                     var list = Parse(ics, from, to);
-                    Log.Write($"iCal：{list.Count} 個行程" + (IsGooglePublicUrl(url) ? "（這是公開網址，日曆沒公開的話會是空的）" : ""));
-                    // Google 帳號已連結時，同一個行程不要重複
-                    foreach (var e in list)
-                        if (!all.Any(a => a.Summary == e.Summary && Math.Abs((a.Start - e.Start).TotalMinutes) < 1)) all.Add(e);
+                    Log.Write($"iCal：{list.Count} 個行程");
+                    all.AddRange(list);
                 }
                 catch (Exception ex) { errors.Add("iCal：" + ex.Message); Log.Error("Calendar.iCal", ex); }
             }

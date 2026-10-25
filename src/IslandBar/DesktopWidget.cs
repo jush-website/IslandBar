@@ -221,10 +221,10 @@ namespace IslandBar
 
             if (list.Count == 0)
             {
-                bool configured = GoogleCalendarService.Connected || !string.IsNullOrEmpty(_settings.CalendarIcsUrl);
+                bool configured = !string.IsNullOrEmpty(_settings.CalendarIcsUrl);
                 _stack.Children.Add(new TextBlock
                 {
-                    Text = configured ? "這 7 天沒有行程" : "系統匣 → 行程 → 連結 Google 日曆",
+                    Text = configured ? "這 7 天沒有行程" : "系統匣 → 行程 → 設定 iCal 網址",
                     FontSize = 13, Foreground = Tertiary, TextWrapping = TextWrapping.Wrap
                 });
                 return;

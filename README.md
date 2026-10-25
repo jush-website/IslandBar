@@ -17,7 +17,7 @@
 | 展開 → 📋 剪貼簿 | 最近 15 筆文字／圖片，點一下重新複製（只存在記憶體） |
 | 🤖 AI 任務完成 | Claude Code／Codex 做完或需要回應時彈出提醒（系統匣「AI 任務完成通知」開啟） |
 | 🔤 螢幕識字 | Ctrl + Shift + O 框選畫面，文字複製到剪貼簿 |
-| 📆 行程倒數 | 直接登入 Google 日曆（或 iCal 網址），行程前 30 分鐘倒數、前 10 分鐘提醒 |
+| 📆 行程倒數 | 讀 Google 日曆等的 iCal 網址，行程前 30 分鐘倒數、前 10 分鐘提醒 |
 | 🖼 桌面小工具 | 釘在桌面的時鐘、天氣、行程、AI 額度，可拖曳、調透明度 |
 | 🌀 Windy 雷達 | 雷達／衛星／雨量／風／溫度圖層，可以釘在桌面當雷達小工具 |
 | 🎯 專注模式 | 25 分鐘專注 + 5 分鐘休息，期間暫停提醒、動態島變暗 |
@@ -67,13 +67,6 @@
 ```
 
 改完存檔，再按「重新載入設定」。天氣資料來自 [Open-Meteo](https://open-meteo.com/)（免費、免 API key）。
-
-## Google 日曆內建登入（選用）
-
-想讓安裝檔一裝好就能直接按「連結 Google 日曆」、不用每個人自己建立 OAuth 用戶端：
-在 Google Cloud 建立「電腦版應用程式」OAuth 用戶端後，到這個 repo 的
-Settings → Secrets and variables → Actions 新增 `GOOGLE_CLIENT_ID` 與 `GOOGLE_CLIENT_SECRET`，
-之後 GitHub Actions 建置的版本就會內建。
 
 ## 自己編譯
 

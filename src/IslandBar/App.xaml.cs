@@ -192,31 +192,15 @@ namespace IslandBar
             };
 
             var calendar = new Forms.ToolStripMenuItem("行程（Google 日曆）");
-            var google = new Forms.ToolStripMenuItem("連結 Google 日曆…");
-            google.Click += (s, e) =>
-            {
-                if (GoogleCalendarService.Connected)
-                {
-                    var r = System.Windows.MessageBox.Show($"要中斷與 Google 日曆（{GoogleCalendarService.Email}）的連結嗎？",
-                        "IslandBar", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                    if (r != MessageBoxResult.Yes) return;
-                    GoogleCalendarService.Disconnect();
-                    _window?.RefreshCalendarNow();
-                    return;
-                }
-                OpenGoogleConnect();
-            };
-            var calSet = new Forms.ToolStripMenuItem("進階：iCal 私人網址…");
+            var calSet = new Forms.ToolStripMenuItem("設定 iCal 網址…");
             calSet.Click += (s, e) =>
             {
                 string url = Microsoft.VisualBasic.Interaction.InputBox(
-                    "貼上 iCal 網址（例如 Google 日曆設定 → 整合日曆 →「iCal 格式的私人網址」）\n注意：「公開網址」只有日曆設成公開才讀得到。",
+                    "貼上 iCal 網址（Google 日曆設定 → 整合日曆 →「iCal 格式的私人網址」或公開網址）\n註：Google 的 iCal 更新會延遲幾個小時。",
                     "IslandBar · 行程", _settings.CalendarIcsUrl ?? "");
                 if (string.IsNullOrWhiteSpace(url)) return; // 取消
                 _settings.CalendarIcsUrl = url.Trim();
                 _settings.Save();
-                if (CalendarService.IsGooglePublicUrl(_settings.CalendarIcsUrl))
-                    Balloon("IslandBar · 行程", "這是 Google 日曆的「公開網址」，日曆沒有設成公開的話會讀不到行程。建議改用「連結 Google 日曆」。", Forms.ToolTipIcon.Warning);
                 _window?.RefreshCalendarNow();
             };
             var calClear = new Forms.ToolStripMenuItem("移除 iCal 網址");
@@ -224,17 +208,12 @@ namespace IslandBar
             var calRefresh = new Forms.ToolStripMenuItem("立即重新整理行程");
             calRefresh.Click += (s, e) => _window?.RefreshCalendarNow();
             var calError = new Forms.ToolStripMenuItem("") { Enabled = false, Visible = false };
-            calendar.DropDownItems.Add(google);
-            calendar.DropDownItems.Add(calRefresh);
-            calendar.DropDownItems.Add(calError);
-            calendar.DropDownItems.Add(new Forms.ToolStripSeparator());
             calendar.DropDownItems.Add(calSet);
+            calendar.DropDownItems.Add(calRefresh);
             calendar.DropDownItems.Add(calClear);
+            calendar.DropDownItems.Add(calError);
             calendar.DropDownOpening += (s, e) =>
             {
-                google.Text = GoogleCalendarService.Connected
-                    ? "✓ 已連結 Google：" + (string.IsNullOrEmpty(GoogleCalendarService.Email) ? "（帳號）" : GoogleCalendarService.Email) + "（點此中斷）"
-                    : "連結 Google 日曆…";
                 calClear.Enabled = !string.IsNullOrEmpty(_settings.CalendarIcsUrl);
                 string err = _window?.CalendarError;
                 calError.Visible = !string.IsNullOrEmpty(err);
@@ -546,7 +525,7 @@ namespace IslandBar
         }
 
         // ================================================================
-        //  桌面小工具 / Windy 雷達 / Google 日曆
+        //  桌面小工具 / Windy 雷達
         // ================================================================
 
         private void ShowWidget()
@@ -580,21 +559,6 @@ namespace IslandBar
             _windy = new WindyWindow(_settings);
             _windy.Closed += (s, e) => _windy = null;
             _windy.Show();
-        }
-
-        private GoogleConnectWindow _googleWin;
-
-        private void OpenGoogleConnect()
-        {
-            if (_googleWin != null) { _googleWin.Activate(); return; }
-            _googleWin = new GoogleConnectWindow();
-            _googleWin.Connected += email =>
-            {
-                _window?.RefreshCalendarNow();
-                Balloon("IslandBar · 行程", "已連結 Google 日曆" + (string.IsNullOrEmpty(email) ? "" : "：" + email), Forms.ToolTipIcon.Info);
-            };
-            _googleWin.Closed += (s, e) => _googleWin = null;
-            _googleWin.Show();
         }
 
         private Forms.ToolStripMenuItem MakeToggle(string text, Func<bool> get, Action<bool> set)
