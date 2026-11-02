@@ -290,14 +290,20 @@ namespace IslandBar
             Set("cpu", st.CpuPercent, $"{st.CpuPercent:0}%");
             Set("ram", st.RamPercent, $"{st.RamPercent:0}%  {st.RamUsedGb:0.0}/{st.RamTotalGb:0} GB");
 
-            if (gpu.Usage.HasValue)
+            // GPU：長條＝顯示記憶體用量，數字＝已用/總共 VRAM 與溫度；使用率放在提示框
+            if (gpu.VramTotalGb.HasValue || gpu.Usage.HasValue || gpu.Temperature.HasValue)
             {
                 _perfRows["gpu"].Row.Visibility = Visibility.Visible;
-                string extra = (gpu.Temperature.HasValue ? $"  {gpu.Temperature}°C" : "");
-                string tip = gpu.VramTotalGb.HasValue ? $"顯示記憶體 {gpu.VramUsedGb:0.0}/{gpu.VramTotalGb:0} GB" + (gpu.VramShared ? "（共用）" : "") : null;
-                if (gpu.Processes.Count > 0)
-                    tip = (tip == null ? "" : tip + "\n") + string.Join("\n", gpu.Processes.Take(5).Select(p => $"{p.name}  {p.usedMb / 1024:0.0} GB"));
-                Set("gpu", gpu.Usage, $"{gpu.Usage:0}%{extra}", null, tip);
+                string temp = gpu.Temperature.HasValue ? $"{gpu.Temperature}°C" : "";
+                double? vramPct = gpu.VramTotalGb > 0 ? gpu.VramUsedGb / gpu.VramTotalGb * 100 : null;
+                string vram = gpu.VramTotalGb.HasValue ? $"{gpu.VramUsedGb:0.0}/{gpu.VramTotalGb:0} GB" : "";
+                string text = string.Join("  ", new[] { vram, temp }.Where(x => x.Length > 0));
+                if (text.Length == 0) text = gpu.Usage.HasValue ? $"{gpu.Usage:0}%" : "—";
+                var tip = new List<string>();
+                if (gpu.Usage.HasValue) tip.Add($"使用率 {gpu.Usage:0}%");
+                if (gpu.VramShared) tip.Add("顯示記憶體為共用記憶體");
+                tip.AddRange(gpu.Processes.Take(5).Select(p => $"{p.name}  {p.usedMb / 1024:0.0} GB"));
+                Set("gpu", vramPct ?? gpu.Usage, text, null, tip.Count > 0 ? string.Join("\n", tip) : null);
             }
             else _perfRows["gpu"].Row.Visibility = Visibility.Collapsed;
 
