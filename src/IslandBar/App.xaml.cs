@@ -221,7 +221,7 @@ namespace IslandBar
             };
 
             // 桌面小工具 / Windy 雷達
-            _widgetItem = new Forms.ToolStripMenuItem("桌面小工具（時鐘、天氣、行程、額度）") { CheckOnClick = true };
+            _widgetItem = new Forms.ToolStripMenuItem("桌面小工具（時鐘、天氣、效能、行程、額度）") { CheckOnClick = true };
             _widgetItem.CheckedChanged += (s, e) =>
             {
                 if (_settings.WidgetEnabled == _widgetItem.Checked) return;

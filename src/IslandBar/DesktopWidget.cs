@@ -42,7 +42,7 @@ namespace IslandBar
 
         public static readonly (string id, string name)[] Sections =
         {
-            ("clock", "時鐘"), ("weather", "天氣"), ("events", "行程"), ("quota", "AI 額度")
+            ("clock", "時鐘"), ("weather", "天氣"), ("perf", "電腦效能"), ("events", "行程"), ("quota", "AI 額度")
         };
 
         public DesktopWidget(MainWindow main, AppSettings settings)
@@ -82,13 +82,26 @@ namespace IslandBar
             };
             Loaded += (s, e) => KeepOnScreen();
 
+            // v1.8：新增「電腦效能」區塊，舊設定自動加上一次
+            if (_settings.WidgetSectionsVersion < 1)
+            {
+                _settings.WidgetSections ??= new List<string>();
+                if (!_settings.WidgetSections.Contains("perf"))
+                {
+                    int i = _settings.WidgetSections.IndexOf("weather");
+                    _settings.WidgetSections.Insert(i >= 0 ? i + 1 : _settings.WidgetSections.Count, "perf");
+                }
+                _settings.WidgetSectionsVersion = 1;
+                _settings.Save();
+            }
+            _perfTimer.Tick += (s, e) => UpdatePerf();
             _clockTimer.Tick += (s, e) =>
             {
                 string m = DateTime.Now.ToString("yyyyMMddHHmm");
                 if (m != _tickMinute) { _tickMinute = m; Rebuild(); } // 每分鐘：時鐘、「幾分鐘後」一起更新
             };
             _main.DataChanged += OnDataChanged;
-            Closed += (s, e) => { _main.DataChanged -= OnDataChanged; _clockTimer.Stop(); };
+            Closed += (s, e) => { _main.DataChanged -= OnDataChanged; _clockTimer.Stop(); _perfTimer.Stop(); };
 
             MouseLeftButtonDown += OnDragStart;
             MouseMove += OnDragMove;
@@ -122,6 +135,8 @@ namespace IslandBar
 
             if (Has("clock")) { Gap(); BuildClock(); }
             if (Has("weather")) { Gap(); BuildWeather(); }
+            _perfRows.Clear();
+            if (Has("perf")) { Gap(); BuildPerf(); }
             if (Has("events")) { Gap(); BuildEvents(); }
             if (Has("quota") && _main.QuotaItems.Count > 0) { Gap(); BuildQuota(); }
             if (first)
@@ -129,6 +144,7 @@ namespace IslandBar
 
             UpdateClock();
             _clockTimer.Start();
+            if (_perfRows.Count > 0) { UpdatePerf(); _perfTimer.Start(); } else _perfTimer.Stop();
         }
 
         private void BuildClock()
@@ -208,6 +224,90 @@ namespace IslandBar
                 days.Children.Add(col);
             }
             _stack.Children.Add(days);
+        }
+
+        // ================================================================
+        //  電腦效能（每 2 秒更新數字，不重建畫面）
+        // ================================================================
+
+        private sealed class PerfRow
+        {
+            public Grid Row;
+            public TextBlock Label, Value;
+            public ScaleTransform Bar;
+        }
+
+        private readonly DispatcherTimer _perfTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        private readonly Dictionary<string, PerfRow> _perfRows = new Dictionary<string, PerfRow>();
+        private TextBlock _netText;
+
+        private void BuildPerf()
+        {
+            _stack.Children.Add(new TextBlock { Text = "電腦效能", FontSize = 12, Foreground = Secondary, Margin = new Thickness(0, 0, 0, 6) });
+            AddPerfRow("cpu", "CPU", "#FF7A7A");
+            AddPerfRow("ram", "記憶體", "#7AA2FF");
+            AddPerfRow("gpu", "GPU", "#FFB454");
+            AddPerfRow("power", "磁碟", "#5AD18A");
+            _netText = new TextBlock { FontSize = 12, Foreground = Secondary, Margin = new Thickness(0, 4, 0, 0) };
+            _stack.Children.Add(_netText);
+        }
+
+        private void AddPerfRow(string id, string label, string color)
+        {
+            var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(104) });
+            var lab = new TextBlock { Text = label, FontSize = 12, Foreground = Secondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            row.Children.Add(lab);
+            var bar = new Grid { Height = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 8, 0) };
+            bar.Children.Add(new Border { CornerRadius = new CornerRadius(2.5), Background = Track });
+            var scale = new ScaleTransform(0, 1);
+            bar.Children.Add(new Border { CornerRadius = new CornerRadius(2.5), Background = Hex(color), RenderTransformOrigin = new Point(0, 0.5), RenderTransform = scale });
+            Grid.SetColumn(bar, 1);
+            row.Children.Add(bar);
+            var val = new TextBlock { FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            Grid.SetColumn(val, 2);
+            row.Children.Add(val);
+            _stack.Children.Add(row);
+            _perfRows[id] = new PerfRow { Row = row, Label = lab, Value = val, Bar = scale };
+        }
+
+        private void UpdatePerf()
+        {
+            if (_perfRows.Count == 0) return;
+            var st = _main.Stats;
+            var gpu = _main.Gpu;
+            void Set(string id, double? percent, string text, string label = null, string tip = null)
+            {
+                if (!_perfRows.TryGetValue(id, out var r)) return;
+                r.Bar.ScaleX = Math.Clamp((percent ?? 0) / 100.0, 0, 1);
+                r.Value.Text = text;
+                if (label != null) r.Label.Text = label;
+                r.Row.ToolTip = tip;
+            }
+
+            Set("cpu", st.CpuPercent, $"{st.CpuPercent:0}%");
+            Set("ram", st.RamPercent, $"{st.RamPercent:0}%  {st.RamUsedGb:0.0}/{st.RamTotalGb:0} GB");
+
+            if (gpu.Usage.HasValue)
+            {
+                _perfRows["gpu"].Row.Visibility = Visibility.Visible;
+                string extra = (gpu.Temperature.HasValue ? $"  {gpu.Temperature}°C" : "");
+                string tip = gpu.VramTotalGb.HasValue ? $"顯示記憶體 {gpu.VramUsedGb:0.0}/{gpu.VramTotalGb:0} GB" + (gpu.VramShared ? "（共用）" : "") : null;
+                if (gpu.Processes.Count > 0)
+                    tip = (tip == null ? "" : tip + "\n") + string.Join("\n", gpu.Processes.Take(5).Select(p => $"{p.name}  {p.usedMb / 1024:0.0} GB"));
+                Set("gpu", gpu.Usage, $"{gpu.Usage:0}%{extra}", null, tip);
+            }
+            else _perfRows["gpu"].Row.Visibility = Visibility.Collapsed;
+
+            if (st.HasBattery)
+                Set("power", st.BatteryPercent, $"{st.BatteryPercent:0}%", st.IsCharging ? "充電中" : "電池");
+            else
+                Set("power", st.DiskPercent, $"{st.DiskPercent:0}%", "磁碟", string.IsNullOrEmpty(st.DiskText) ? null : st.DiskText);
+
+            if (_netText != null)
+                _netText.Text = $"網路  ↓ {SystemStats.FormatSpeed(st.DownBytesPerSec)}   ↑ {SystemStats.FormatSpeed(st.UpBytesPerSec)}";
         }
 
         private void BuildEvents()

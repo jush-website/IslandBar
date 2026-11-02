@@ -70,7 +70,9 @@ namespace IslandBar
         public bool WidgetEnabled { get; set; } = false;
         public double? WidgetLeft { get; set; }
         public double? WidgetTop { get; set; }
-        public List<string> WidgetSections { get; set; } = new List<string> { "clock", "weather", "events", "quota" };
+        public List<string> WidgetSections { get; set; } = new List<string> { "clock", "weather", "perf", "events", "quota" };
+        /// <summary>小工具區塊清單的版本（新增區塊時用來幫舊設定自動加上）</summary>
+        public int WidgetSectionsVersion { get; set; } = 0;
         public double WidgetOpacity { get; set; } = 0.7;
         public bool WidgetLocked { get; set; } = false;
 

@@ -257,6 +257,8 @@ namespace IslandBar
         public string CalendarError => _calendar.LastError;
         public IReadOnlyList<QuotaItem> QuotaItems => _allItems.Where(i => i.Group != "sys").ToList();
         public static Color QuotaColor(double? percent) => LevelColor(percent);
+        public SystemStats Stats => _stats;
+        public GpuService Gpu => _gpu;
 
         private void RaiseDataChanged() => DataChanged?.Invoke();
     }
