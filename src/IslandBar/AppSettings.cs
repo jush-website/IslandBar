@@ -73,6 +73,27 @@ namespace IslandBar
         public List<string> WidgetSections { get; set; } = new List<string> { "clock", "weather", "perf", "events", "quota" };
         /// <summary>小工具區塊清單的版本（新增區塊時用來幫舊設定自動加上）</summary>
         public int WidgetSectionsVersion { get; set; } = 0;
+
+        /// <summary>多個桌面小工具（每個有自己的區塊、順序、位置、大小）。空的話會從上面舊的單一小工具設定轉過來</summary>
+        public List<WidgetConfig> Widgets { get; set; } = new List<WidgetConfig>();
+
+        /// <summary>舊版單一小工具設定 → Widgets 清單</summary>
+        public void MigrateWidgets()
+        {
+            if (Widgets != null && Widgets.Count > 0) return;
+            Widgets = new List<WidgetConfig>();
+            var sections = new List<string>(WidgetSections ?? new List<string>());
+            if (WidgetSectionsVersion < 1 && !sections.Contains("perf"))
+            {
+                int i = sections.IndexOf("weather");
+                sections.Insert(i >= 0 ? i + 1 : sections.Count, "perf");
+            }
+            Widgets.Add(new WidgetConfig
+            {
+                Left = WidgetLeft, Top = WidgetTop, Sections = sections, Opacity = WidgetOpacity, Locked = WidgetLocked
+            });
+            WidgetSectionsVersion = 1;
+        }
         public double WidgetOpacity { get; set; } = 0.7;
         public bool WidgetLocked { get; set; } = false;
 
@@ -144,5 +165,19 @@ namespace IslandBar
             }
             catch { }
         }
+    }
+
+    /// <summary>一個桌面小工具的設定</summary>
+    public sealed class WidgetConfig
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public double? Left { get; set; }
+        public double? Top { get; set; }
+        /// <summary>大小（1 = 寬 300）</summary>
+        public double Scale { get; set; } = 1.0;
+        /// <summary>依序顯示的區塊：clock / weather / perf / events / quota</summary>
+        public List<string> Sections { get; set; } = new List<string> { "clock", "weather", "perf", "events", "quota" };
+        public double Opacity { get; set; } = 0.7;
+        public bool Locked { get; set; }
     }
 }

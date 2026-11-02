@@ -23,7 +23,11 @@ namespace IslandBar
     {
         private readonly MainWindow _main;
         private readonly AppSettings _settings;
+        private readonly WidgetConfig _cfg;
         private readonly Border _card = new Border();
+        private readonly ScaleTransform _scale = new ScaleTransform(1, 1);
+        private const double BaseWidth = 300;
+        public const double MinScale = 0.6, MaxScale = 2.0;
         private readonly StackPanel _stack = new StackPanel();
         private readonly DispatcherTimer _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private TextBlock _time, _date;
@@ -37,18 +41,26 @@ namespace IslandBar
 
         /// <summary>開啟 Windy 雷達（交給 App 處理）</summary>
         public event Action OpenRadarRequested;
-        /// <summary>小工具被使用者關掉</summary>
-        public event Action ClosedByUser;
+        /// <summary>使用者要移除這個小工具</summary>
+        public event Action<DesktopWidget> RemoveRequested;
+        /// <summary>使用者要再新增一個小工具</summary>
+        public event Action AddRequested;
+        /// <summary>使用者要把每個區塊拆成各自一個小工具</summary>
+        public event Action<DesktopWidget> SplitRequested;
+
+        public WidgetConfig Config => _cfg;
 
         public static readonly (string id, string name)[] Sections =
         {
             ("clock", "時鐘"), ("weather", "天氣"), ("perf", "電腦效能"), ("events", "行程"), ("quota", "AI 額度")
         };
 
-        public DesktopWidget(MainWindow main, AppSettings settings)
+        public DesktopWidget(MainWindow main, AppSettings settings, WidgetConfig cfg)
         {
             _main = main;
             _settings = settings;
+            _cfg = cfg;
+            _cfg.Sections ??= new List<string>();
             Title = "IslandBar 桌面小工具";
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
@@ -57,7 +69,8 @@ namespace IslandBar
             ShowActivated = false;
             ResizeMode = ResizeMode.NoResize;
             SizeToContent = SizeToContent.Height;
-            Width = 300;
+            _cfg.Scale = Math.Clamp(_cfg.Scale <= 0 ? 1 : _cfg.Scale, MinScale, MaxScale);
+            Width = BaseWidth * _cfg.Scale;
             Foreground = Brushes.White;
             FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft JhengHei UI");
             UseLayoutRounding = true;
@@ -66,12 +79,44 @@ namespace IslandBar
             _card.CornerRadius = new CornerRadius(20);
             _card.Padding = new Thickness(18, 14, 18, 16);
             _card.Child = _stack;
-            Content = _card;
+            _card.Width = BaseWidth;
+            _card.HorizontalAlignment = HorizontalAlignment.Left;
+            _card.LayoutTransform = _scale;
+            _scale.ScaleX = _scale.ScaleY = _cfg.Scale;
+
+            // 右下角拖曳把手：自由縮放
+            var grip = new Border
+            {
+                Width = 18, Height = 18, Background = Brushes.Transparent, Cursor = Cursors.SizeNWSE,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
+                ToolTip = "拖曳調整大小（或在小工具上按住 Ctrl 滾滾輪）"
+            };
+            var gripMark = new Path
+            {
+                Data = Geometry.Parse("M 14,4 L 4,14 M 14,9 L 9,14"), Stroke = Tertiary, StrokeThickness = 1.5,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 4, 4),
+                IsHitTestVisible = false
+            };
+            grip.Child = gripMark;
+            grip.MouseLeftButtonDown += OnResizeStart;
+            grip.MouseMove += OnResizeMove;
+            grip.MouseLeftButtonUp += OnResizeEnd;
+            var root = new Grid();
+            root.Children.Add(_card);
+            root.Children.Add(grip);
+            Content = root;
             ApplyOpacity();
+            MouseWheel += (s, e) =>
+            {
+                if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+                SetScale(_cfg.Scale + (e.Delta > 0 ? 0.05 : -0.05));
+                _settings.Save();
+                e.Handled = true;
+            };
 
             var area = SystemParameters.WorkArea;
-            Left = _settings.WidgetLeft ?? area.Right - Width - 24;
-            Top = _settings.WidgetTop ?? area.Top + 24;
+            Left = _cfg.Left ?? area.Right - Width - 24;
+            Top = _cfg.Top ?? area.Top + 24;
 
             SourceInitialized += (s, e) =>
             {
@@ -82,18 +127,6 @@ namespace IslandBar
             };
             Loaded += (s, e) => KeepOnScreen();
 
-            // v1.8：新增「電腦效能」區塊，舊設定自動加上一次
-            if (_settings.WidgetSectionsVersion < 1)
-            {
-                _settings.WidgetSections ??= new List<string>();
-                if (!_settings.WidgetSections.Contains("perf"))
-                {
-                    int i = _settings.WidgetSections.IndexOf("weather");
-                    _settings.WidgetSections.Insert(i >= 0 ? i + 1 : _settings.WidgetSections.Count, "perf");
-                }
-                _settings.WidgetSectionsVersion = 1;
-                _settings.Save();
-            }
             _perfTimer.Tick += (s, e) => UpdatePerf();
             _clockTimer.Tick += (s, e) =>
             {
@@ -114,11 +147,18 @@ namespace IslandBar
 
         private void OnDataChanged() => Dispatcher.BeginInvoke(new Action(Rebuild));
 
-        private bool Has(string id) => (_settings.WidgetSections ?? new List<string>()).Contains(id);
+        private bool Has(string id) => _cfg.Sections.Contains(id);
 
-        private void ApplyOpacity()
+        public void SetScale(double scale)
         {
-            double a = Math.Clamp(_settings.WidgetOpacity, 0.0, 1.0);
+            _cfg.Scale = Math.Clamp(Math.Round(scale, 3), MinScale, MaxScale);
+            _scale.ScaleX = _scale.ScaleY = _cfg.Scale;
+            Width = BaseWidth * _cfg.Scale;
+        }
+
+        public void ApplyOpacity()
+        {
+            double a = Math.Clamp(_cfg.Opacity, 0.0, 1.0);
             // 至少留 1/255：完全透明的地方滑鼠會穿透，就拖不動也按不到右鍵
             _card.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Max(1, Math.Round(a * 255)), 0x0D, 0x0D, 0x0F));
         }
@@ -133,14 +173,22 @@ namespace IslandBar
             bool first = true;
             void Gap() { if (!first) _stack.Children.Add(new Border { Height = 1, Background = Track, Margin = new Thickness(0, 12, 0, 12) }); first = false; }
 
-            if (Has("clock")) { Gap(); BuildClock(); }
-            if (Has("weather")) { Gap(); BuildWeather(); }
             _perfRows.Clear();
-            if (Has("perf")) { Gap(); BuildPerf(); }
-            if (Has("events")) { Gap(); BuildEvents(); }
-            if (Has("quota") && _main.QuotaItems.Count > 0) { Gap(); BuildQuota(); }
+            _time = null;
+            // 依設定的順序排列
+            foreach (var id in _cfg.Sections.Distinct().ToList())
+            {
+                switch (id)
+                {
+                    case "clock": Gap(); BuildClock(); break;
+                    case "weather": Gap(); BuildWeather(); break;
+                    case "perf": Gap(); BuildPerf(); break;
+                    case "events": Gap(); BuildEvents(); break;
+                    case "quota": if (_main.QuotaItems.Count > 0) { Gap(); BuildQuota(); } break;
+                }
+            }
             if (first)
-                _stack.Children.Add(new TextBlock { Text = "右鍵選擇要顯示的內容", Foreground = Secondary, FontSize = 13 });
+                _stack.Children.Add(new TextBlock { Text = "右鍵 →「小工具設定」選擇要顯示的內容", Foreground = Secondary, FontSize = 13, TextWrapping = TextWrapping.Wrap });
 
             UpdateClock();
             _clockTimer.Start();
@@ -416,41 +464,94 @@ namespace IslandBar
         private ContextMenu BuildMenu()
         {
             var menu = new ContextMenu();
+            var edit = new MenuItem { Header = "小工具設定…（區塊、順序、大小）", FontWeight = FontWeights.SemiBold };
+            edit.Click += (s, e) => OpenEditor();
+            menu.Items.Add(edit);
+            menu.Items.Add(new Separator());
             foreach (var (id, name) in Sections)
             {
                 var item = new MenuItem { Header = "顯示" + name, IsCheckable = true, IsChecked = Has(id) };
                 string sid = id;
                 item.Click += (s, e) =>
                 {
-                    _settings.WidgetSections ??= new List<string>();
-                    if (item.IsChecked) { if (!_settings.WidgetSections.Contains(sid)) _settings.WidgetSections.Add(sid); }
-                    else _settings.WidgetSections.Remove(sid);
+                    if (item.IsChecked) { if (!_cfg.Sections.Contains(sid)) _cfg.Sections.Add(sid); }
+                    else _cfg.Sections.Remove(sid);
                     _settings.Save();
                     Rebuild();
                 };
                 menu.Items.Add(item);
             }
             menu.Items.Add(new Separator());
-            var opacity = new MenuItem { Header = "背景不透明度" };
-            foreach (var v in new[] { 0.0, 0.3, 0.5, 0.7, 0.85, 1.0 })
-            {
-                var o = new MenuItem { Header = v == 0 ? "完全透明" : $"{v * 100:0}%", IsCheckable = true, IsChecked = Math.Abs(_settings.WidgetOpacity - v) < 0.01 };
-                double val = v;
-                o.Click += (s, e) => { _settings.WidgetOpacity = val; _settings.Save(); ApplyOpacity(); };
-                opacity.Items.Add(o);
-            }
-            menu.Items.Add(opacity);
-            var locked = new MenuItem { Header = "鎖定位置", IsCheckable = true, IsChecked = _settings.WidgetLocked };
-            locked.Click += (s, e) => { _settings.WidgetLocked = locked.IsChecked; _settings.Save(); };
+            var locked = new MenuItem { Header = "鎖定位置與大小", IsCheckable = true, IsChecked = _cfg.Locked };
+            locked.Click += (s, e) => { _cfg.Locked = locked.IsChecked; _settings.Save(); };
             menu.Items.Add(locked);
-            menu.Items.Add(new Separator());
+            var add = new MenuItem { Header = "新增另一個小工具" };
+            add.Click += (s, e) => AddRequested?.Invoke();
+            menu.Items.Add(add);
             var radar = new MenuItem { Header = "開啟 Windy 雷達" };
             radar.Click += (s, e) => OpenRadarRequested?.Invoke();
             menu.Items.Add(radar);
-            var close = new MenuItem { Header = "關閉桌面小工具" };
-            close.Click += (s, e) => { ClosedByUser?.Invoke(); Close(); };
+            menu.Items.Add(new Separator());
+            var close = new MenuItem { Header = "移除這個小工具" };
+            close.Click += (s, e) => RemoveRequested?.Invoke(this);
             menu.Items.Add(close);
             return menu;
+        }
+
+        private WidgetEditorWindow _editor;
+
+        public void OpenEditor()
+        {
+            if (_editor != null) { _editor.Activate(); return; }
+            _editor = new WidgetEditorWindow(this, _cfg, () => { _settings.Save(); Rebuild(); });
+            _editor.AddRequested += () => AddRequested?.Invoke();
+            _editor.RemoveRequested += () => RemoveRequested?.Invoke(this);
+            _editor.SplitRequested += () => SplitRequested?.Invoke(this);
+            _editor.Closed += (s, e) => _editor = null;
+            _editor.Show();
+        }
+
+        public void CloseEditor() => _editor?.Close();
+
+        // ================================================================
+        //  縮放
+        // ================================================================
+
+        private bool _resizing;
+        private POINT _resizeStartCursor;
+        private double _resizeStartWidth;
+
+        private void OnResizeStart(object sender, MouseButtonEventArgs e)
+        {
+            if (_cfg.Locked) return;
+            GetCursorPos(out _resizeStartCursor);
+            _resizeStartWidth = Width;
+            _resizing = true;
+            ((UIElement)sender).CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void OnResizeMove(object sender, MouseEventArgs e)
+        {
+            if (!_resizing) return;
+            GetCursorPos(out var p);
+            var dpi = VisualTreeHelper.GetDpi(this);
+            double dx = (p.X - _resizeStartCursor.X) / dpi.DpiScaleX;
+            double dy = (p.Y - _resizeStartCursor.Y) / dpi.DpiScaleY;
+            // 往右下拉＝放大；以水平與垂直中較大的位移為準
+            double d = Math.Abs(dx) > Math.Abs(dy) ? dx : dy * (Width / Math.Max(1, ActualHeight));
+            SetScale((_resizeStartWidth + d) / BaseWidth);
+            e.Handled = true;
+        }
+
+        private void OnResizeEnd(object sender, MouseButtonEventArgs e)
+        {
+            if (!_resizing) return;
+            _resizing = false;
+            ((UIElement)sender).ReleaseMouseCapture();
+            KeepOnScreen();
+            _settings.Save();
+            e.Handled = true;
         }
 
         // ================================================================
@@ -463,7 +564,7 @@ namespace IslandBar
 
         private void OnDragStart(object sender, MouseButtonEventArgs e)
         {
-            if (_settings.WidgetLocked || e.OriginalSource is Button || FindParent<Button>(e.OriginalSource as DependencyObject) != null) return;
+            if (_resizing || _cfg.Locked || e.OriginalSource is Button || FindParent<Button>(e.OriginalSource as DependencyObject) != null) return;
             GetCursorPos(out _dragStartCursor);
             _dragStartLeft = Left;
             _dragStartTop = Top;
@@ -492,8 +593,8 @@ namespace IslandBar
             if (_moved)
             {
                 KeepOnScreen();
-                _settings.WidgetLeft = Left;
-                _settings.WidgetTop = Top;
+                _cfg.Left = Left;
+                _cfg.Top = Top;
                 _settings.Save();
             }
         }

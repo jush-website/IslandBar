@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Threading;
@@ -44,7 +45,7 @@ namespace IslandBar
         private Forms.ToolStripMenuItem _trainNotifyItem;
         private Forms.ToolStripMenuItem _focusItem;
         private Forms.ToolStripMenuItem _widgetItem;
-        private DesktopWidget _widget;
+        private readonly List<DesktopWidget> _widgets = new List<DesktopWidget>();
         private WindyWindow _windy;
 
         private readonly DispatcherTimer _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(4) };
@@ -90,7 +91,8 @@ namespace IslandBar
             _window.Show();
 
             CreateTrayIcon();
-            if (_settings.WidgetEnabled) ShowWidget();
+            _settings.MigrateWidgets();
+            if (_settings.WidgetEnabled) ShowWidgets();
             if (_settings.WindyPinned) OpenWindy();
             if (updateFailCode != 0)
             {
@@ -221,14 +223,28 @@ namespace IslandBar
             };
 
             // 桌面小工具 / Windy 雷達
-            _widgetItem = new Forms.ToolStripMenuItem("桌面小工具（時鐘、天氣、效能、行程、額度）") { CheckOnClick = true };
+            var widgetMenu = new Forms.ToolStripMenuItem("桌面小工具");
+            _widgetItem = new Forms.ToolStripMenuItem("顯示桌面小工具") { CheckOnClick = true };
             _widgetItem.CheckedChanged += (s, e) =>
             {
                 if (_settings.WidgetEnabled == _widgetItem.Checked) return;
                 _settings.WidgetEnabled = _widgetItem.Checked;
                 _settings.Save();
-                if (_widgetItem.Checked) ShowWidget(); else CloseWidget();
+                if (_widgetItem.Checked) ShowWidgets(); else CloseWidgets();
             };
+            var widgetAdd = new Forms.ToolStripMenuItem("新增小工具");
+            widgetAdd.Click += (s, e) => AddWidget();
+            var widgetEdit = new Forms.ToolStripMenuItem("小工具設定…（區塊、順序、大小）");
+            widgetEdit.Click += (s, e) =>
+            {
+                if (!_settings.WidgetEnabled) { _settings.WidgetEnabled = true; _settings.Save(); SyncMenu(); ShowWidgets(); }
+                if (_widgets.Count == 0) AddWidget(); else _widgets[0].OpenEditor();
+            };
+            widgetMenu.DropDownItems.Add(_widgetItem);
+            widgetMenu.DropDownItems.Add(widgetAdd);
+            widgetMenu.DropDownItems.Add(widgetEdit);
+            widgetMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            widgetMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在小工具上按右鍵可設定該小工具") { Enabled = false });
             var windy = new Forms.ToolStripMenuItem("Windy 雷達…");
             windy.Click += (s, e) => OpenWindy();
 
@@ -397,8 +413,9 @@ namespace IslandBar
                 SyncMenu();
                 _window?.ApplySettings(_settings);
                 // 小工具 / 雷達視窗拿的是舊的設定物件，重開
-                CloseWidget();
-                if (_settings.WidgetEnabled) ShowWidget();
+                CloseWidgets();
+                _settings.MigrateWidgets();
+                if (_settings.WidgetEnabled) ShowWidgets();
                 if (_windy != null) { _windy.Close(); OpenWindy(); }
             };
 
@@ -433,7 +450,7 @@ namespace IslandBar
             menu.Items.Add(_focusItem);
             menu.Items.Add(agentHooks);
             menu.Items.Add(calendar);
-            menu.Items.Add(_widgetItem);
+            menu.Items.Add(widgetMenu);
             menu.Items.Add(windy);
             menu.Items.Add(training);
             menu.Items.Add(new Forms.ToolStripSeparator());
@@ -528,25 +545,87 @@ namespace IslandBar
         //  桌面小工具 / Windy 雷達
         // ================================================================
 
-        private void ShowWidget()
+        private void ShowWidgets()
         {
-            if (_widget != null || _window == null) return;
-            _widget = new DesktopWidget(_window, _settings);
-            _widget.OpenRadarRequested += OpenWindy;
-            _widget.ClosedByUser += () =>
-            {
-                _settings.WidgetEnabled = false;
-                _settings.Save();
-                SyncMenu();
-            };
-            _widget.Closed += (s, e) => _widget = null;
-            _widget.Show();
+            if (_window == null || _widgets.Count > 0) return;
+            _settings.MigrateWidgets();
+            foreach (var cfg in _settings.Widgets.ToList()) ShowWidget(cfg);
         }
 
-        private void CloseWidget()
+        private void ShowWidget(WidgetConfig cfg)
         {
-            _widget?.Close();
-            _widget = null;
+            var w = new DesktopWidget(_window, _settings, cfg);
+            w.OpenRadarRequested += OpenWindy;
+            w.AddRequested += AddWidget;
+            w.RemoveRequested += RemoveWidget;
+            w.SplitRequested += SplitWidget;
+            w.Closed += (s, e) => _widgets.Remove(w);
+            _widgets.Add(w);
+            w.Show();
+        }
+
+        private void CloseWidgets()
+        {
+            foreach (var w in _widgets.ToList()) { w.CloseEditor(); w.Close(); }
+            _widgets.Clear();
+        }
+
+        /// <summary>新增一個小工具（先放時鐘，打開設定讓使用者選）</summary>
+        private void AddWidget()
+        {
+            if (!_settings.WidgetEnabled) { _settings.WidgetEnabled = true; SyncMenu(); ShowWidgets(); }
+            var area = SystemParameters.WorkArea;
+            int n = _settings.Widgets.Count;
+            var cfg = new WidgetConfig
+            {
+                Sections = new List<string> { "clock" },
+                Left = area.Left + area.Width / 2 - 150 + (n % 5) * 30,
+                Top = area.Top + 120 + (n % 5) * 30
+            };
+            _settings.Widgets.Add(cfg);
+            _settings.Save();
+            ShowWidget(cfg);
+            _widgets.Last().OpenEditor();
+        }
+
+        private void RemoveWidget(DesktopWidget w)
+        {
+            var r = System.Windows.MessageBox.Show("要移除這個桌面小工具嗎？", "IslandBar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (r != MessageBoxResult.Yes) return;
+            _settings.Widgets.RemoveAll(c => c.Id == w.Config.Id);
+            if (_settings.Widgets.Count == 0)
+            {
+                // 最後一個：改成關閉小工具，保留設定方便下次再開
+                _settings.Widgets.Add(w.Config);
+                _settings.WidgetEnabled = false;
+                SyncMenu();
+            }
+            _settings.Save();
+            w.CloseEditor();
+            w.Close();
+        }
+
+        /// <summary>把一個小工具的每個區塊拆成各自的小工具，依序往下排</summary>
+        private void SplitWidget(DesktopWidget w)
+        {
+            var cfg = w.Config;
+            var sections = cfg.Sections.Distinct().ToList();
+            if (sections.Count <= 1) return;
+            double left = w.Left, top = w.Top;
+            cfg.Sections = new List<string> { sections[0] };
+            w.Rebuild();
+            w.UpdateLayout();
+            top += w.ActualHeight + 12;
+            foreach (var id in sections.Skip(1))
+            {
+                var c = new WidgetConfig { Sections = new List<string> { id }, Left = left, Top = top, Scale = cfg.Scale, Opacity = cfg.Opacity };
+                _settings.Widgets.Add(c);
+                ShowWidget(c);
+                var nw = _widgets.Last();
+                nw.UpdateLayout();
+                top += Math.Max(60, nw.ActualHeight) + 12;
+            }
+            _settings.Save();
         }
 
         private void OpenWindy()
