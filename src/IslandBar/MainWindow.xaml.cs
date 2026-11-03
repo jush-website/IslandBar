@@ -96,8 +96,40 @@ namespace IslandBar
             _hudTimer.Tick += (s, e) => { _hudTimer.Stop(); if (_mode == IslandMode.Hud) SetMode(IslandMode.Compact); };
             _autoHideDelay.Tick += (s, e) => AutoHideTick();
 
-            SystemEvents.DisplaySettingsChanged += (s, e) => Dispatcher.BeginInvoke(new Action(PositionWindow));
+            SystemEvents.DisplaySettingsChanged += (s, e) => Dispatcher.BeginInvoke(new Action(() => RecoverWindow("display")));
+            // 遠端桌面連上 / 解除鎖定 / 睡眠喚醒：透明視窗有時會不再重繪（看起來像消失），重新整理一次
+            SystemEvents.SessionSwitch += (s, e) =>
+            {
+                if (e.Reason == SessionSwitchReason.SessionUnlock || e.Reason == SessionSwitchReason.RemoteConnect ||
+                    e.Reason == SessionSwitchReason.ConsoleConnect || e.Reason == SessionSwitchReason.SessionLogon)
+                    Dispatcher.BeginInvoke(new Action(() => RecoverWindow("session " + e.Reason)));
+            };
+            SystemEvents.PowerModeChanged += (s, e) =>
+            {
+                if (e.Mode == PowerModes.Resume) Dispatcher.BeginInvoke(new Action(() => RecoverWindow("resume")));
+            };
         }
+
+        /// <summary>螢幕 / 工作階段變動後把動態島救回來：重新定位、重新置頂、強制重繪</summary>
+        public void RecoverWindow(string reason)
+        {
+            try
+            {
+                Log.Write("Recover window: " + reason);
+                PositionWindow();
+                Topmost = false;
+                Topmost = true;
+                ApplyMode(animate: false);
+                InvalidateVisual();
+                Island.InvalidateVisual();
+                UpdateIslandClip();
+                RecoverRequested?.Invoke();
+            }
+            catch (Exception ex) { Log.Error("RecoverWindow", ex); }
+        }
+
+        /// <summary>給 App：桌面小工具也一起救回來</summary>
+        public event Action RecoverRequested;
 
         // ================================================================
         //  初始化
@@ -106,6 +138,9 @@ namespace IslandBar
         private void OnSourceInitialized(object sender, EventArgs e)
         {
             _hwnd = new WindowInteropHelper(this).Handle;
+            // 透明（分層）視窗改用軟體繪製：顯示卡重置、遠端桌面、睡眠喚醒後不會再畫不出來
+            if (PresentationSource.FromVisual(this) is HwndSource src && src.CompositionTarget != null)
+                src.CompositionTarget.RenderMode = RenderMode.SoftwareOnly;
             // 工具視窗：不出現在 Alt+Tab；不搶焦點
             long ex = NativeMethods.GetWindowLong(_hwnd, NativeMethods.GWL_EXSTYLE);
             ex |= NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE;

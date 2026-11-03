@@ -1,0 +1,151 @@
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
+
+namespace IslandBar
+{
+    /// <summary>
+    /// 長時間執行的穩定性：
+    /// 1. 所有沒接到的例外都寫進記錄檔，UI 執行緒的例外不再讓程式直接消失
+    /// 2. 向 Windows 註冊「當掉 / 沒有回應時自動重新啟動」
+    /// 3. 自己的看門狗：UI 卡住超過 45 秒就重新啟動
+    /// 4. 每 30 分鐘記錄一次記憶體、控制代碼、執行緒數量（找記憶體洩漏用）
+    /// </summary>
+    internal static class Stability
+    {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern int RegisterApplicationRestart(string commandLine, int flags);
+
+        private const int RESTART_NO_PATCH = 4, RESTART_NO_REBOOT = 8;
+        private static long _lastPong = Environment.TickCount64;
+        private static bool _restarting;
+
+        public static void Install(Application app)
+        {
+            app.DispatcherUnhandledException += (s, e) =>
+            {
+                Log.Fatal("UI 執行緒", e.Exception);
+                e.Handled = true; // 記下來，繼續跑
+            };
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                Log.Fatal("未處理的例外（程式即將結束）" + (e.IsTerminating ? "" : "（非致命）"), e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
+                if (e.IsTerminating) Relaunch("crash");
+            };
+            TaskScheduler.UnobservedTaskException += (s, e) =>
+            {
+                Log.Fatal("背景工作", e.Exception);
+                e.SetObserved();
+            };
+
+            try { RegisterApplicationRestart("--restarted", RESTART_NO_PATCH | RESTART_NO_REBOOT); } catch { }
+
+            StartWatchdog(app.Dispatcher);
+            StartHeartbeat();
+        }
+
+        // ---------------- 看門狗 ----------------
+
+        private static void StartWatchdog(Dispatcher ui)
+        {
+            var t = new Thread(() =>
+            {
+                long lastLoggedHang = 0;
+                while (true)
+                {
+                    Thread.Sleep(5000);
+                    try
+                    {
+                        ui.BeginInvoke(new Action(() => Interlocked.Exchange(ref _lastPong, Environment.TickCount64)), DispatcherPriority.Background);
+                    }
+                    catch { return; } // Dispatcher 已關閉
+                    long silent = Environment.TickCount64 - Interlocked.Read(ref _lastPong);
+                    if (silent > 15000 && silent - lastLoggedHang > 15000)
+                    {
+                        lastLoggedHang = silent;
+                        Log.Write($"Watchdog: UI 已經 {silent / 1000} 秒沒有回應");
+                    }
+                    // 電腦睡眠喚醒時 TickCount 會跳，所以要連續超過才算
+                    if (silent > 45000)
+                    {
+                        Log.Write("Watchdog: UI 卡住超過 45 秒，自動重新啟動");
+                        Relaunch("hang");
+                        Environment.Exit(3);
+                    }
+                    if (silent < 15000) lastLoggedHang = 0;
+                }
+            })
+            { IsBackground = true, Name = "IslandBar watchdog", Priority = ThreadPriority.AboveNormal };
+            t.Start();
+
+            // 睡眠喚醒後先重設，避免被誤判成卡住
+            Microsoft.Win32.SystemEvents.PowerModeChanged += (s, e) =>
+            {
+                if (e.Mode == Microsoft.Win32.PowerModes.Resume)
+                {
+                    Interlocked.Exchange(ref _lastPong, Environment.TickCount64);
+                    Log.Write("Power: 從睡眠喚醒");
+                }
+                else if (e.Mode == Microsoft.Win32.PowerModes.Suspend) Log.Write("Power: 進入睡眠");
+            };
+        }
+
+        /// <summary>開一個新的自己（等目前這個結束後才接手），用在當掉或卡住時</summary>
+        public static void Relaunch(string reason)
+        {
+            if (_restarting) return;
+            _restarting = true;
+            try
+            {
+                string exe = Environment.ProcessPath;
+                if (string.IsNullOrEmpty(exe)) return;
+                Process.Start(new ProcessStartInfo(exe, $"--wait-pid {Environment.ProcessId} --restarted {reason}") { UseShellExecute = false });
+                Log.Write("Relaunch: " + reason);
+            }
+            catch (Exception ex) { Log.Error("Relaunch", ex); }
+        }
+
+        /// <summary>啟動參數有 --wait-pid 時，等舊的那個結束（最多 15 秒）</summary>
+        public static void WaitForPrevious(string[] args)
+        {
+            int i = Array.IndexOf(args, "--wait-pid");
+            if (i < 0 || i + 1 >= args.Length || !int.TryParse(args[i + 1], out int pid)) return;
+            try
+            {
+                using var p = Process.GetProcessById(pid);
+                if (!p.WaitForExit(15000)) { try { p.Kill(); p.WaitForExit(3000); } catch { } }
+            }
+            catch { } // 已經結束了
+        }
+
+        // ---------------- 健康紀錄 ----------------
+
+        private static void StartHeartbeat()
+        {
+            var timer = new System.Threading.Timer(_ =>
+            {
+                try
+                {
+                    using var p = Process.GetCurrentProcess();
+                    Log.Write($"Health: 記憶體 {p.WorkingSet64 / 1048576} MB（私有 {p.PrivateMemorySize64 / 1048576} MB，GC {GC.GetTotalMemory(false) / 1048576} MB）" +
+                              $"，控制代碼 {p.HandleCount}，執行緒 {p.Threads.Count}，GDI/USER {GuiResources(p.Handle)}");
+                }
+                catch { }
+            }, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30));
+            GC.KeepAlive(timer);
+            _heartbeat = timer;
+        }
+
+        private static System.Threading.Timer _heartbeat;
+
+        [DllImport("user32.dll")] private static extern int GetGuiResources(IntPtr hProcess, int uiFlags);
+        private static string GuiResources(IntPtr h)
+        {
+            try { return $"{GetGuiResources(h, 0)}/{GetGuiResources(h, 1)}"; } catch { return "?"; }
+        }
+    }
+}

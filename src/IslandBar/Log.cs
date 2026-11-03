@@ -19,7 +19,13 @@ namespace IslandBar
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
                     var fi = new FileInfo(FilePath);
-                    if (fi.Exists && fi.Length > 512 * 1024) fi.Delete();
+                    if (fi.Exists && fi.Length > 1024 * 1024)
+                    {
+                        // 保留上一份，方便回報問題時看得到出事前的紀錄
+                        string old = Path.Combine(Path.GetDirectoryName(FilePath), "log.old.txt");
+                        try { File.Copy(FilePath, old, true); } catch { }
+                        fi.Delete();
+                    }
                     File.AppendAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {message}{Environment.NewLine}");
                 }
             }
@@ -29,6 +35,12 @@ namespace IslandBar
         public static void Error(string where, Exception ex)
         {
             Write($"[ERROR] {where}: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        /// <summary>嚴重錯誤：連同呼叫堆疊整個寫下來</summary>
+        public static void Fatal(string where, Exception ex)
+        {
+            Write($"[FATAL] {where}: {ex}");
         }
     }
 }

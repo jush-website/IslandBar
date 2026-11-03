@@ -123,6 +123,8 @@ namespace IslandBar
                 var hwnd = new WindowInteropHelper(this).Handle;
                 int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
                 SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+                if (HwndSource.FromHwnd(hwnd) is HwndSource src && src.CompositionTarget != null)
+                    src.CompositionTarget.RenderMode = RenderMode.SoftwareOnly;
                 DesktopPin.Pin(this);
             };
             Loaded += (s, e) => KeepOnScreen();
@@ -597,6 +599,19 @@ namespace IslandBar
                 _cfg.Top = Top;
                 _settings.Save();
             }
+        }
+
+        /// <summary>螢幕 / 工作階段變動後：重新釘在桌面、拉回螢幕內、重繪</summary>
+        public void Recover()
+        {
+            try
+            {
+                DesktopPin.Pin(this);
+                KeepOnScreen();
+                Rebuild();
+                InvalidateVisual();
+            }
+            catch (Exception ex) { Log.Error("Widget.Recover", ex); }
         }
 
         private void KeepOnScreen()

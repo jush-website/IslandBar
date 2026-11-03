@@ -64,6 +64,8 @@ namespace IslandBar
                 return;
             }
 
+            // 當掉 / 卡住後自動重開的新程序：等舊的結束再接手
+            Stability.WaitForPrevious(e.Args);
             _mutex = new Mutex(true, "IslandBar_SingleInstance_Mutex", out bool isNew);
             if (!isNew)
             {
@@ -74,6 +76,9 @@ namespace IslandBar
             // 上一次更新失敗，由安裝監看程式把舊版開回來
             int failIdx = Array.IndexOf(e.Args, "--update-failed");
             int updateFailCode = failIdx >= 0 && failIdx + 1 < e.Args.Length && int.TryParse(e.Args[failIdx + 1], out int fc) ? fc : 0;
+
+            Stability.Install(this);
+            if (Array.IndexOf(e.Args, "--restarted") >= 0) Log.Write("（自動重新啟動：" + string.Join(" ", e.Args) + "）");
 
             _settings = AppSettings.Load();
             _window = new MainWindow(_settings);
@@ -88,6 +93,7 @@ namespace IslandBar
             _window.TrainingFinished += text =>
                 Balloon("IslandBar · GPU", text, Forms.ToolTipIcon.Info);
             _window.OpenRadarRequested += OpenWindy;
+            _window.RecoverRequested += () => { foreach (var w in _widgets.ToList()) w.Recover(); };
             _window.Show();
 
             CreateTrayIcon();
