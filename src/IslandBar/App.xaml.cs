@@ -28,6 +28,8 @@ namespace IslandBar
             new Dictionary<IslandPosition, Forms.ToolStripMenuItem>();
         private readonly Dictionary<double, Forms.ToolStripMenuItem> _scaleItems =
             new Dictionary<double, Forms.ToolStripMenuItem>();
+        private readonly Dictionary<double, Forms.ToolStripMenuItem> _thickItems = new Dictionary<double, Forms.ToolStripMenuItem>();
+        private readonly Dictionary<double, Forms.ToolStripMenuItem> _wideItems = new Dictionary<double, Forms.ToolStripMenuItem>();
         private readonly Dictionary<double, Forms.ToolStripMenuItem> _opacityItems =
             new Dictionary<double, Forms.ToolStripMenuItem>();
         private Forms.ToolStripMenuItem _recentItem;
@@ -369,6 +371,30 @@ namespace IslandBar
             size.DropDownItems.Add(new Forms.ToolStripSeparator());
             size.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在動態島上按住 Ctrl 滾滾輪也能縮放") { Enabled = false });
 
+            // 收合時的粗細 / 寬度
+            var thick = new Forms.ToolStripMenuItem("收合時的粗細");
+            foreach (var (label, v) in new[] { ("很細", 24.0), ("細", 28.0), ("標準", 34.0), ("粗", 40.0), ("很粗", 46.0) })
+            {
+                double val = v;
+                var item = new Forms.ToolStripMenuItem(label);
+                item.Click += (s, e) => { _settings.CompactThickness = val; SaveAndApply(); };
+                _thickItems[val] = item;
+                thick.DropDownItems.Add(item);
+            }
+            thick.DropDownItems.Add(new Forms.ToolStripSeparator());
+            thick.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在動態島上按住 Alt 滾滾輪可以微調") { Enabled = false });
+            var wide = new Forms.ToolStripMenuItem("收合時的寬度");
+            foreach (var (label, v) in new[] { ("貼合內容", 0.0), ("寬一點", 40.0), ("寬", 90.0), ("很寬", 160.0), ("超寬", 240.0) })
+            {
+                double val = v;
+                var item = new Forms.ToolStripMenuItem(label);
+                item.Click += (s, e) => { _settings.CompactExtraLength = val; SaveAndApply(); };
+                _wideItems[val] = item;
+                wide.DropDownItems.Add(item);
+            }
+            wide.DropDownItems.Add(new Forms.ToolStripSeparator());
+            wide.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在動態島上按住 Shift 滾滾輪可以微調") { Enabled = false });
+
             _autoHideItem = new Forms.ToolStripMenuItem("自動隱藏到螢幕邊緣") { CheckOnClick = true };
             _autoHideItem.CheckedChanged += (s, e) =>
             {
@@ -463,6 +489,8 @@ namespace IslandBar
             menu.Items.Add(toggle);
             menu.Items.Add(position);
             menu.Items.Add(size);
+            menu.Items.Add(thick);
+            menu.Items.Add(wide);
             menu.Items.Add(opacity);
             menu.Items.Add(_autoHideItem);
             menu.Items.Add(_fullscreenItem);
@@ -538,6 +566,8 @@ namespace IslandBar
             if (_titleItem != null) _titleItem.Checked = _settings.ShowCompactTitle;
             if (_fullscreenItem != null) _fullscreenItem.Checked = _settings.HideOnFullscreen;
             foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
+            foreach (var kv in _thickItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.CompactThickness) < 0.5;
+            foreach (var kv in _wideItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.CompactExtraLength) < 0.5;
             if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
             if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
             if (_clipItem != null) _clipItem.Checked = _settings.ClipboardHistory;

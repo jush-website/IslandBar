@@ -66,6 +66,12 @@ namespace IslandBar
         /// <summary>耳機等播放裝置連上 / 中斷時提示</summary>
         public bool DeviceConnectHud { get; set; } = true;
 
+        /// <summary>收合時的粗細（上方＝高度、左右＝寬度），預設 34</summary>
+        public double CompactThickness { get; set; } = 34;
+
+        /// <summary>收合時額外加長多少（上方＝更寬、左右＝更長），預設 0</summary>
+        public double CompactExtraLength { get; set; } = 0;
+
         /// <summary>桌面小工具</summary>
         public bool WidgetEnabled { get; set; } = false;
         public double? WidgetLeft { get; set; }

@@ -322,6 +322,20 @@ namespace IslandBar
             }
         }
 
+        public const double MinThickness = 22, MaxThickness = 52, MaxExtraLength = 320;
+        private double CompactThickness => Math.Clamp(_settings.CompactThickness <= 0 ? 34 : _settings.CompactThickness, MinThickness, MaxThickness);
+        private double CompactExtra => Math.Clamp(_settings.CompactExtraLength, 0, MaxExtraLength);
+
+        /// <summary>收合狀態的粗細：內容高度、封面大小跟著調整</summary>
+        private void ApplyCompactThickness()
+        {
+            double t = CompactThickness;
+            CompactView.Height = t;
+            SideCompactView.Width = Math.Max(28, t + 6);
+            double art = Math.Clamp(t - 10, 14, 30);
+            CompactArt.Width = CompactArt.Height = art;
+        }
+
         private CornerRadius CornersFor(double r)
         {
             if (_dragging) return new CornerRadius(17); // 拖曳中：浮起來的膠囊
@@ -420,30 +434,32 @@ namespace IslandBar
                 default:
                 {
                     int dots = _settings.ShowQuotaDots ? _dotCount : 0;
+                    double t = CompactThickness, extra = CompactExtra;
                     if (IsSide)
                     {
                         // 直式窄條：上下各留 10，內容高度依狀態而定
                         double h = 20 + (_currentMedia != null ? 26 : 38);
                         if (_timerRunning) h += 22;
                         if (dots > 0) h += 8 + dots * 10;
-                        return new Size(40, h);
+                        return new Size(Math.Max(28, t + 6), h + extra);
                     }
                     double dotsW = dots > 0 ? 10 + dots * 10 : 0;
                     if (_currentMedia != null)
                     {
                         double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW;
-                        return new Size(Math.Max(w, 74), 34);
+                        return new Size(Math.Max(w, 74) + extra, t);
                     }
                     double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0);
-                    return new Size(Math.Max(iw, 130), 34);
+                    return new Size(Math.Max(iw, 130) + extra, t);
                 }
             }
         }
 
         private void ApplyMode(bool animate)
         {
+            ApplyCompactThickness();
             var size = TargetSize();
-            double radius = _mode == IslandMode.Expanded ? 26 : (_mode == IslandMode.Hud ? 20 : 18);
+            double radius = _mode == IslandMode.Expanded ? 26 : (_mode == IslandMode.Hud ? 20 : CompactThickness / 2 + 1);
             Island.CornerRadius = CornersFor(radius);
             UpdateIslandClip();
 
@@ -542,6 +558,20 @@ namespace IslandBar
             else if (_mode == IslandMode.Compact) ScheduleAutoHide();
         }
 
+        private DispatcherTimer _saveCompactSizeTimer;
+        private DispatcherTimer _saveCompactSize
+        {
+            get
+            {
+                if (_saveCompactSizeTimer == null)
+                {
+                    _saveCompactSizeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+                    _saveCompactSizeTimer.Tick += (s, e) => { _saveCompactSizeTimer.Stop(); _settings.Save(); SettingsChanged?.Invoke(); };
+                }
+                return _saveCompactSizeTimer;
+            }
+        }
+
         private void Island_MouseWheel(object sender, MouseWheelEventArgs e)
         {
             // Ctrl + 滾輪 = 放大縮小
@@ -555,6 +585,21 @@ namespace IslandBar
                     PositionWindow();
                     SettingsChanged?.Invoke();
                 }
+                e.Handled = true;
+                return;
+            }
+
+            // Shift + 滾輪 = 收合時的寬度（長度）；Alt + 滾輪 = 粗細
+            if (_mode == IslandMode.Compact && (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Alt)) != 0)
+            {
+                if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                    _settings.CompactExtraLength = Math.Clamp(CompactExtra + (e.Delta > 0 ? 10 : -10), 0, MaxExtraLength);
+                else
+                    _settings.CompactThickness = Math.Clamp(CompactThickness + (e.Delta > 0 ? 2 : -2), MinThickness, MaxThickness);
+                ApplyMode(true);
+                PositionWindow();
+                _saveCompactSize.Stop();
+                _saveCompactSize.Start();
                 e.Handled = true;
                 return;
             }
