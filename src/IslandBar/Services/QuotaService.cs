@@ -647,14 +647,16 @@ namespace IslandBar.Services
             foreach (var dir in ClaudeDirs())
             {
                 string file = Path.Combine(dir, ".credentials.json");
-                if (!File.Exists(file)) { diag.Add($"{file}: 不存在"); continue; }
+                // 不先用 File.Exists：沒有權限時它也會回答「不存在」。直接試著打開，失敗就記下真正原因。
+                string text = TryReadShared(file, out string why);
+                if (text == null) { diag.Add($"{file}: {why}"); continue; }
                 try
                 {
-                    var cred = ParseClaudeCredJson(File.ReadAllText(file), out string keys);
+                    var cred = ParseClaudeCredJson(text, out string keys);
                     if (cred != null) return cred;
                     diag.Add($"{file}: 有檔案但沒有 accessToken（欄位：{keys}）");
                 }
-                catch (Exception ex) { diag.Add($"{file}: 讀取失敗 {ex.GetType().Name}"); }
+                catch (Exception ex) { diag.Add($"{file}: 內容無法解析 {ex.GetType().Name}"); }
             }
 
             try
@@ -668,9 +670,75 @@ namespace IslandBar.Services
             if (!_claudeDiagLogged)
             {
                 _claudeDiagLogged = true;
-                Log.Write("Claude 憑證搜尋：" + string.Join(" | ", diag));
+                Log.Write("Claude 憑證搜尋（IslandBar 權限：" + ProcessIntegrity() + "）：" + string.Join(" | ", diag));
+                _ = LogCliStatusAsync();
             }
             return null;
+        }
+
+        /// <summary>以共用模式讀檔（Claude Code 可能正開著它）；失敗回傳 null 並說明原因</summary>
+        private static string TryReadShared(string file, out string why)
+        {
+            why = null;
+            try
+            {
+                using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var sr = new StreamReader(fs, Encoding.UTF8, true);
+                return sr.ReadToEnd();
+            }
+            catch (FileNotFoundException) { why = "不存在"; }
+            catch (DirectoryNotFoundException) { why = "資料夾不存在"; }
+            catch (UnauthorizedAccessException) { why = "沒有權限讀取（存取被拒）"; }
+            catch (IOException ex) { why = $"無法讀取（{ex.Message.Trim()}，0x{ex.HResult:X8}）"; }
+            catch (Exception ex) { why = $"讀取失敗 {ex.GetType().Name}：{ex.Message.Trim()}"; }
+            // 補充：資料夾看得到哪些 .credentials 檔案（只列檔名）
+            try
+            {
+                string dir = Path.GetDirectoryName(file);
+                if (Directory.Exists(dir))
+                {
+                    var names = Directory.EnumerateFiles(dir, ".cred*").Select(Path.GetFileName).ToList();
+                    why += names.Count == 0 ? "；資料夾裡看不到任何 .cred* 檔案" : "；資料夾裡看得到：" + string.Join(",", names);
+                }
+            }
+            catch (Exception ex) { why += "；列出資料夾失敗 " + ex.GetType().Name; }
+            return null;
+        }
+
+        private static string ProcessIntegrity()
+        {
+            try
+            {
+                using var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+                var sids = id.Groups?.Select(g => g.Value).ToList() ?? new List<string>();
+                string level = sids.Contains("S-1-16-16384") ? "System" : sids.Contains("S-1-16-12288") ? "High（系統管理員）" :
+                               sids.Contains("S-1-16-8192") ? "Medium（一般）" : sids.Contains("S-1-16-4096") ? "Low" : "未知";
+                return $"{id.Name}，{level}";
+            }
+            catch { return "未知"; }
+        }
+
+        /// <summary>從 IslandBar 的身分執行 claude auth status，記下 Claude Code 自己怎麼看（輸出不含金鑰）</summary>
+        private static async Task LogCliStatusAsync()
+        {
+            try
+            {
+                string cli = FindClaudeCli();
+                if (cli == null) return;
+                var psi = new ProcessStartInfo(cli, "auth status")
+                {
+                    CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true
+                };
+                using var p = Process.Start(psi);
+                var outTask = p.StandardOutput.ReadToEndAsync();
+                if (!await Task.Run(() => p.WaitForExit(15000))) { try { p.Kill(true); } catch { } return; }
+                string o = await outTask;
+                var m1 = Regex.Match(o, "\"loggedIn\"\\s*:\\s*(true|false)");
+                var m2 = Regex.Match(o, "\"authMethod\"\\s*:\\s*\"([^\"]*)\"");
+                var m3 = Regex.Match(o, "\"configDirectory\"\\s*:\\s*\"([^\"]*)\"");
+                Log.Write($"Claude CLI（以 IslandBar 身分）：loggedIn={m1.Groups[1].Value} authMethod={m2.Groups[1].Value} configDirectory={m3.Groups[1].Value.Replace("\\\\", "\\")}");
+            }
+            catch (Exception ex) { Log.Error("Claude.CliStatus", ex); }
         }
 
         internal static ClaudeCred ParseClaudeCredJson(string json, out string keys)
