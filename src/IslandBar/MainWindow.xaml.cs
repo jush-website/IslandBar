@@ -1419,8 +1419,9 @@ namespace IslandBar
             if (scroller != null) Dispatcher.BeginInvoke(new Action(() => scroller.ScrollToVerticalOffset(offset)), DispatcherPriority.Loaded);
             var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
             var items = _allItems.Where(i => !hidden.Contains(i.Label)).ToList();
-            QuotaEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (items.Count == 0) return;
+            bool showPair = _settings.PairMonitor;
+            QuotaEmpty.Visibility = items.Count == 0 && !showPair ? Visibility.Visible : Visibility.Collapsed;
+            if (items.Count == 0 && !showPair) return;
 
             var secondary = (Brush)FindResource("Secondary");
             var tertiary = (Brush)FindResource("Tertiary");
@@ -1488,6 +1489,8 @@ namespace IslandBar
                 row.Children.Add(resetTb);
                 QuotaList.Children.Add(row);
             }
+
+            if (showPair) AddPairSection(secondary, tertiary);
 
             foreach (var p in _quotaSnap.Providers.Where(p => p.Installed && !string.IsNullOrEmpty(p.Message) && (p.Stale || !p.Available)))
             {

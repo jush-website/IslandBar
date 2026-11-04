@@ -52,7 +52,7 @@ namespace IslandBar
 
         public static readonly (string id, string name)[] Sections =
         {
-            ("clock", "時鐘"), ("weather", "天氣"), ("perf", "電腦效能"), ("events", "行程"), ("quota", "AI 額度")
+            ("clock", "時鐘"), ("weather", "天氣"), ("perf", "電腦效能"), ("events", "行程"), ("quota", "AI 額度"), ("pair", "NVIDIA PAIR")
         };
 
         public DesktopWidget(MainWindow main, AppSettings settings, WidgetConfig cfg)
@@ -187,6 +187,7 @@ namespace IslandBar
                     case "perf": Gap(); BuildPerf(); break;
                     case "events": Gap(); BuildEvents(); break;
                     case "quota": if (_main.QuotaItems.Count > 0) { Gap(); BuildQuota(); } break;
+                    case "pair": Gap(); BuildPair(); break;
                 }
             }
             if (first)
@@ -364,6 +365,44 @@ namespace IslandBar
 
             if (_netText != null)
                 _netText.Text = $"網路  ↓ {SystemStats.FormatSpeed(st.DownBytesPerSec)}   ↑ {SystemStats.FormatSpeed(st.UpBytesPerSec)}";
+        }
+
+        private void BuildPair()
+        {
+            _stack.Children.Add(new TextBlock { Text = "NVIDIA PAIR", FontSize = 12, Foreground = Secondary, Margin = new Thickness(0, 0, 0, 6) });
+            if (!_main.PairMonitorOn)
+            {
+                _stack.Children.Add(new TextBlock { Text = "系統匣 → 勾選「NVIDIA PAIR 監控」", FontSize = 13, Foreground = Tertiary, TextWrapping = TextWrapping.Wrap });
+                return;
+            }
+            var s = _main.PairSnapshot;
+            if (!s.Running)
+            {
+                _stack.Children.Add(new TextBlock { Text = s.UpdatedAt == default ? "偵測中…" : "沒有偵測到 PAIR", FontSize = 13, Foreground = Tertiary });
+                return;
+            }
+            var status = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+            var color = s.LocalWorking ? "#FF9F0A" : "#30D158";
+            status.Children.Add(new Ellipse { Width = 7, Height = 7, Fill = Hex(color), VerticalAlignment = VerticalAlignment.Center });
+            status.Children.Add(new TextBlock
+            {
+                Text = s.LocalWorking ? "這台電腦正在跑推論" + (string.IsNullOrEmpty(s.LocalWorkingModel) ? "" : "：" + PairService.ShortModel(s.LocalWorkingModel)) : "運作中，本機閒置",
+                FontSize = 13, Margin = new Thickness(8, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis
+            });
+            _stack.Children.Add(status);
+            foreach (var e in s.Engines.Where(x => x.ProxyUp))
+            {
+                var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(78) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.Children.Add(new TextBlock { Text = e.Name, FontSize = 12, Foreground = Secondary });
+                string text = $"叢集 {e.ClusterModels.Count} 個" + (e.Loaded.Count > 0 ? " · 本機 " + string.Join("、", e.Loaded.Select(l => PairService.ShortModel(l.name))) : "");
+                var tb = new TextBlock { Text = text, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis };
+                Grid.SetColumn(tb, 1);
+                row.Children.Add(tb);
+                if (e.ClusterModels.Count > 0) row.ToolTip = string.Join("\n", e.ClusterModels.Take(20));
+                _stack.Children.Add(row);
+            }
         }
 
         private void BuildEvents()

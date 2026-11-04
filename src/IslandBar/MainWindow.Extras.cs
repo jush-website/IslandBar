@@ -79,6 +79,8 @@ namespace IslandBar
 
             _audio.DeviceConnectionChanged += (name, connected) =>
                 Dispatcher.BeginInvoke(new Action(() => OnAudioDeviceChanged(name, connected)));
+
+            StartPair();
         }
 
         private void StopExtras()
@@ -87,6 +89,7 @@ namespace IslandBar
             {
                 _extrasCts?.Cancel();
                 _calendar.Stop();
+                _pair?.Stop();
                 UnregisterHotKey(_hwnd, HotkeyOcrId);
                 RemoveClipboardFormatListener(_hwnd);
             }

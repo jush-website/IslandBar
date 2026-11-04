@@ -66,6 +66,12 @@ namespace IslandBar
         /// <summary>耳機等播放裝置連上 / 中斷時提示</summary>
         public bool DeviceConnectHud { get; set; } = true;
 
+        /// <summary>NVIDIA PAIR 監控（沒裝 PAIR 的電腦不用開）</summary>
+        public bool PairMonitor { get; set; } = false;
+
+        /// <summary>PAIR 代理的埠：Ollama、LM Studio、llama.cpp（PAIR 的 Endpoints 有改才需要動）</summary>
+        public int[] PairProxyPorts { get; set; } = new[] { 11434, 1234, 8080 };
+
         /// <summary>收合時的粗細（上方＝高度、左右＝寬度），預設 34</summary>
         public double CompactThickness { get; set; } = 34;
 

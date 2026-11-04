@@ -47,6 +47,7 @@ namespace IslandBar
         private Forms.ToolStripMenuItem _trainNotifyItem;
         private Forms.ToolStripMenuItem _focusItem;
         private Forms.ToolStripMenuItem _widgetItem;
+        private Forms.ToolStripMenuItem _pairItem;
         private readonly List<DesktopWidget> _widgets = new List<DesktopWidget>();
         private WindyWindow _windy;
 
@@ -253,6 +254,18 @@ namespace IslandBar
             widgetMenu.DropDownItems.Add(widgetEdit);
             widgetMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
             widgetMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在小工具上按右鍵可設定該小工具") { Enabled = false });
+            _pairItem = new Forms.ToolStripMenuItem("NVIDIA PAIR 監控") { CheckOnClick = true, ToolTipText = "有安裝 NVIDIA PAIR 的電腦才需要開：顯示叢集模型、本機載入的模型，本機開始 / 結束推論時提示" };
+            _pairItem.CheckedChanged += (s, e) =>
+            {
+                if (_settings.PairMonitor == _pairItem.Checked) return;
+                _window?.SetPairMonitor(_pairItem.Checked);
+                if (_pairItem.Checked)
+                {
+                    // 第一個桌面小工具自動加上 PAIR 區塊
+                    var first = _settings.Widgets?.FirstOrDefault();
+                    if (first != null && !first.Sections.Contains("pair")) { first.Sections.Add("pair"); _settings.Save(); foreach (var w in _widgets) w.Rebuild(); }
+                }
+            };
             var windy = new Forms.ToolStripMenuItem("Windy 雷達…");
             windy.Click += (s, e) => OpenWindy();
 
@@ -483,6 +496,7 @@ namespace IslandBar
             menu.Items.Add(agentHooks);
             menu.Items.Add(calendar);
             menu.Items.Add(widgetMenu);
+            menu.Items.Add(_pairItem);
             menu.Items.Add(windy);
             menu.Items.Add(training);
             menu.Items.Add(new Forms.ToolStripSeparator());
@@ -575,6 +589,7 @@ namespace IslandBar
             if (_deviceHudItem != null) _deviceHudItem.Checked = _settings.DeviceConnectHud;
             if (_trainNotifyItem != null) _trainNotifyItem.Checked = _settings.NotifyTrainingDone;
             if (_widgetItem != null) _widgetItem.Checked = _settings.WidgetEnabled;
+            if (_pairItem != null) _pairItem.Checked = _settings.PairMonitor;
         }
 
         // ================================================================
