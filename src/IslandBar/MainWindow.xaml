@@ -302,6 +302,8 @@
                                    Foreground="#FFB454" Margin="10,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
                         <TextBlock x:Name="CompactEvent" Text="" FontSize="11" FontWeight="SemiBold" Foreground="#7AB8FF"
                                    Margin="10,0,0,0" VerticalAlignment="Center" MaxWidth="120" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
+                        <TextBlock x:Name="CompactPair" Text="" FontSize="11" FontWeight="SemiBold" Foreground="#FF9F0A"
+                                   Margin="10,0,0,0" VerticalAlignment="Center" MaxWidth="170" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
                         <StackPanel x:Name="IdleDots" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0" />
                     </StackPanel>
 
@@ -332,6 +334,8 @@
                         </Border>
                         <TextBlock x:Name="CompactTitle" Width="140" Text="" FontSize="12" Margin="10,0,0,0"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="#E6FFFFFF" />
+                        <TextBlock x:Name="CompactPairMedia" Text="" FontSize="11" FontWeight="SemiBold" Foreground="#FF9F0A"
+                                   Margin="10,0,0,0" VerticalAlignment="Center" MaxWidth="170" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
                         <StackPanel x:Name="MediaDots" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0" />
                     </StackPanel>
                 </Grid>

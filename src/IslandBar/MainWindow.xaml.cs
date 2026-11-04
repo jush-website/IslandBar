@@ -446,10 +446,10 @@ namespace IslandBar
                     double dotsW = dots > 0 ? 10 + dots * 10 : 0;
                     if (_currentMedia != null)
                     {
-                        double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW;
+                        double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW + PairCompactWidth(CompactPairMedia);
                         return new Size(Math.Max(w, 74) + extra, t);
                     }
-                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0);
+                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0) + PairCompactWidth(CompactPair);
                     return new Size(Math.Max(iw, 130) + extra, t);
                 }
             }

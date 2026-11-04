@@ -99,6 +99,7 @@ namespace IslandBar
         /// <summary>每秒呼叫一次（StatsTick）</summary>
         private void ExtrasTick()
         {
+            PairTick();
             _extrasTick++;
             if (_extrasTick % 2 == 0) UpdatePrivacyDots();
             UpdateTraining();

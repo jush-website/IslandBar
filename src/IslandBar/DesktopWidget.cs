@@ -376,34 +376,60 @@ namespace IslandBar
                 return;
             }
             var s = _main.PairSnapshot;
-            if (!s.Running)
+            bool anyOnline = s.Nodes.Any(n => n.Online);
+            if (!s.Running && !anyOnline)
             {
-                _stack.Children.Add(new TextBlock { Text = s.UpdatedAt == default ? "偵測中…" : "沒有偵測到 PAIR", FontSize = 13, Foreground = Tertiary });
+                _stack.Children.Add(new TextBlock { Text = s.UpdatedAt == default ? "偵測中…" : s.Installed ? "PAIR 沒有在執行" : "這台電腦沒有安裝 PAIR", FontSize = 13, Foreground = Tertiary });
                 return;
             }
-            var status = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
-            var color = s.LocalWorking ? "#FF9F0A" : "#30D158";
-            status.Children.Add(new Ellipse { Width = 7, Height = 7, Fill = Hex(color), VerticalAlignment = VerticalAlignment.Center });
-            status.Children.Add(new TextBlock
-            {
-                Text = s.LocalWorking ? "這台電腦正在跑推論" + (string.IsNullOrEmpty(s.LocalWorkingModel) ? "" : "：" + PairService.ShortModel(s.LocalWorkingModel)) : "運作中，本機閒置",
-                FontSize = 13, Margin = new Thickness(8, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis
-            });
-            _stack.Children.Add(status);
-            foreach (var e in s.Engines.Where(x => x.ProxyUp))
+
+            // 每台電腦：名稱、正在跑什麼、GPU
+            foreach (var n in s.Nodes.OrderByDescending(x => x.Busy).ThenByDescending(x => x.IsLocal))
             {
                 var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(78) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.Children.Add(new TextBlock { Text = e.Name, FontSize = 12, Foreground = Secondary });
-                string text = $"叢集 {e.ClusterModels.Count} 個" + (e.Loaded.Count > 0 ? " · 本機 " + string.Join("、", e.Loaded.Select(l => PairService.ShortModel(l.name))) : "");
-                var tb = new TextBlock { Text = text, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis };
-                Grid.SetColumn(tb, 1);
-                row.Children.Add(tb);
-                if (e.ClusterModels.Count > 0) row.ToolTip = string.Join("\n", e.ClusterModels.Take(20));
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+                row.Children.Add(new Ellipse
+                {
+                    Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center,
+                    Fill = !n.Online ? Track : n.Busy ? Hex("#FF9F0A") : Hex("#30D158")
+                });
+                string model = n.CurrentModel ?? (n.Busy ? n.LastModel : null);
+                var name = new TextBlock { FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+                name.Inlines.Add(new System.Windows.Documents.Run(n.Name + (n.IsLocal ? "（本機）" : "")));
+                if (!n.Online) name.Inlines.Add(new System.Windows.Documents.Run("  離線") { Foreground = Tertiary, FontSize = 11 });
+                else if (n.Busy) name.Inlines.Add(new System.Windows.Documents.Run("  ▸ " + (string.IsNullOrEmpty(model) ? "推論中" : PairService.ShortModel(model))) { Foreground = Hex("#FF9F0A"), FontSize = 12 });
+                Grid.SetColumn(name, 1);
+                row.Children.Add(name);
+                var gpu = new TextBlock
+                {
+                    Text = n.Online && n.GpuUtil.HasValue ? $"{n.GpuUtil:0}%" : "", FontSize = 12, Foreground = Secondary,
+                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(gpu, 2);
+                row.Children.Add(gpu);
+                row.ToolTip = $"{n.Name}（{n.Ip}）" + (n.GpuName != null ? "\n" + n.GpuName : "") +
+                              (n.VramTotalGb.HasValue ? $"\nVRAM {n.VramUsedGb:0.0}/{n.VramTotalGb:0} GB" : "") +
+                              (n.LastModel != null ? $"\n最近跑的模型：{n.LastModel}" : "");
                 _stack.Children.Add(row);
             }
+
+            // 最近一個完成的工作
+            var last = s.RecentJobs.FirstOrDefault();
+            if (last != null)
+            {
+                string ago = last.CompletedAt.HasValue ? Ago(DateTime.Now - last.CompletedAt.Value) : "";
+                _stack.Children.Add(new TextBlock
+                {
+                    Text = $"最近：{PairService.ShortModel(last.Model)} @ {last.NodeName}" + (ago.Length > 0 ? $"（{ago}）" : ""),
+                    FontSize = 11, Foreground = Tertiary, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis
+                });
+            }
         }
+
+        private static string Ago(TimeSpan t) =>
+            t.TotalMinutes < 1 ? "剛剛" : t.TotalHours < 1 ? $"{(int)t.TotalMinutes} 分鐘前" : t.TotalDays < 1 ? $"{(int)t.TotalHours} 小時前" : $"{(int)t.TotalDays} 天前";
 
         private void BuildEvents()
         {

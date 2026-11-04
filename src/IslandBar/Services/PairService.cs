@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
@@ -19,8 +20,51 @@ namespace IslandBar.Services
         public int? Busy { get; set; }                    // llama.cpp：正在處理的請求數
     }
 
+    /// <summary>叢集裡的一台電腦（cluster\members.json ＋ 它自己的 /v1/node-info）</summary>
+    public sealed class PairNode
+    {
+        public string Uuid { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Ip { get; set; } = "";
+        public bool IsLocal { get; set; }
+        public bool Online { get; set; }
+        public string GpuName { get; set; }
+        public double? GpuUtil { get; set; }
+        public double? VramUsedGb { get; set; }
+        public double? VramTotalGb { get; set; }
+        /// <summary>GPU 有明顯負載：判斷為「正在跑」</summary>
+        public bool Busy => (GpuUtil ?? 0) >= PairService.BusyThreshold;
+        /// <summary>這台最近一次跑完的模型（工作紀錄）</summary>
+        public string LastModel { get; set; }
+        public DateTime? LastJobAt { get; set; }
+        /// <summary>確切知道正在跑的模型（只有本機查得到）</summary>
+        public string CurrentModel { get; set; }
+        public bool Matches(string nodeId) => !string.IsNullOrEmpty(nodeId) &&
+            (string.Equals(nodeId, Uuid, StringComparison.OrdinalIgnoreCase) || string.Equals(nodeId, Id, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>一筆完成的工作（workloads-history.json）</summary>
+    public sealed class PairJob
+    {
+        public string Key { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string Engine { get; set; } = "";
+        public string State { get; set; } = "";
+        public string NodeName { get; set; } = "";
+        public string FromName { get; set; } = "";
+        public DateTime? CompletedAt { get; set; }
+        public TimeSpan? Duration { get; set; }
+        public bool Failed => State == "failed" || State == "errored" || State == "error" || State == "cancelled";
+    }
+
     public sealed class PairSnapshot
     {
+        public List<PairNode> Nodes { get; set; } = new List<PairNode>();
+        public List<PairJob> RecentJobs { get; set; } = new List<PairJob>();
+        public bool Installed { get; set; }
+        /// <summary>現在在跑的節點（GPU 有負載，依負載排序）</summary>
+        public List<PairNode> BusyNodes => Nodes.Where(n => n.Online && n.Busy).OrderByDescending(n => n.GpuUtil).ToList();
         public bool Running => Engines.Any(e => e.ProxyUp);
         public List<PairEngine> Engines { get; set; } = new List<PairEngine>();
         /// <summary>本機 GPU 正在幫 PAIR 跑推論（推論引擎在用 GPU，而且 GPU 有負載）</summary>
@@ -45,6 +89,22 @@ namespace IslandBar.Services
         public Func<int[]> ProxyPorts { get; set; } = () => new[] { 11434, 1234, 8080 };
 
         public PairService(GpuService gpu) { _gpu = gpu; }
+
+        /// <summary>GPU 使用率超過多少算「正在跑」</summary>
+        public const double BusyThreshold = 30;
+
+        /// <summary>有新的工作完成（給動態島顯示）</summary>
+        public event Action<List<PairJob>> JobsCompleted;
+
+        public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Nvidia Corporation", "Personal AI Router");
+
+        public static bool IsInstalled => Directory.Exists(DataDir);
+
+        private DateTime _historyStamp = DateTime.MinValue;
+        private readonly HashSet<string> _seenJobs = new HashSet<string>();
+        private List<PairJob> _recentJobs = new List<PairJob>();
+        private bool _historyPrimed;
 
         public bool IsRunning => _cts != null;
 
@@ -82,7 +142,22 @@ namespace IslandBar.Services
                 ("llama.cpp", ports.ElementAtOrDefault(2) > 0 ? ports[2] : 8080, new[] { 8081 })
             };
             var engines = await Task.WhenAll(defs.Select(d => PollEngine(d.name, d.proxy, d.engine)));
-            var snap = new PairSnapshot { Engines = engines.ToList(), UpdatedAt = DateTime.Now };
+            var snap = new PairSnapshot { Engines = engines.ToList(), UpdatedAt = DateTime.Now, Installed = IsInstalled };
+
+            // 叢集節點與各自的 GPU 負載
+            var nodes = ReadNodes();
+            await Task.WhenAll(nodes.Select(PollNodeInfo));
+            snap.Nodes = nodes;
+
+            // 工作紀錄（完成約 5 秒內寫入）
+            var newJobs = ReadHistory(nodes);
+            snap.RecentJobs = _recentJobs;
+            foreach (var n in nodes)
+            {
+                var last = _recentJobs.FirstOrDefault(j => j.NodeName == n.Name);
+                if (last != null) { n.LastModel = last.Model; n.LastJobAt = last.CompletedAt; }
+            }
+            if (newJobs.Count > 0) JobsCompleted?.Invoke(newJobs);
 
             // 本機是否正在幫 PAIR 跑：推論引擎的程序在用 GPU，而且 GPU 使用率明顯
             if (snap.Running)
@@ -94,8 +169,156 @@ namespace IslandBar.Services
                 if (snap.LocalWorking)
                     snap.LocalWorkingModel = engines.SelectMany(e => e.Loaded).Select(l => l.name).FirstOrDefault();
             }
+            var local = snap.Nodes.FirstOrDefault(n => n.IsLocal);
+            if (local != null)
+            {
+                // 本機查得到確切的模型
+                local.CurrentModel = snap.LocalWorking ? snap.LocalWorkingModel : null;
+                if (snap.LocalWorking && !local.Busy) local.GpuUtil = Math.Max(local.GpuUtil ?? 0, BusyThreshold);
+            }
             return snap;
         }
+
+        // ================================================================
+        //  節點：cluster\members.json（名稱、IP）＋ 本機 identity
+        // ================================================================
+
+        private static List<PairNode> ReadNodes()
+        {
+            var list = new List<PairNode>();
+            string clusterDir = Path.Combine(DataDir, "cluster");
+            string localUuid = "";
+            try
+            {
+                string idFile = Path.Combine(clusterDir, "identity.json");
+                if (File.Exists(idFile))
+                {
+                    using var doc = JsonDocument.Parse(ReadShared(idFile));
+                    localUuid = Str(doc.RootElement, "node_uuid") ?? "";
+                }
+            }
+            catch (Exception ex) { Log.Error("Pair.identity", ex); }
+
+            try
+            {
+                string mf = Path.Combine(clusterDir, "members.json");
+                if (File.Exists(mf))
+                {
+                    using var doc = JsonDocument.Parse(ReadShared(mf));
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                        foreach (var m in doc.RootElement.EnumerateArray())
+                        {
+                            var n = new PairNode
+                            {
+                                Uuid = Str(m, "nodeUuid") ?? "",
+                                Id = Str(m, "id") ?? "",
+                                Name = Str(m, "name") ?? "",
+                                Ip = Str(m, "ipAddress") ?? ""
+                            };
+                            n.IsLocal = !string.IsNullOrEmpty(localUuid) && n.Matches(localUuid);
+                            if (string.IsNullOrEmpty(n.Name)) n.Name = n.Ip;
+                            list.Add(n);
+                        }
+                }
+            }
+            catch (Exception ex) { Log.Error("Pair.members", ex); }
+
+            var self = list.FirstOrDefault(n => n.IsLocal);
+            if (self == null)
+            {
+                self = new PairNode { Uuid = localUuid, Id = localUuid, Name = Environment.MachineName, IsLocal = true };
+                list.Insert(0, self);
+            }
+            self.Ip = "127.0.0.1";
+            if (string.IsNullOrEmpty(self.Name)) self.Name = Environment.MachineName;
+            return list;
+        }
+
+        /// <summary>每台節點自己的 /v1/node-info（14318，桌面版 PAIR 對區網是一般 HTTP）</summary>
+        private static async Task PollNodeInfo(PairNode n)
+        {
+            if (string.IsNullOrEmpty(n.Ip)) return;
+            using var doc = await GetJson($"http://{n.Ip}:14318/v1/node-info");
+            if (doc == null) { n.Online = false; return; }
+            n.Online = true;
+            var r = doc.RootElement;
+            if (r.TryGetProperty("GPUs", out var gpus) && gpus.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var g in gpus.EnumerateArray())
+                {
+                    double util = g.TryGetProperty("utilization_percent", out var u) && u.ValueKind == JsonValueKind.Number ? u.GetDouble() : 0;
+                    double total = g.TryGetProperty("vram_bytes", out var vt) && vt.ValueKind == JsonValueKind.Number ? vt.GetDouble() : 0;
+                    double used = g.TryGetProperty("vram_used_bytes", out var vu) && vu.ValueKind == JsonValueKind.Number ? vu.GetDouble() : 0;
+                    // 多張卡：取負載最高的那張
+                    if (n.GpuUtil == null || util > n.GpuUtil)
+                    {
+                        n.GpuUtil = util;
+                        n.GpuName = Str(g, "name");
+                        n.VramTotalGb = total > 0 ? total / 1073741824.0 : (double?)null;
+                        n.VramUsedGb = used > 0 ? used / 1073741824.0 : (double?)null;
+                    }
+                }
+            }
+        }
+
+        // ================================================================
+        //  工作紀錄：workloads-history.json（只有已完成的工作）
+        // ================================================================
+
+        private List<PairJob> ReadHistory(List<PairNode> nodes)
+        {
+            var fresh = new List<PairJob>();
+            string file = Path.Combine(DataDir, "workloads-history.json");
+            try
+            {
+                if (!File.Exists(file)) return fresh;
+                var stamp = File.GetLastWriteTimeUtc(file);
+                if (stamp == _historyStamp && _historyPrimed) return fresh;
+                _historyStamp = stamp;
+
+                using var doc = JsonDocument.Parse(ReadShared(file));
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) return fresh;
+                string NameOf(string id) => nodes.FirstOrDefault(n => n.Matches(id))?.Name ?? (string.IsNullOrEmpty(id) ? "" : id.Substring(0, Math.Min(8, id.Length)));
+
+                var all = new List<PairJob>();
+                foreach (var w in doc.RootElement.EnumerateArray())
+                {
+                    string id = Str(w, "id") ?? "", origin = Str(w, "originatedFrom") ?? "";
+                    long? created = Long(w, "createdAt"), started = Long(w, "startedAt"), done = Long(w, "completedAt");
+                    var job = new PairJob
+                    {
+                        Key = origin + "|" + id,
+                        Model = Str(w, "model") ?? "",
+                        Engine = Str(w, "engine") ?? "",
+                        State = Str(w, "state") ?? "",
+                        NodeName = NameOf(Str(w, "scheduledOn")),
+                        FromName = NameOf(origin),
+                        CompletedAt = done.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(done.Value).LocalDateTime : (DateTime?)null,
+                        Duration = done.HasValue && (started ?? created).HasValue ? TimeSpan.FromMilliseconds(done.Value - (started ?? created).Value) : (TimeSpan?)null
+                    };
+                    all.Add(job);
+                    if (_historyPrimed && _seenJobs.Add(job.Key)) fresh.Add(job);
+                    else _seenJobs.Add(job.Key);
+                }
+                _recentJobs = all.OrderByDescending(j => j.CompletedAt ?? DateTime.MinValue).Take(30).ToList();
+                // 只提示最近 2 分鐘內完成的（避免第一次讀到一大堆舊紀錄）
+                fresh = fresh.Where(j => j.CompletedAt.HasValue && (DateTime.Now - j.CompletedAt.Value).TotalMinutes < 2).ToList();
+                _historyPrimed = true;
+                if (_seenJobs.Count > 20000) _seenJobs.Clear();
+            }
+            catch (Exception ex) { Log.Error("Pair.history", ex); }
+            return fresh;
+        }
+
+        private static string ReadShared(string file)
+        {
+            using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var sr = new StreamReader(fs);
+            return sr.ReadToEnd();
+        }
+
+        private static long? Long(JsonElement e, string key) =>
+            e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long l) ? l : (long?)null;
 
         private static bool IsEngineProcess(string path)
         {
