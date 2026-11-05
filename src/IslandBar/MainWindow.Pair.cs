@@ -137,6 +137,41 @@ namespace IslandBar
             if (changed && _mode == IslandMode.Compact) ApplyMode(true);
         }
 
+        /// <summary>展開時固定的額度列上的 PAIR 小標籤：誰在跑什麼，或閒置幾台</summary>
+        private (string text, Color color, string tip)? PairStripInfo()
+        {
+            if (!_settings.PairMonitor) return null;
+            var s = PairSnapshot;
+            if (!s.Running) return null;
+            var busy = s.BusyNodes;
+            if (busy.Count > 0)
+            {
+                var n = busy[0];
+                string model = n.CurrentModel ?? n.LastModel;
+                string text = "PAIR ▸ " + n.Name + (string.IsNullOrEmpty(model) ? "" : " · " + PairService.ShortModel(model)) +
+                              (n.VramPct.HasValue ? $" · {n.VramPct:0}%" : "") + (busy.Count > 1 ? $" +{busy.Count - 1}" : "");
+                string tip = string.Join("\n", busy.Select(b => $"{b.Name}　{b.LoadText()}" + (string.IsNullOrEmpty(b.CurrentModel ?? b.LastModel) ? "" : "　" + (b.CurrentModel ?? b.LastModel))));
+                return (text, PairBusyColor, tip);
+            }
+            int online = s.Nodes.Count(x => x.Online);
+            return ($"PAIR 閒置 · {online} 台在線", Color.FromArgb(0xA6, 0xFF, 0xFF, 0xFF),
+                    string.Join("\n", s.Nodes.Select(x => $"{x.Name}{(x.IsLocal ? "（本機）" : "")}　{(x.Online ? x.LoadText() : "離線")}")));
+        }
+
+        private Border MakePairChip(string text, Color color, string tip)
+        {
+            var chip = new Border
+            {
+                CornerRadius = new CornerRadius(8), Background = (Brush)FindResource("TileBg"),
+                Padding = new Thickness(7, 2, 7, 2), Margin = new Thickness(0, 0, 4, 4), ToolTip = tip
+            };
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            sp.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
+            sp.Children.Add(new TextBlock { Text = text, FontSize = 10, Foreground = new SolidColorBrush(color), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            chip.Child = sp;
+            return chip;
+        }
+
         private double PairCompactWidth(TextBlock tb)
         {
             if (tb == null || tb.Visibility != Visibility.Visible) return 0;

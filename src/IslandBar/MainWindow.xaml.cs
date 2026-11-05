@@ -1358,12 +1358,15 @@ namespace IslandBar
             var logins = _settings.PinQuotaStrip && TabQuota.IsChecked != true
                 ? _quotaSnap.Providers.Where(p => p.AttentionAction != null).ToList()
                 : new List<ProviderUsage>();
-            string sig = string.Join("|", logins.Select(p => p.Attention)) + "||" + string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}={i.ResetIn}"));
+            var pairChip = _settings.PinQuotaStrip && TabQuota.IsChecked != true ? PairStripInfo() : null;
+            string sig = string.Join("|", logins.Select(p => p.Attention)) + "||" + string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}={i.ResetIn}")) +
+                         "||" + (pairChip?.text ?? "");
             if (sig != _stripSignature)
             {
                 _stripSignature = sig;
                 QuotaStrip.Children.Clear();
                 foreach (var p in logins) QuotaStrip.Children.Add(MakeLoginChip(p));
+                if (pairChip != null) QuotaStrip.Children.Add(MakePairChip(pairChip.Value.text, pairChip.Value.color, pairChip.Value.tip));
                 var secondary = (Brush)FindResource("Secondary");
                 foreach (var it in items)
                 {
@@ -1388,7 +1391,7 @@ namespace IslandBar
                 }
             }
 
-            bool anyStrip = items.Count > 0 || logins.Count > 0;
+            bool anyStrip = items.Count > 0 || logins.Count > 0 || pairChip != null;
             QuotaStrip.Visibility = anyStrip ? Visibility.Visible : Visibility.Collapsed;
             double extra = 0;
             if (anyStrip)
@@ -1428,6 +1431,9 @@ namespace IslandBar
             var track = (Brush)FindResource("TrackBg");
             var groupNames = new Dictionary<string, string> { ["codex"] = "Codex", ["claude"] = "Claude", ["antigravity"] = "Antigravity", ["sys"] = "系統資源" };
             string lastGroup = null;
+
+            // PAIR 放最上面，不用捲動就看得到
+            if (showPair) AddPairSection(secondary, tertiary);
 
             foreach (var it in items)
             {
@@ -1489,8 +1495,6 @@ namespace IslandBar
                 row.Children.Add(resetTb);
                 QuotaList.Children.Add(row);
             }
-
-            if (showPair) AddPairSection(secondary, tertiary);
 
             foreach (var p in _quotaSnap.Providers.Where(p => p.Installed && !string.IsNullOrEmpty(p.Message) && (p.Stale || !p.Available)))
             {
