@@ -49,14 +49,21 @@ namespace IslandBar
             root.Children.Add(_list);
             BuildList();
 
-            root.Children.Add(Heading("大小", 16));
+            root.Children.Add(Heading("文字與內容大小", 16));
             var size = MakeSlider(DesktopWidget.MinScale * 100, DesktopWidget.MaxScale * 100, _cfg.Scale * 100, v =>
             {
                 _widget.SetScale(v / 100);
                 _changed();
             }, v => $"{v:0}%");
             root.Children.Add(size);
-            root.Children.Add(Note("也可以直接拖曳小工具右下角，或在小工具上按住 Ctrl 滾滾輪。"));
+            root.Children.Add(Note("也可以在小工具上按住 Ctrl 滾滾輪。"));
+
+            root.Children.Add(Heading("長寬", 16));
+            root.Children.Add(Note("直接拖曳小工具的右邊（寬）、下邊（高）或右下角（寬高一起）。高度比內容矮時，可以在小工具上滾滾輪捲動。"));
+            var resetSize = MakeButton("恢復自動大小", false);
+            resetSize.ToolTip = "寬度跟著內容大小、高度自動符合內容（也可以雙擊小工具右下角）";
+            resetSize.Click += (s, e) => _widget.ResetSize();
+            root.Children.Add(resetSize);
 
             root.Children.Add(Heading("背景不透明度", 16));
             root.Children.Add(MakeSlider(0, 100, _cfg.Opacity * 100, v =>

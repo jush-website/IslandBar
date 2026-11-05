@@ -109,7 +109,7 @@ namespace IslandBar
                     string model = n.CurrentModel ?? n.LastModel;
                     text = "▸ " + n.Name + (string.IsNullOrEmpty(model) ? "" : " · " + PairService.ShortModel(model)) + (busy.Count > 1 ? $" +{busy.Count - 1}" : "");
                     tip = "NVIDIA PAIR 正在跑：\n" + string.Join("\n", busy.Select(b =>
-                        $"{b.Name}　GPU {b.GpuUtil:0}%" + (b.VramTotalGb.HasValue ? $"　VRAM {b.VramUsedGb:0.0}/{b.VramTotalGb:0} GB" : "") +
+                        $"{b.Name}　{b.LoadText()}" +
                         (b.CurrentModel != null ? "　" + b.CurrentModel : b.LastModel != null ? "　" + b.LastModel + "（最近跑的模型）" : "")));
                 }
                 else if (_pairLastDone != null && DateTime.Now < _pairLastDoneShownUntil)
@@ -200,7 +200,7 @@ namespace IslandBar
                 row.Children.Add(what);
                 var gpu = new TextBlock
                 {
-                    Text = n.Online && n.GpuUtil.HasValue ? $"GPU {n.GpuUtil:0}%" + (n.VramTotalGb.HasValue ? $" · {n.VramUsedGb:0.0}/{n.VramTotalGb:0}G" : "") : "",
+                    Text = n.Online ? (n.VramPct.HasValue ? $"VRAM {n.VramPct:0}% · {n.VramUsedGb:0.0}/{n.VramTotalGb:0}G" : n.LoadText(false)) : "",
                     FontSize = 11, Foreground = secondary, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
                 };
                 Grid.SetColumn(gpu, 3);

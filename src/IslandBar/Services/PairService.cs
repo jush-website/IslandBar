@@ -35,6 +35,12 @@ namespace IslandBar.Services
         public double? VramTotalGb { get; set; }
         /// <summary>GPU 有明顯負載：判斷為「正在跑」</summary>
         public bool Busy => (GpuUtil ?? 0) >= PairService.BusyThreshold;
+        /// <summary>顯示記憶體用量百分比（顯示用；判斷「在跑」仍看 GPU 使用率）</summary>
+        public double? VramPct => VramTotalGb > 0 && VramUsedGb.HasValue ? Math.Clamp(VramUsedGb.Value / VramTotalGb.Value * 100, 0, 100) : (double?)null;
+        /// <summary>「VRAM 63%（15.1/24 GB）」；抓不到 VRAM 時退回 GPU 使用率</summary>
+        public string LoadText(bool withGb = true) =>
+            VramPct.HasValue ? $"VRAM {VramPct:0}%" + (withGb ? $"（{VramUsedGb:0.0}/{VramTotalGb:0} GB）" : "")
+            : GpuUtil.HasValue ? $"GPU {GpuUtil:0}%" : "";
         /// <summary>這台最近一次跑完的模型（工作紀錄）</summary>
         public string LastModel { get; set; }
         public DateTime? LastJobAt { get; set; }

@@ -191,5 +191,9 @@ namespace IslandBar
         public List<string> Sections { get; set; } = new List<string> { "clock", "weather", "perf", "events", "quota" };
         public double Opacity { get; set; } = 0.7;
         public bool Locked { get; set; }
+        /// <summary>自訂寬度（螢幕單位，null＝依內容大小）</summary>
+        public double? Width { get; set; }
+        /// <summary>自訂高度（null＝自動符合內容；內容放不下時可以用滾輪捲動）</summary>
+        public double? Height { get; set; }
     }
 }

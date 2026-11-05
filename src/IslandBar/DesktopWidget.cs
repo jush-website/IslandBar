@@ -25,6 +25,7 @@ namespace IslandBar
         private readonly AppSettings _settings;
         private readonly WidgetConfig _cfg;
         private readonly Border _card = new Border();
+        private readonly ScrollViewer _scroll = new ScrollViewer();
         private readonly ScaleTransform _scale = new ScaleTransform(1, 1);
         private const double BaseWidth = 300;
         public const double MinScale = 0.6, MaxScale = 2.0;
@@ -68,9 +69,7 @@ namespace IslandBar
             ShowInTaskbar = false;
             ShowActivated = false;
             ResizeMode = ResizeMode.NoResize;
-            SizeToContent = SizeToContent.Height;
             _cfg.Scale = Math.Clamp(_cfg.Scale <= 0 ? 1 : _cfg.Scale, MinScale, MaxScale);
-            Width = BaseWidth * _cfg.Scale;
             Foreground = Brushes.White;
             FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft JhengHei UI");
             UseLayoutRounding = true;
@@ -78,19 +77,26 @@ namespace IslandBar
 
             _card.CornerRadius = new CornerRadius(20);
             _card.Padding = new Thickness(18, 14, 18, 16);
-            _card.Child = _stack;
-            _card.Width = BaseWidth;
+            // 自訂高度比內容矮時可以用滾輪捲動（不顯示捲軸）
+            _scroll.Content = _stack;
+            _scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+            _scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            _scroll.Focusable = false;
+            _card.Child = _scroll;
             _card.HorizontalAlignment = HorizontalAlignment.Left;
+            _card.VerticalAlignment = VerticalAlignment.Top;
             _card.LayoutTransform = _scale;
             _scale.ScaleX = _scale.ScaleY = _cfg.Scale;
 
-            // 右下角拖曳把手：自由縮放
+            // 拖曳把手：右下角＝寬高一起、右邊＝寬、下邊＝高；雙擊右下角恢復自動大小
             var grip = new Border
             {
                 Width = 18, Height = 18, Background = Brushes.Transparent, Cursor = Cursors.SizeNWSE,
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
-                ToolTip = "拖曳調整大小（或在小工具上按住 Ctrl 滾滾輪）"
+                ToolTip = "拖曳調整寬高（右邊、下邊也可以拉）\n雙擊恢復自動大小 · Ctrl + 滾輪調整文字大小", Tag = "both"
             };
+            var rightEdge = new Border { Width = 6, Background = Brushes.Transparent, Cursor = Cursors.SizeWE, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 18), Tag = "w" };
+            var bottomEdge = new Border { Height = 6, Background = Brushes.Transparent, Cursor = Cursors.SizeNS, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(16, 0, 18, 0), Tag = "h" };
             var gripMark = new Path
             {
                 Data = Geometry.Parse("M 14,4 L 4,14 M 14,9 L 9,14"), Stroke = Tertiary, StrokeThickness = 1.5,
@@ -98,15 +104,21 @@ namespace IslandBar
                 IsHitTestVisible = false
             };
             grip.Child = gripMark;
-            grip.MouseLeftButtonDown += OnResizeStart;
-            grip.MouseMove += OnResizeMove;
-            grip.MouseLeftButtonUp += OnResizeEnd;
+            foreach (var g in new[] { grip, rightEdge, bottomEdge })
+            {
+                g.MouseLeftButtonDown += OnResizeStart;
+                g.MouseMove += OnResizeMove;
+                g.MouseLeftButtonUp += OnResizeEnd;
+            }
             var root = new Grid();
             root.Children.Add(_card);
+            root.Children.Add(rightEdge);
+            root.Children.Add(bottomEdge);
             root.Children.Add(grip);
             Content = root;
             ApplyOpacity();
-            MouseWheel += (s, e) =>
+            ApplySize();
+            PreviewMouseWheel += (s, e) =>
             {
                 if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
                 SetScale(_cfg.Scale + (e.Delta > 0 ? 0.05 : -0.05));
@@ -151,11 +163,43 @@ namespace IslandBar
 
         private bool Has(string id) => _cfg.Sections.Contains(id);
 
+        /// <summary>文字與內容大小（不改變自訂的寬高）</summary>
         public void SetScale(double scale)
         {
             _cfg.Scale = Math.Clamp(Math.Round(scale, 3), MinScale, MaxScale);
             _scale.ScaleX = _scale.ScaleY = _cfg.Scale;
-            Width = BaseWidth * _cfg.Scale;
+            ApplySize();
+        }
+
+        public const double MinW = 160, MaxW = 1600, MinH = 60, MaxH = 1600;
+
+        /// <summary>套用寬高：沒有自訂寬度就跟著內容大小；沒有自訂高度就自動符合內容</summary>
+        public void ApplySize()
+        {
+            double w = Math.Clamp(_cfg.Width ?? BaseWidth * _cfg.Scale, MinW, MaxW);
+            Width = w;
+            _card.Width = w / _cfg.Scale;
+            if (_cfg.Height is double h)
+            {
+                h = Math.Clamp(h, MinH, MaxH);
+                SizeToContent = SizeToContent.Manual;
+                Height = h;
+                _card.Height = h / _cfg.Scale;
+            }
+            else
+            {
+                _card.Height = double.NaN;
+                SizeToContent = SizeToContent.Height;
+            }
+        }
+
+        /// <summary>恢復自動大小（寬度依內容大小、高度符合內容）</summary>
+        public void ResetSize()
+        {
+            _cfg.Width = null;
+            _cfg.Height = null;
+            ApplySize();
+            _settings.Save();
         }
 
         public void ApplyOpacity()
@@ -404,13 +448,14 @@ namespace IslandBar
                 row.Children.Add(name);
                 var gpu = new TextBlock
                 {
-                    Text = n.Online && n.GpuUtil.HasValue ? $"{n.GpuUtil:0}%" : "", FontSize = 12, Foreground = Secondary,
+                    Text = n.Online ? (n.VramPct.HasValue ? $"VRAM {n.VramPct:0}%" : n.GpuUtil.HasValue ? $"GPU {n.GpuUtil:0}%" : "") : "", FontSize = 12, Foreground = Secondary,
                     HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
                 };
                 Grid.SetColumn(gpu, 2);
                 row.Children.Add(gpu);
                 row.ToolTip = $"{n.Name}（{n.Ip}）" + (n.GpuName != null ? "\n" + n.GpuName : "") +
                               (n.VramTotalGb.HasValue ? $"\nVRAM {n.VramUsedGb:0.0}/{n.VramTotalGb:0} GB" : "") +
+                              (n.GpuUtil.HasValue ? $"\nGPU 使用率 {n.GpuUtil:0}%" : "") +
                               (n.LastModel != null ? $"\n最近跑的模型：{n.LastModel}" : "");
                 _stack.Children.Add(row);
             }
@@ -585,14 +630,23 @@ namespace IslandBar
         // ================================================================
 
         private bool _resizing;
+        private string _resizeMode = "both";
         private POINT _resizeStartCursor;
-        private double _resizeStartWidth;
+        private double _resizeStartWidth, _resizeStartHeight;
 
         private void OnResizeStart(object sender, MouseButtonEventArgs e)
         {
             if (_cfg.Locked) return;
+            if (e.ClickCount == 2 && (string)((FrameworkElement)sender).Tag == "both")
+            {
+                ResetSize();
+                e.Handled = true;
+                return;
+            }
             GetCursorPos(out _resizeStartCursor);
-            _resizeStartWidth = Width;
+            _resizeMode = (string)((FrameworkElement)sender).Tag ?? "both";
+            _resizeStartWidth = ActualWidth;
+            _resizeStartHeight = ActualHeight;
             _resizing = true;
             ((UIElement)sender).CaptureMouse();
             e.Handled = true;
@@ -605,9 +659,9 @@ namespace IslandBar
             var dpi = VisualTreeHelper.GetDpi(this);
             double dx = (p.X - _resizeStartCursor.X) / dpi.DpiScaleX;
             double dy = (p.Y - _resizeStartCursor.Y) / dpi.DpiScaleY;
-            // 往右下拉＝放大；以水平與垂直中較大的位移為準
-            double d = Math.Abs(dx) > Math.Abs(dy) ? dx : dy * (Width / Math.Max(1, ActualHeight));
-            SetScale((_resizeStartWidth + d) / BaseWidth);
+            if (_resizeMode != "h") _cfg.Width = Math.Clamp(Math.Round(_resizeStartWidth + dx), MinW, MaxW);
+            if (_resizeMode != "w") _cfg.Height = Math.Clamp(Math.Round(_resizeStartHeight + dy), MinH, MaxH);
+            ApplySize();
             e.Handled = true;
         }
 
