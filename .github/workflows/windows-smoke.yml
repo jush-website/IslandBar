@@ -1,0 +1,57 @@
+name: Windows smoke test
+
+# 手動執行：在 Windows runner 上跑 IslandBar --shot，把設定畫面與動態島截圖推到 ci-smoke 分支（只用來檢查畫面）
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish src/IslandBar/IslandBar.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish
+
+      - name: Screenshots
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:APPDATA 'IslandBar'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $settings = @{
+            AllowRemoteRead = $true
+            RemoteHosts = @(@{ Name = '本機測試'; Address = '127.0.0.1' }, @{ Name = '4090 主機'; Address = '192.168.77.77' })
+            ShelfFiles = @('C:\Windows\notepad.exe', 'C:\Windows\win.ini', 'C:\Windows\System32\drivers\etc')
+            AutoUpdate = $false
+          } | ConvertTo-Json -Depth 5
+          [IO.File]::WriteAllText((Join-Path $dir 'settings.json'), $settings, [Text.UTF8Encoding]::new($false))
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $shots = (Resolve-Path shots).Path
+          $p = Start-Process -FilePath publish\IslandBar.exe -ArgumentList '--shot', $shots -PassThru
+          Start-Sleep 14
+          try { Invoke-WebRequest http://127.0.0.1:14320/islandbar/status -UseBasicParsing -TimeoutSec 5 | Select-Object -ExpandProperty Content | Out-File shots\status.json -Encoding utf8 }
+          catch { "status failed: $_" | Out-File shots\status.json }
+          if (-not $p.WaitForExit(120000)) { Stop-Process $p -Force; 'timeout' | Out-File shots\timeout.txt }
+          Copy-Item (Join-Path $dir 'log.txt') shots\log.txt -ErrorAction SilentlyContinue
+          Get-ChildItem shots | Format-Table Name, Length
+
+      - name: Push screenshots to ci-smoke branch
+        shell: bash
+        run: |
+          cd shots
+          git init -q -b ci-smoke
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "windows smoke ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-smoke

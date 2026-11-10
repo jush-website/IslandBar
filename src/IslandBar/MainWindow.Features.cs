@@ -48,6 +48,29 @@ namespace IslandBar
         /// <summary>在動態島上按右鍵＝開設定</summary>
         public event Action SettingsRequested;
 
+        // ---- 截圖測試用（--shot） ----
+        public FrameworkElement IslandVisual => Island;
+
+        public void DebugExpand(string tab)
+        {
+            _collapseDelay.Stop();
+            switch (tab)
+            {
+                case "remote": TabRemote.Visibility = Visibility.Visible; TabRemote.IsChecked = true; break;
+                case "shelf": TabShelf.Visibility = Visibility.Visible; TabShelf.IsChecked = true; break;
+                default: TabStats.IsChecked = true; break;
+            }
+            SetMode(IslandMode.Expanded);
+        }
+
+        public void DebugTestRgb()
+        {
+            SetMode(IslandMode.Compact);
+            TestRgb();
+            _hudTimer.Stop();
+            SetMode(IslandMode.Compact);
+        }
+
         /// <summary>設定畫面的「試試看」</summary>
         public void TestRgb()
         {

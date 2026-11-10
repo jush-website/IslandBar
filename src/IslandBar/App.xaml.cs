@@ -81,6 +81,8 @@ namespace IslandBar
             _window.Show();
 
             CreateTrayIcon();
+            int shotIdx = Array.IndexOf(e.Args, "--shot");
+            if (shotIdx >= 0 && shotIdx + 1 < e.Args.Length) RunShots(e.Args[shotIdx + 1]);
             _settings.MigrateWidgets();
             if (_settings.WidgetEnabled) ShowWidgets();
             if (_settings.WindyPinned) OpenWindy();
