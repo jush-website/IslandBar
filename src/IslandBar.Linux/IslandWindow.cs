@@ -158,6 +158,7 @@ namespace IslandBar.Linux
 
         private Screen TargetScreen()
         {
+            if (_s == null) return null;
             var all = Screens?.All;
             if (all == null || all.Count == 0) return null;
             if (_s.Screen >= 0 && _s.Screen < all.Count) return all[_s.Screen];
@@ -180,7 +181,8 @@ namespace IslandBar.Linux
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == ClientSizeProperty) Recenter();
+            // 基底類別的建構式也會觸發這裡（那時欄位還沒設定）
+            if (change.Property == ClientSizeProperty && _s != null && _scaler != null) Recenter();
         }
 
         private void Schedule(Action a, int ms)
