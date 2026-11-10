@@ -48,7 +48,6 @@ namespace IslandBar
         private Forms.ToolStripMenuItem _focusItem;
         private Forms.ToolStripMenuItem _widgetItem;
         private Forms.ToolStripMenuItem _pairItem;
-        private Forms.ToolStripMenuItem _voiceItem;
         private readonly List<DesktopWidget> _widgets = new List<DesktopWidget>();
         private WindyWindow _windy;
 
@@ -143,7 +142,6 @@ namespace IslandBar
                 claudeLoginTop.Visible = pending.Contains("claude-login");
                 codexLoginTop.Visible = pending.Contains("codex-login");
                 if (_focusItem != null) _focusItem.Text = _window?.FocusRunning == true ? "結束專注模式" : "專注模式（25 分鐘 + 休息 5 分鐘）";
-                UpdateVoiceItem();
             };
 
             // 隨時都可以用的帳號登入
@@ -267,17 +265,6 @@ namespace IslandBar
                     var first = _settings.Widgets?.FirstOrDefault();
                     if (first != null && !first.Sections.Contains("pair")) { first.Sections.Add("pair"); _settings.Save(); foreach (var w in _widgets) w.Rebuild(); }
                 }
-            };
-            _voiceItem = new Forms.ToolStripMenuItem("語音指令") { CheckOnClick = true };
-            _voiceItem.ToolTipText = "說「欸小工具」（或「欸動態島」）再接指令，「欸」可省略；也可以先喚醒、聽到提示音後再說指令：\n" +
-                "打開／收起來／看音樂・日曆・天氣・額度・效能\n" +
-                "Claude 還剩多少／Codex 額度／Antigravity 額度／天氣如何／現在幾點\n" +
-                "下一首／上一首／播放／暫停／大聲一點／小聲一點／靜音／取消靜音／開始專注\n" +
-                "離線辨識，只認這些固定句型";
-            _voiceItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.VoiceCommands == _voiceItem.Checked) return;
-                _window?.SetVoiceCommands(_voiceItem.Checked);
             };
             var windy = new Forms.ToolStripMenuItem("Windy 雷達…");
             windy.Click += (s, e) => OpenWindy();
@@ -510,7 +497,6 @@ namespace IslandBar
             menu.Items.Add(calendar);
             menu.Items.Add(widgetMenu);
             menu.Items.Add(_pairItem);
-            menu.Items.Add(_voiceItem);
             menu.Items.Add(windy);
             menu.Items.Add(training);
             menu.Items.Add(new Forms.ToolStripSeparator());
@@ -585,20 +571,6 @@ namespace IslandBar
             parent.DropDownItems.Add(item);
         }
 
-        private void UpdateVoiceItem()
-        {
-            if (_voiceItem == null) return;
-            _voiceItem.Checked = _settings.VoiceCommands;
-            _voiceItem.Text = !_settings.VoiceCommands ? "語音指令" : (_window?.VoiceState ?? VoiceStatus.Off) switch
-            {
-                VoiceStatus.Listening => "語音指令（聆聽中）",
-                VoiceStatus.NoMic => "語音指令（沒有麥克風，接上後自動開始）",
-                VoiceStatus.NoRecognizer => "語音指令（缺少中文語音辨識）",
-                VoiceStatus.Error => "語音指令（無法啟動）",
-                _ => "語音指令（啟動中）"
-            };
-        }
-
         private void SyncMenu()
         {
             foreach (var kv in _positionItems) kv.Value.Checked = _settings.AlongEdge == null && kv.Key == _settings.Position;
@@ -618,7 +590,6 @@ namespace IslandBar
             if (_trainNotifyItem != null) _trainNotifyItem.Checked = _settings.NotifyTrainingDone;
             if (_widgetItem != null) _widgetItem.Checked = _settings.WidgetEnabled;
             if (_pairItem != null) _pairItem.Checked = _settings.PairMonitor;
-            UpdateVoiceItem();
         }
 
         // ================================================================

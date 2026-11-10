@@ -88,7 +88,6 @@ namespace IslandBar
             try
             {
                 _extrasCts?.Cancel();
-                StopVoice();
                 _calendar.Stop();
                 _pair?.Stop();
                 UnregisterHotKey(_hwnd, HotkeyOcrId);
@@ -330,8 +329,6 @@ namespace IslandBar
                 return;
             }
             var mic = PrivacyService.InUse("microphone");
-            // 自己的語音指令一直開著麥克風，不算
-            mic.RemoveAll(a => a.Equals("IslandBar", StringComparison.OrdinalIgnoreCase));
             var cam = PrivacyService.InUse("webcam");
             MicDot.Visibility = mic.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             CamDot.Visibility = cam.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
