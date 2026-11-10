@@ -29,6 +29,9 @@ namespace IslandBar.Linux
         public string Tab { get; set; } = "sys";
         public bool AutoStart { get; set; } = true;
         public bool CheckUpdates { get; set; } = true;
+        /// <summary>允許區網裡的 IslandBar（Windows／Linux）讀這台的狀態（只讀）</summary>
+        public bool AllowRemoteRead { get; set; } = false;
+        public int RemotePort { get; set; } = 14320;
 
         public static string Dir
         {

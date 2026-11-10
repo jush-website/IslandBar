@@ -24,30 +24,10 @@ namespace IslandBar
         private MainWindow _window;
         private AppSettings _settings;
 
-        private readonly Dictionary<IslandPosition, Forms.ToolStripMenuItem> _positionItems =
-            new Dictionary<IslandPosition, Forms.ToolStripMenuItem>();
-        private readonly Dictionary<double, Forms.ToolStripMenuItem> _scaleItems =
-            new Dictionary<double, Forms.ToolStripMenuItem>();
-        private readonly Dictionary<double, Forms.ToolStripMenuItem> _thickItems = new Dictionary<double, Forms.ToolStripMenuItem>();
-        private readonly Dictionary<double, Forms.ToolStripMenuItem> _wideItems = new Dictionary<double, Forms.ToolStripMenuItem>();
-        private readonly Dictionary<double, Forms.ToolStripMenuItem> _opacityItems =
-            new Dictionary<double, Forms.ToolStripMenuItem>();
         private Forms.ToolStripMenuItem _recentItem;
         private readonly List<string> _recent = new List<string>();
-        private Forms.ToolStripMenuItem _dotsItem;
-        private Forms.ToolStripMenuItem _pinItem;
-        private Forms.ToolStripMenuItem _titleItem;
-        private Forms.ToolStripMenuItem _fullscreenItem;
-        private Forms.ToolStripMenuItem _autoHideItem;
-        private Forms.ToolStripMenuItem _autoUpdateItem;
         private Forms.ToolStripMenuItem _installUpdateItem;
-        private Forms.ToolStripMenuItem _clipItem;
-        private Forms.ToolStripMenuItem _micCamItem;
-        private Forms.ToolStripMenuItem _deviceHudItem;
-        private Forms.ToolStripMenuItem _trainNotifyItem;
         private Forms.ToolStripMenuItem _focusItem;
-        private Forms.ToolStripMenuItem _widgetItem;
-        private Forms.ToolStripMenuItem _pairItem;
         private readonly List<DesktopWidget> _widgets = new List<DesktopWidget>();
         private WindyWindow _windy;
 
@@ -96,6 +76,7 @@ namespace IslandBar
             _window.TrainingFinished += text =>
                 Balloon("IslandBar · GPU", text, Forms.ToolTipIcon.Info);
             _window.OpenRadarRequested += OpenWindy;
+            _window.SettingsRequested += () => OpenSettings();
             _window.RecoverRequested += () => { foreach (var w in _widgets.ToList()) w.Recover(); };
             _window.Show();
 
@@ -127,24 +108,35 @@ namespace IslandBar
         private void CreateTrayIcon()
         {
             var menu = new Forms.ContextMenuStrip();
+            var bold = new Font(menu.Font, System.Drawing.FontStyle.Bold);
 
             var header = new Forms.ToolStripMenuItem($"IslandBar v{UpdateService.CurrentVersion}") { Enabled = false };
 
             // 需要時才出現在最上面的粗體「重新登入」
-            var bold = new Font(menu.Font, System.Drawing.FontStyle.Bold);
             var claudeLoginTop = new Forms.ToolStripMenuItem("⚠ 重新登入 Claude…") { Font = bold, Visible = false };
             claudeLoginTop.Click += (s, e) => _window?.RunLoginAction("claude-login");
             var codexLoginTop = new Forms.ToolStripMenuItem("⚠ 重新登入 Codex…") { Font = bold, Visible = false };
             codexLoginTop.Click += (s, e) => _window?.RunLoginAction("codex-login");
-            menu.Opening += (s, e) =>
-            {
-                var pending = _window?.PendingLoginActions ?? new HashSet<string>();
-                claudeLoginTop.Visible = pending.Contains("claude-login");
-                codexLoginTop.Visible = pending.Contains("codex-login");
-                if (_focusItem != null) _focusItem.Text = _window?.FocusRunning == true ? "結束專注模式" : "專注模式（25 分鐘 + 休息 5 分鐘）";
-            };
 
-            // 隨時都可以用的帳號登入
+            _installUpdateItem = new Forms.ToolStripMenuItem("立即更新") { Visible = false, Font = bold };
+            _installUpdateItem.Click += async (s, e) => { if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate); };
+
+            var settings = new Forms.ToolStripMenuItem("設定…") { Font = bold };
+            settings.Click += (s, e) => OpenSettings();
+
+            var openWheel = new Forms.ToolStripMenuItem("格式轉換：選擇檔案…");
+            openWheel.Click += (s, e) =>
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "選擇要轉換的檔案（也可以直接把檔案拖到動態島上）" };
+                if (dlg.ShowDialog() == true) _window?.OpenWheelForFiles(dlg.FileNames);
+            };
+            _recentItem = new Forms.ToolStripMenuItem("最近轉換") { Enabled = false };
+
+            var ocr = new Forms.ToolStripMenuItem("螢幕識字（Ctrl+Shift+O）");
+            ocr.Click += (s, e) => _window?.StartScreenOcr();
+            _focusItem = new Forms.ToolStripMenuItem("專注模式（25 分鐘 + 休息 5 分鐘）");
+            _focusItem.Click += (s, e) => _window?.ToggleFocus();
+
             var accounts = new Forms.ToolStripMenuItem("AI 帳號登入");
             var claudeLogin = new Forms.ToolStripMenuItem("登入 Claude Code…");
             claudeLogin.Click += (s, e) => _window?.RunLoginAction("claude-login");
@@ -157,375 +149,55 @@ namespace IslandBar
             accounts.DropDownItems.Add(new Forms.ToolStripSeparator());
             accounts.DropDownItems.Add(refreshQuota);
 
-            var openWheel = new Forms.ToolStripMenuItem("格式轉換：選擇檔案…");
-            openWheel.Click += (s, e) =>
-            {
-                var dlg = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "選擇要轉換的檔案（也可以直接把檔案拖到動態島上）" };
-                if (dlg.ShowDialog() == true) _window?.OpenWheelForFiles(dlg.FileNames);
-            };
-            _recentItem = new Forms.ToolStripMenuItem("最近轉換") { Enabled = false };
-
-            // ---- v1.5 小工具 ----
-            var ocr = new Forms.ToolStripMenuItem("螢幕識字（Ctrl+Shift+O）");
-            ocr.Click += (s, e) => _window?.StartScreenOcr();
-            _focusItem = new Forms.ToolStripMenuItem("專注模式（25 分鐘 + 休息 5 分鐘）");
-            _focusItem.Click += (s, e) => _window?.ToggleFocus();
-
-            var agentHooks = new Forms.ToolStripMenuItem("AI 任務完成通知");
-            var claudeHook = new Forms.ToolStripMenuItem("Claude Code 完成時通知我");
-            claudeHook.Click += (s, e) =>
-            {
-                try
-                {
-                    if (HookBridge.IsClaudeInstalled()) { HookBridge.UninstallClaude(); Balloon("IslandBar", "已移除 Claude Code 的完成通知", Forms.ToolTipIcon.Info); }
-                    else { string path = HookBridge.InstallClaude(); Balloon("IslandBar", "已加入 Claude Code 完成通知（" + path + "，原檔已備份）。新開的 Claude Code 才會生效。", Forms.ToolTipIcon.Info); }
-                }
-                catch (Exception ex) { Log.Error("ClaudeHook", ex); Balloon("IslandBar", "設定失敗：" + ex.Message, Forms.ToolTipIcon.Warning); }
-            };
-            var codexHook = new Forms.ToolStripMenuItem("Codex 完成時通知我");
-            codexHook.Click += (s, e) =>
-            {
-                try
-                {
-                    if (HookBridge.IsCodexInstalled()) { HookBridge.UninstallCodex(); Balloon("IslandBar", "已移除 Codex 的完成通知", Forms.ToolTipIcon.Info); }
-                    else { string path = HookBridge.InstallCodex(); Balloon("IslandBar", "已加入 Codex 完成通知（" + path + "，原檔已備份）。新開的 Codex 才會生效。", Forms.ToolTipIcon.Info); }
-                }
-                catch (Exception ex) { Log.Error("CodexHook", ex); Balloon("IslandBar", "設定失敗：" + ex.Message, Forms.ToolTipIcon.Warning); }
-            };
-            agentHooks.DropDownItems.Add(claudeHook);
-            agentHooks.DropDownItems.Add(codexHook);
-            agentHooks.DropDownItems.Add(new Forms.ToolStripSeparator());
-            agentHooks.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：專注模式中只記數量，結束時一次告訴你") { Enabled = false });
-            agentHooks.DropDownOpening += (s, e) =>
-            {
-                claudeHook.Checked = HookBridge.IsClaudeInstalled();
-                codexHook.Checked = HookBridge.IsCodexInstalled();
-            };
-
-            var calendar = new Forms.ToolStripMenuItem("行程（Google 日曆）");
-            var calSet = new Forms.ToolStripMenuItem("設定 iCal 網址…");
-            calSet.Click += (s, e) =>
-            {
-                string url = Microsoft.VisualBasic.Interaction.InputBox(
-                    "貼上 iCal 網址（Google 日曆設定 → 整合日曆 →「iCal 格式的私人網址」或公開網址）\n註：Google 的 iCal 更新會延遲幾個小時。",
-                    "IslandBar · 行程", _settings.CalendarIcsUrl ?? "");
-                if (string.IsNullOrWhiteSpace(url)) return; // 取消
-                _settings.CalendarIcsUrl = url.Trim();
-                _settings.Save();
-                _window?.RefreshCalendarNow();
-            };
-            var calClear = new Forms.ToolStripMenuItem("移除 iCal 網址");
-            calClear.Click += (s, e) => { _settings.CalendarIcsUrl = ""; _settings.Save(); _window?.RefreshCalendarNow(); };
-            var calRefresh = new Forms.ToolStripMenuItem("立即重新整理行程");
-            calRefresh.Click += (s, e) => _window?.RefreshCalendarNow();
-            var calError = new Forms.ToolStripMenuItem("") { Enabled = false, Visible = false };
-            calendar.DropDownItems.Add(calSet);
-            calendar.DropDownItems.Add(calRefresh);
-            calendar.DropDownItems.Add(calClear);
-            calendar.DropDownItems.Add(calError);
-            calendar.DropDownOpening += (s, e) =>
-            {
-                calClear.Enabled = !string.IsNullOrEmpty(_settings.CalendarIcsUrl);
-                string err = _window?.CalendarError;
-                calError.Visible = !string.IsNullOrEmpty(err);
-                calError.Text = "⚠ " + (err != null && err.Length > 60 ? err.Substring(0, 60) + "…" : err);
-            };
-
-            // 桌面小工具 / Windy 雷達
-            var widgetMenu = new Forms.ToolStripMenuItem("桌面小工具");
-            _widgetItem = new Forms.ToolStripMenuItem("顯示桌面小工具") { CheckOnClick = true };
-            _widgetItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.WidgetEnabled == _widgetItem.Checked) return;
-                _settings.WidgetEnabled = _widgetItem.Checked;
-                _settings.Save();
-                if (_widgetItem.Checked) ShowWidgets(); else CloseWidgets();
-            };
-            var widgetAdd = new Forms.ToolStripMenuItem("新增小工具");
-            widgetAdd.Click += (s, e) => AddWidget();
-            var widgetEdit = new Forms.ToolStripMenuItem("小工具設定…（區塊、順序、大小）");
-            widgetEdit.Click += (s, e) =>
-            {
-                if (!_settings.WidgetEnabled) { _settings.WidgetEnabled = true; _settings.Save(); SyncMenu(); ShowWidgets(); }
-                if (_widgets.Count == 0) AddWidget(); else _widgets[0].OpenEditor();
-            };
-            widgetMenu.DropDownItems.Add(_widgetItem);
-            widgetMenu.DropDownItems.Add(widgetAdd);
-            widgetMenu.DropDownItems.Add(widgetEdit);
-            widgetMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
-            widgetMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在小工具上按右鍵可設定該小工具") { Enabled = false });
-            _pairItem = new Forms.ToolStripMenuItem("NVIDIA PAIR 監控") { CheckOnClick = true, ToolTipText = "有安裝 NVIDIA PAIR 的電腦才需要開：顯示叢集模型、本機載入的模型，本機開始 / 結束推論時提示" };
-            _pairItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.PairMonitor == _pairItem.Checked) return;
-                _window?.SetPairMonitor(_pairItem.Checked);
-                if (_pairItem.Checked)
-                {
-                    // 第一個桌面小工具自動加上 PAIR 區塊
-                    var first = _settings.Widgets?.FirstOrDefault();
-                    if (first != null && !first.Sections.Contains("pair")) { first.Sections.Add("pair"); _settings.Save(); foreach (var w in _widgets) w.Rebuild(); }
-                }
-            };
             var windy = new Forms.ToolStripMenuItem("Windy 雷達…");
             windy.Click += (s, e) => OpenWindy();
-
-            var training = new Forms.ToolStripMenuItem("GPU 訓練監控");
-            var trainLog = new Forms.ToolStripMenuItem("選擇訓練 log 檔（讀 epoch / loss）…");
-            trainLog.Click += (s, e) =>
-            {
-                var dlg = new Microsoft.Win32.OpenFileDialog { Title = "選擇訓練輸出的 log 檔", Filter = "Log / 文字檔|*.log;*.txt;*.out|所有檔案|*.*" };
-                if (dlg.ShowDialog() != true) return;
-                _settings.TrainingLogPath = dlg.FileName;
-                _settings.Save();
-            };
-            var trainClear = new Forms.ToolStripMenuItem("不讀 log");
-            trainClear.Click += (s, e) => { _settings.TrainingLogPath = ""; _settings.Save(); };
-            _trainNotifyItem = new Forms.ToolStripMenuItem("GPU 工作結束時通知我") { CheckOnClick = true };
-            _trainNotifyItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.NotifyTrainingDone == _trainNotifyItem.Checked) return;
-                _settings.NotifyTrainingDone = _trainNotifyItem.Checked;
-                _settings.Save();
-            };
-            training.DropDownItems.Add(trainLog);
-            training.DropDownItems.Add(trainClear);
-            training.DropDownItems.Add(new Forms.ToolStripSeparator());
-            training.DropDownItems.Add(_trainNotifyItem);
-            training.DropDownOpening += (s, e) =>
-                trainClear.Text = string.IsNullOrEmpty(_settings.TrainingLogPath) ? "不讀 log（目前沒有）" : "不讀 log（目前：" + System.IO.Path.GetFileName(_settings.TrainingLogPath) + "）";
-
-            _clipItem = MakeToggle("剪貼簿歷史", () => _settings.ClipboardHistory, v => _settings.ClipboardHistory = v);
-            _micCamItem = MakeToggle("麥克風 / 鏡頭使用中指示燈", () => _settings.MicCamIndicator, v => _settings.MicCamIndicator = v);
-            _deviceHudItem = MakeToggle("耳機連上 / 中斷提示", () => _settings.DeviceConnectHud, v => _settings.DeviceConnectHud = v);
 
             var toggle = new Forms.ToolStripMenuItem("隱藏 / 顯示動態島");
             toggle.Click += (s, e) => _window?.ToggleUserHidden();
 
-            // 位置
-            var position = new Forms.ToolStripMenuItem("位置");
-            AddPosition(position, IslandPosition.TopCenter, "上方置中");
-            AddPosition(position, IslandPosition.TopLeft, "左上");
-            AddPosition(position, IslandPosition.TopRight, "右上");
-            AddPosition(position, IslandPosition.Left, "左側");
-            AddPosition(position, IslandPosition.Right, "右側");
-            position.DropDownItems.Add(new Forms.ToolStripSeparator());
-            position.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：直接拖曳動態島到螢幕上／左／右邊緣，放開就停在那裡") { Enabled = false });
-
-            // 背景不透明度
-            var opacity = new Forms.ToolStripMenuItem("背景不透明度");
-            foreach (var op in new[] { 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3 })
-            {
-                double value = op;
-                var item = new Forms.ToolStripMenuItem($"{value * 100:0}%");
-                item.Click += (s, e) =>
-                {
-                    _settings.BackgroundOpacity = value;
-                    SaveAndApply();
-                };
-                _opacityItems[value] = item;
-                opacity.DropDownItems.Add(item);
-            }
-
-            _dotsItem = new Forms.ToolStripMenuItem("收合時顯示 AI 額度點點") { CheckOnClick = true };
-            _dotsItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.ShowQuotaDots == _dotsItem.Checked) return;
-                _settings.ShowQuotaDots = _dotsItem.Checked;
-                SaveAndApply();
-            };
-
-            // 顯示項目：每次打開時依目前的項目重建，打勾＝顯示；點了不關選單，可以連續勾
-            var showItems = new Forms.ToolStripMenuItem("點點顯示項目");
-            showItems.DropDownItems.Add(new Forms.ToolStripMenuItem("（讀取中）") { Enabled = false });
-            showItems.DropDownOpening += (s, e) => BuildShowItemsMenu(showItems);
-            showItems.DropDown.Closing += (s, e) =>
-            {
-                if (e.CloseReason == Forms.ToolStripDropDownCloseReason.ItemClicked) e.Cancel = true;
-            };
-
-            _pinItem = new Forms.ToolStripMenuItem("展開時固定顯示 AI 額度") { CheckOnClick = true };
-            _pinItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.PinQuotaStrip == _pinItem.Checked) return;
-                _settings.PinQuotaStrip = _pinItem.Checked;
-                SaveAndApply();
-            };
-
-            _titleItem = new Forms.ToolStripMenuItem("收合時顯示歌名") { CheckOnClick = true };
-            _titleItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.ShowCompactTitle == _titleItem.Checked) return;
-                _settings.ShowCompactTitle = _titleItem.Checked;
-                SaveAndApply();
-            };
-
-            _fullscreenItem = new Forms.ToolStripMenuItem("全螢幕時自動隱藏") { CheckOnClick = true };
-            _fullscreenItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.HideOnFullscreen == _fullscreenItem.Checked) return;
-                _settings.HideOnFullscreen = _fullscreenItem.Checked;
-                SaveAndApply();
-            };
-
-            // 大小
-            var size = new Forms.ToolStripMenuItem("文字／大小");
-            foreach (var sc in new[] { 0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6 })
-            {
-                double value = sc;
-                var item = new Forms.ToolStripMenuItem($"{value * 100:0}%");
-                item.Click += (s, e) =>
-                {
-                    _settings.Scale = value;
-                    SaveAndApply();
-                };
-                _scaleItems[value] = item;
-                size.DropDownItems.Add(item);
-            }
-            size.DropDownItems.Add(new Forms.ToolStripSeparator());
-            size.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在動態島上按住 Ctrl 滾滾輪也能縮放") { Enabled = false });
-
-            // 收合時的粗細 / 寬度
-            var thick = new Forms.ToolStripMenuItem("收合時的粗細");
-            foreach (var (label, v) in new[] { ("很細", 24.0), ("細", 28.0), ("標準", 34.0), ("粗", 40.0), ("很粗", 46.0) })
-            {
-                double val = v;
-                var item = new Forms.ToolStripMenuItem(label);
-                item.Click += (s, e) => { _settings.CompactThickness = val; SaveAndApply(); };
-                _thickItems[val] = item;
-                thick.DropDownItems.Add(item);
-            }
-            thick.DropDownItems.Add(new Forms.ToolStripSeparator());
-            thick.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在動態島上按住 Alt 滾滾輪可以微調") { Enabled = false });
-            var wide = new Forms.ToolStripMenuItem("收合時的寬度");
-            foreach (var (label, v) in new[] { ("貼合內容", 0.0), ("寬一點", 40.0), ("寬", 90.0), ("很寬", 160.0), ("超寬", 240.0) })
-            {
-                double val = v;
-                var item = new Forms.ToolStripMenuItem(label);
-                item.Click += (s, e) => { _settings.CompactExtraLength = val; SaveAndApply(); };
-                _wideItems[val] = item;
-                wide.DropDownItems.Add(item);
-            }
-            wide.DropDownItems.Add(new Forms.ToolStripSeparator());
-            wide.DropDownItems.Add(new Forms.ToolStripMenuItem("提示：在動態島上按住 Shift 滾滾輪可以微調") { Enabled = false });
-
-            _autoHideItem = new Forms.ToolStripMenuItem("自動隱藏到螢幕邊緣") { CheckOnClick = true };
-            _autoHideItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.AutoHide == _autoHideItem.Checked) return;
-                _settings.AutoHide = _autoHideItem.Checked;
-                SaveAndApply();
-            };
-
-            var autoStart = new Forms.ToolStripMenuItem("開機時自動啟動")
-            {
-                CheckOnClick = true,
-                Checked = IsAutoStartEnabled()
-            };
-            autoStart.CheckedChanged += (s, e) => SetAutoStart(autoStart.Checked);
-
-            // 更新
-            _autoUpdateItem = new Forms.ToolStripMenuItem("自動更新") { CheckOnClick = true };
-            _autoUpdateItem.CheckedChanged += (s, e) =>
-            {
-                if (_settings.AutoUpdate == _autoUpdateItem.Checked) return;
-                _settings.AutoUpdate = _autoUpdateItem.Checked;
-                _settings.Save();
-            };
-
-            var checkUpdate = new Forms.ToolStripMenuItem("檢查更新");
-            checkUpdate.Click += async (s, e) => await CheckForUpdatesAsync(true);
-
-            _installUpdateItem = new Forms.ToolStripMenuItem("立即更新") { Visible = false, Font = new Font(menu.Font, System.Drawing.FontStyle.Bold) };
-            _installUpdateItem.Click += async (s, e) => { if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate); };
-
-            var weatherCity = new Forms.ToolStripMenuItem("天氣地區…");
-            weatherCity.Click += (s, e) => _window?.OpenCityPicker();
-
-            var editSettings = new Forms.ToolStripMenuItem("編輯進階設定（時間格式等）");
-            editSettings.Click += (s, e) =>
-            {
-                try
-                {
-                    Process.Start(new ProcessStartInfo("notepad.exe", "\"" + AppSettings.FilePath + "\"") { UseShellExecute = true });
-                }
-                catch { }
-            };
-
-            var reload = new Forms.ToolStripMenuItem("重新載入設定");
+            var reload = new Forms.ToolStripMenuItem("重新載入設定（手動改 settings.json 後）");
             reload.Click += (s, e) =>
             {
                 _settings = AppSettings.Load();
-                SyncMenu();
                 _window?.ApplySettings(_settings);
                 // 小工具 / 雷達視窗拿的是舊的設定物件，重開
                 CloseWidgets();
                 _settings.MigrateWidgets();
                 if (_settings.WidgetEnabled) ShowWidgets();
                 if (_windy != null) { _windy.Close(); OpenWindy(); }
+                if (_settingsWindow != null) { _settingsWindow.Close(); _settingsWindow = null; }
             };
 
-            var openLog = new Forms.ToolStripMenuItem("開啟記錄檔（回報問題用）");
-            openLog.Click += (s, e) =>
-            {
-                try
-                {
-                    Log.Write("Open log requested");
-                    Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Log.FilePath + "\"") { UseShellExecute = true });
-                }
-                catch { }
-            };
-
-            var soundSettings = new Forms.ToolStripMenuItem("Windows 音效設定");
-            soundSettings.Click += (s, e) =>
-            {
-                try { Process.Start(new ProcessStartInfo("ms-settings:sound") { UseShellExecute = true }); } catch { }
-            };
+            var checkUpdate = new Forms.ToolStripMenuItem("檢查更新");
+            checkUpdate.Click += async (s, e) => await CheckForUpdatesAsync(true);
 
             var exit = new Forms.ToolStripMenuItem("結束");
             exit.Click += (s, e) => ExitApp();
+
+            menu.Opening += (s, e) =>
+            {
+                var pending = _window?.PendingLoginActions ?? new HashSet<string>();
+                claudeLoginTop.Visible = pending.Contains("claude-login");
+                codexLoginTop.Visible = pending.Contains("codex-login");
+                if (_focusItem != null) _focusItem.Text = _window?.FocusRunning == true ? "結束專注模式" : "專注模式（25 分鐘 + 休息 5 分鐘）";
+            };
 
             menu.Items.Add(header);
             menu.Items.Add(claudeLoginTop);
             menu.Items.Add(codexLoginTop);
             menu.Items.Add(_installUpdateItem);
+            menu.Items.Add(settings);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(openWheel);
             menu.Items.Add(_recentItem);
             menu.Items.Add(ocr);
             menu.Items.Add(_focusItem);
-            menu.Items.Add(agentHooks);
-            menu.Items.Add(calendar);
-            menu.Items.Add(widgetMenu);
-            menu.Items.Add(_pairItem);
             menu.Items.Add(windy);
-            menu.Items.Add(training);
+            menu.Items.Add(accounts);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(toggle);
-            menu.Items.Add(position);
-            menu.Items.Add(size);
-            menu.Items.Add(thick);
-            menu.Items.Add(wide);
-            menu.Items.Add(opacity);
-            menu.Items.Add(_autoHideItem);
-            menu.Items.Add(_fullscreenItem);
-            menu.Items.Add(_dotsItem);
-            menu.Items.Add(showItems);
-            menu.Items.Add(accounts);
-            menu.Items.Add(_pinItem);
-            menu.Items.Add(_titleItem);
-            menu.Items.Add(_clipItem);
-            menu.Items.Add(_micCamItem);
-            menu.Items.Add(_deviceHudItem);
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(autoStart);
-            menu.Items.Add(_autoUpdateItem);
             menu.Items.Add(checkUpdate);
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(weatherCity);
-            menu.Items.Add(editSettings);
             menu.Items.Add(reload);
-            menu.Items.Add(soundSettings);
-            menu.Items.Add(openLog);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(exit);
 
@@ -536,6 +208,8 @@ namespace IslandBar
                 ContextMenuStrip = menu,
                 Visible = true
             };
+            // 點一下系統匣圖示＝開設定；雙擊＝隱藏 / 顯示動態島
+            _tray.MouseClick += (s, e) => { if (e.Button == Forms.MouseButtons.Left) OpenSettings(); };
             _tray.DoubleClick += (s, e) => _window?.ToggleUserHidden();
             _tray.BalloonTipClicked += async (s, e) =>
             {
@@ -554,43 +228,65 @@ namespace IslandBar
                 }
                 if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate);
             };
-
-            SyncMenu();
         }
 
-        private void AddPosition(Forms.ToolStripMenuItem parent, IslandPosition pos, string text)
+        // ================================================================
+        //  設定畫面
+        // ================================================================
+
+        private SettingsWindow _settingsWindow;
+
+        public void OpenSettings(string page = null)
         {
-            var item = new Forms.ToolStripMenuItem(text);
-            item.Click += (s, e) =>
+            if (_settingsWindow != null)
             {
-                _settings.Position = pos;
-                _settings.AlongEdge = null; // 回到預設位置
-                SaveAndApply();
+                if (page != null) _settingsWindow.ShowPage(page);
+                if (_settingsWindow.WindowState == WindowState.Minimized) _settingsWindow.WindowState = WindowState.Normal;
+                _settingsWindow.Activate();
+                return;
+            }
+            var host = new SettingsHost
+            {
+                Settings = _settings,
+                Window = _window,
+                Apply = SaveAndApply,
+                GetAutoStart = IsAutoStartEnabled,
+                SetAutoStart = SetAutoStart,
+                CheckUpdates = () => CheckForUpdatesAsync(true),
+                SetWidgets = on =>
+                {
+                    if (_settings.WidgetEnabled == on) return;
+                    _settings.WidgetEnabled = on;
+                    _settings.Save();
+                    if (on) ShowWidgets(); else CloseWidgets();
+                },
+                AddWidget = AddWidget,
+                EditWidgets = () =>
+                {
+                    if (!_settings.WidgetEnabled) { _settings.WidgetEnabled = true; _settings.Save(); ShowWidgets(); }
+                    if (_widgets.Count == 0) AddWidget(); else _widgets[0].OpenEditor();
+                },
+                SetPair = on =>
+                {
+                    if (_settings.PairMonitor == on) return;
+                    _window?.SetPairMonitor(on);
+                    if (on)
+                    {
+                        // 第一個桌面小工具自動加上 PAIR 區塊
+                        var first = _settings.Widgets?.FirstOrDefault();
+                        if (first != null && !first.Sections.Contains("pair")) { first.Sections.Add("pair"); _settings.Save(); foreach (var w in _widgets) w.Rebuild(); }
+                    }
+                },
+                Notify = text => Balloon("IslandBar", text, Forms.ToolTipIcon.Info)
             };
-            _positionItems[pos] = item;
-            parent.DropDownItems.Add(item);
+            _settingsWindow = new SettingsWindow(host);
+            _settingsWindow.Closed += (s, e) => _settingsWindow = null;
+            if (page != null) _settingsWindow.ShowPage(page);
+            _settingsWindow.Show();
+            _settingsWindow.Activate();
         }
 
-        private void SyncMenu()
-        {
-            foreach (var kv in _positionItems) kv.Value.Checked = _settings.AlongEdge == null && kv.Key == _settings.Position;
-            foreach (var kv in _opacityItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.BackgroundOpacity) < 0.001;
-            if (_dotsItem != null) _dotsItem.Checked = _settings.ShowQuotaDots;
-            if (_pinItem != null) _pinItem.Checked = _settings.PinQuotaStrip;
-            if (_titleItem != null) _titleItem.Checked = _settings.ShowCompactTitle;
-            if (_fullscreenItem != null) _fullscreenItem.Checked = _settings.HideOnFullscreen;
-            foreach (var kv in _scaleItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.Scale) < 0.001;
-            foreach (var kv in _thickItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.CompactThickness) < 0.5;
-            foreach (var kv in _wideItems) kv.Value.Checked = Math.Abs(kv.Key - _settings.CompactExtraLength) < 0.5;
-            if (_autoHideItem != null) _autoHideItem.Checked = _settings.AutoHide;
-            if (_autoUpdateItem != null) _autoUpdateItem.Checked = _settings.AutoUpdate;
-            if (_clipItem != null) _clipItem.Checked = _settings.ClipboardHistory;
-            if (_micCamItem != null) _micCamItem.Checked = _settings.MicCamIndicator;
-            if (_deviceHudItem != null) _deviceHudItem.Checked = _settings.DeviceConnectHud;
-            if (_trainNotifyItem != null) _trainNotifyItem.Checked = _settings.NotifyTrainingDone;
-            if (_widgetItem != null) _widgetItem.Checked = _settings.WidgetEnabled;
-            if (_pairItem != null) _pairItem.Checked = _settings.PairMonitor;
-        }
+        private void SyncMenu() { }
 
         // ================================================================
         //  桌面小工具 / Windy 雷達
@@ -689,53 +385,6 @@ namespace IslandBar
             _windy = new WindyWindow(_settings);
             _windy.Closed += (s, e) => _windy = null;
             _windy.Show();
-        }
-
-        private Forms.ToolStripMenuItem MakeToggle(string text, Func<bool> get, Action<bool> set)
-        {
-            var item = new Forms.ToolStripMenuItem(text) { CheckOnClick = true };
-            item.CheckedChanged += (s, e) =>
-            {
-                if (get() == item.Checked) return;
-                set(item.Checked);
-                SaveAndApply();
-            };
-            return item;
-        }
-
-        private void BuildShowItemsMenu(Forms.ToolStripMenuItem parent)
-        {
-            parent.DropDownItems.Clear();
-            var labels = _window?.AllItemLabels ?? new List<(string group, string label)>();
-            _settings.HiddenItems ??= new List<string>();
-
-            var all = new Forms.ToolStripMenuItem("全部顯示");
-            all.Click += (s, e) =>
-            {
-                _settings.HiddenItems.Clear();
-                _settings.Save();
-                foreach (Forms.ToolStripItem it in parent.DropDownItems)
-                    if (it is Forms.ToolStripMenuItem mi && mi.CheckOnClick) mi.Checked = true;
-                _window?.RefreshItemsFromSettings();
-            };
-            parent.DropDownItems.Add(all);
-
-            string lastGroup = null;
-            foreach (var (group, label) in labels)
-            {
-                if (group != lastGroup) { parent.DropDownItems.Add(new Forms.ToolStripSeparator()); lastGroup = group; }
-                string name = label;
-                var item = new Forms.ToolStripMenuItem(name) { CheckOnClick = true, Checked = !_settings.HiddenItems.Contains(name) };
-                item.CheckedChanged += (s, e) =>
-                {
-                    if (item.Checked) _settings.HiddenItems.Remove(name);
-                    else if (!_settings.HiddenItems.Contains(name)) _settings.HiddenItems.Add(name);
-                    _settings.Save();
-                    _window?.RefreshItemsFromSettings();
-                };
-                parent.DropDownItems.Add(item);
-            }
-            if (labels.Count == 0) parent.DropDownItems.Add(new Forms.ToolStripMenuItem("（還沒有資料）") { Enabled = false });
         }
 
         private void AddRecent(string path)

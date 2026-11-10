@@ -24,6 +24,7 @@ namespace IslandBar.Linux
         private readonly Settings _s;
         private readonly SystemMonitor _mon = new SystemMonitor();
         private PairService _pair;
+        private StatusServer _server;
 
         private readonly Border _island;
         private readonly LayoutTransformControl _scaler;
@@ -130,6 +131,7 @@ namespace IslandBar.Linux
             _mon.Start();
             if (Program.Demo == "pair") _s.PairMonitor = true;
             ApplyPair();
+            ApplyServer();
             _tick = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _tick.Tick += (_, _) => Refresh();
             _tick.Start();
@@ -141,7 +143,7 @@ namespace IslandBar.Linux
                 if (Program.Demo != null && Program.Demo != "compact")
                     DispatcherTimer.RunOnce(() => { _s.Tab = Program.Demo; _pinned = true; Expand(true); }, TimeSpan.FromSeconds(3));
             };
-            Closed += (_, _) => { _tick.Stop(); _mon.Stop(); _pair?.Stop(); };
+            Closed += (_, _) => { _tick.Stop(); _mon.Stop(); _pair?.Stop(); _server?.Stop(); };
         }
 
         // ================================================================
@@ -561,6 +563,65 @@ namespace IslandBar.Linux
         }
 
         // ================================================================
+        //  讓其他電腦的 IslandBar 監看這台
+        // ================================================================
+
+        private void ApplyServer()
+        {
+            if (_s.AllowRemoteRead)
+            {
+                _server ??= new StatusServer(BuildStatus);
+                int port = _s.RemotePort > 0 && _s.RemotePort < 65536 ? _s.RemotePort : StatusServer.DefaultPort;
+                if (!_server.Running || _server.Port != port) _server.Start(port);
+            }
+            else _server?.Stop();
+        }
+
+        /// <summary>給遠端讀的狀態（背景執行緒呼叫）</summary>
+        private RemoteStatus BuildStatus()
+        {
+            var sys = _mon.Sys;
+            var st = new RemoteStatus
+            {
+                Version = Desktop.Version,
+                Os = "Linux",
+                Host = sys.Host,
+                Cpu = sys.CpuPct.HasValue ? Math.Round(sys.CpuPct.Value, 1) : (double?)null,
+                RamUsedGb = Math.Round(sys.MemUsedGb, 2),
+                RamTotalGb = Math.Round(sys.MemTotalGb, 2),
+                UptimeSec = Math.Round(sys.Uptime.TotalSeconds)
+            };
+            foreach (var c in _mon.Gpu.Cards)
+                st.Gpus.Add(new RemoteGpu
+                {
+                    Name = c.Name,
+                    Util = c.Util,
+                    MemUsedGb = c.MemUsedMb.HasValue ? Math.Round(c.MemUsedMb.Value / 1024, 2) : (double?)null,
+                    MemTotalGb = c.MemTotalMb.HasValue ? Math.Round(c.MemTotalMb.Value / 1024, 2) : (double?)null,
+                    Temp = c.Temp,
+                    PowerW = c.PowerW
+                });
+            foreach (var (name, mb) in _mon.Gpu.Processes.OrderByDescending(p => p.usedMb).Take(5))
+                st.GpuProcs.Add(new RemoteProc { Name = Path.GetFileName(name), MemGb = mb > 0 ? Math.Round(mb / 1024, 2) : (double?)null });
+            return st;
+        }
+
+        private static string LocalAddresses()
+        {
+            try
+            {
+                var ips = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+                                n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                    .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                    .Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !a.Address.ToString().StartsWith("172.17."))
+                    .Select(a => a.Address.ToString()).Distinct().ToList();
+                return ips.Count > 0 ? string.Join("、", ips) : "（沒有網路）";
+            }
+            catch { return ""; }
+        }
+
+        // ================================================================
         //  右鍵選單
         // ================================================================
 
@@ -634,6 +695,16 @@ namespace IslandBar.Linux
             var pair = new MenuItem { Header = "NVIDIA PAIR 監控", ToggleType = MenuItemToggleType.CheckBox, IsChecked = PairEnabled };
             pair.Click += (_, _) => { _s.PairMonitor = !PairEnabled; _s.Save(); ApplyPair(); Refresh(); };
             menu.Items.Add(pair);
+
+            var share = new MenuItem { Header = "允許區網讀取（讓其他電腦的 IslandBar 監看這台）", ToggleType = MenuItemToggleType.CheckBox, IsChecked = _s.AllowRemoteRead };
+            share.Click += (_, _) => { _s.AllowRemoteRead = !_s.AllowRemoteRead; _s.Save(); ApplyServer(); };
+            menu.Items.Add(share);
+            if (_s.AllowRemoteRead)
+                menu.Items.Add(new MenuItem
+                {
+                    Header = _server?.Running == true ? $"　在 Windows 版設定加入：{LocalAddresses()}（埠 {_server.Port}）" : "　無法開啟：" + (_server?.LastError ?? ""),
+                    IsEnabled = false
+                });
 
             var auto = new MenuItem { Header = "登入時自動啟動", ToggleType = MenuItemToggleType.CheckBox, IsChecked = Desktop.AutostartEnabled };
             auto.Click += (_, _) => { _s.AutoStart = !Desktop.AutostartEnabled; Desktop.SetAutostart(_s.AutoStart); _s.Save(); };

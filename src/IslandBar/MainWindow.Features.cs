@@ -45,9 +45,25 @@ namespace IslandBar
             : _statusServer?.Running == true ? $"已開啟（埠 {_statusServer.Port}）：{string.Join("、", LocalIps())}"
             : "無法開啟：" + (_statusServer?.LastError ?? "未知原因");
 
+        /// <summary>在動態島上按右鍵＝開設定</summary>
+        public event Action SettingsRequested;
+
+        /// <summary>設定畫面的「試試看」</summary>
+        public void TestRgb()
+        {
+            StartRgb(_settings.RgbApps?.FirstOrDefault() ?? "LINE");
+            _rgbUntil = DateTime.Now.AddSeconds(15);
+        }
+
         private void StartFeatures()
         {
             _featuresStarted = true;
+            Island.MouseRightButtonUp += (s, e) =>
+            {
+                if (_mode == IslandMode.Wheel) return;
+                e.Handled = true;
+                SettingsRequested?.Invoke();
+            };
             try
             {
                 _remote = new RemoteService(() => _settings.RemoteHosts ?? new List<RemoteHost>());
