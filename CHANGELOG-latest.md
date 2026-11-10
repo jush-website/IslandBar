@@ -5,6 +5,20 @@
 
 > 第一次執行若出現「Windows 已保護您的電腦」，點「其他資訊 → 仍要執行」。
 
+**Linux 版（系統監控）**
+
+- **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
+- **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
+
+## v1.12.0 Linux 版
+
+- **新的 Linux 版動態島**，只做裝置監控：螢幕上緣中央一顆膠囊顯示時鐘、CPU／GPU 使用率與溫度、RAM、PAIR 正在跑的電腦與模型；滑鼠移上去展開，點一下固定。
+  - 系統：CPU、RAM／Swap、NVIDIA GPU（使用率、顯存、溫度、風扇、功耗、用 GPU 的程式）、磁碟用量與讀寫、網路介面 IP 與速度。
+  - 溫度與風扇：所有感測器（CPU、主機板、NVMe、顯示卡…）與風扇轉速。
+  - NVIDIA PAIR：叢集每台電腦的 VRAM、正在跑的模型、本機載入的模型、最近完成的工作。
+  - 支援 x64 與 arm64（含 Jetson、DGX Spark），右鍵選單可以調整顯示項目、螢幕、透明度、大小與登入自動啟動。
+- Windows 版沒有功能變動。
+
 ## v1.11.2
 
 - AI 額度分頁：**NVIDIA PAIR 區塊移到最上面**，不用捲動就看得到每台電腦的狀態和最近完成的工作。

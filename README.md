@@ -1,4 +1,4 @@
-# IslandBar — Windows 動態島
+# IslandBar — Windows 動態島（另有 Linux 監控版）
 
 把 iPhone 的「動態島」搬到 Windows 螢幕頂端。平常是一顆小膠囊，滑鼠移上去會展開。
 
@@ -44,6 +44,28 @@
 不想安裝的話，可以直接執行 `IslandBar-portable.exe`。
 
 > 第一次執行 Windows SmartScreen 可能會跳出「Windows 已保護您的電腦」，因為執行檔沒有程式碼簽章。點「其他資訊 → 仍要執行」即可。
+
+## Linux 版（系統監控）
+
+Linux 桌面也有一個動態島，只做裝置監控（沒有音樂、天氣等功能）：
+
+- **收合**：時鐘、CPU（含溫度）、RAM、GPU（含溫度）、PAIR 正在跑的電腦與模型；可以加上網路速度、磁碟讀寫
+- **展開 → 系統**：CPU 型號／使用率／時脈／負載、RAM 與 Swap、NVIDIA GPU（使用率、顯存、溫度、風扇、功耗、正在用 GPU 的程式）、每個磁碟的用量與讀寫速度、各網路介面的 IP 與上下行速度
+- **展開 → 溫度與風扇**：所有 hwmon 感測器（CPU、主機板、NVMe、顯示卡、Wi‑Fi…）與 thermal zone，風扇轉速；核心很多時合併成「最高／平均」
+- **展開 → NVIDIA PAIR**：叢集每台電腦的 VRAM、正在跑／上次跑的模型、本機引擎載入的模型、最近完成的工作（有安裝 PAIR 才會自動開啟）
+
+到 [Releases](../../releases/latest) 下載：
+
+| 檔案 | 用法 |
+|---|---|
+| `islandbar_x.y.z_amd64.deb` / `_arm64.deb` | Ubuntu／Debian：`sudo apt install ./islandbar_x.y.z_amd64.deb`，從應用程式選單開啟 |
+| `IslandBar-x.y.z-linux-x64.tar.gz` / `-linux-arm64.tar.gz` | 其他發行版：解壓縮後執行 `./install.sh`（裝在目前使用者，不需要 sudo），或直接執行 `./islandbar` |
+
+- 需要有桌面的 Linux（X11；Wayland 透過 XWayland），x64 或 arm64（Jetson、DGX Spark 也可以）
+- 中文字型建議安裝 `fonts-noto-cjk`；主機板風扇與溫度需要安裝 `lm-sensors` 並執行 `sudo sensors-detect`
+- 第一次執行會自動設定登入時啟動；右鍵點動態島可以改顯示項目、螢幕、透明度、大小、PAIR 監控、自動啟動
+- 設定在 `~/.config/IslandBar/settings.json`，記錄在 `~/.config/IslandBar/log.txt`
+- 有新版時右鍵選單最上面會出現「有新版」，點了開啟下載頁
 
 ## 設定
 
