@@ -25,7 +25,7 @@ jobs:
       - name: Install X server and fonts
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb imagemagick fonts-noto-cjk lm-sensors > /dev/null
+          sudo apt-get install -y -qq xvfb imagemagick fonts-noto-cjk lm-sensors xdotool > /dev/null
 
       - name: Fake NVIDIA GPU and PAIR cluster
         run: |
@@ -88,6 +88,21 @@ jobs:
             convert shots/$mode-full.png -crop 800x760+400+0 +repage shots/$mode.png || true
             cp ~/.config/IslandBar/log.txt shots/$mode.log 2>/dev/null || true
           done
+          # 滑鼠移上去展開、右鍵選單、移開收合
+          rm -rf ~/.config/IslandBar
+          xvfb-run -a -s "-screen 0 1600x1000x24" bash -c "
+            ./publish/islandbar > shots/mouse.out 2>&1 &
+            sleep 8
+            xdotool mousemove 800 22; sleep 3
+            import -window root shots/hover-full.png
+            xdotool mousemove 800 40 click 3; sleep 2
+            import -window root shots/menu-full.png
+            xdotool key Escape; sleep 1
+            xdotool mousemove 800 950; sleep 3
+            import -window root shots/away-full.png
+            kill %1 || true
+            sleep 1"
+          for m in hover menu away; do convert shots/$m-full.png -crop 800x760+400+0 +repage shots/$m.png || true; done
           ls /sys/class/hwmon/ > shots/hwmon.txt 2>&1 || true
           nvidia-smi > shots/nvidia.txt 2>&1 || true
           ls -la shots

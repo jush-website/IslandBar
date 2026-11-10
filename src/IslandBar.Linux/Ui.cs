@@ -134,7 +134,7 @@ namespace IslandBar.Linux
             {
                 r.Bar.IsVisible = true;
                 r.Bar.Value = Math.Clamp(barPct.Value, 0, 100);
-                r.Bar.Foreground = valueBrush ?? Ui.Level(barPct);
+                r.Bar.Foreground = valueBrush == null || ReferenceEquals(valueBrush, Ui.Fg) ? Ui.Level(barPct) : valueBrush;
             }
             else r.Bar.IsVisible = false;
         }
