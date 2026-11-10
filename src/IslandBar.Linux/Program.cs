@@ -37,10 +37,14 @@ namespace IslandBar.Linux
     public static class Program
     {
         private static Mutex _single;
+        /// <summary>--demo sys|temp|pair：啟動後直接固定展開在該分頁（截圖測試用）</summary>
+        public static string Demo { get; private set; }
 
         [STAThread]
         public static int Main(string[] args)
         {
+            for (int i = 0; i < args.Length - 1; i++)
+                if (args[i] == "--demo") Demo = args[i + 1];
             foreach (var a in args)
             {
                 if (a == "--version" || a == "-v") { Console.WriteLine("IslandBar " + Desktop.Version); return 0; }

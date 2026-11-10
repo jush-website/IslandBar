@@ -1,0 +1,57 @@
+name: Linux smoke test
+
+# 手動執行：在虛擬 X 伺服器上跑 Linux 版並截圖，截圖推到 ci-smoke 分支（只用來檢查畫面）
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        run: |
+          dotnet publish src/IslandBar.Linux/IslandBar.Linux.csproj -c Release -r linux-x64 --self-contained true \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o publish
+
+      - name: Install X server and fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb imagemagick fonts-noto-cjk lm-sensors > /dev/null
+
+      - name: Screenshots
+        run: |
+          mkdir -p shots
+          for mode in compact sys temp pair; do
+            rm -rf ~/.config/IslandBar
+            xvfb-run -a -s "-screen 0 1600x1000x24" bash -c "
+              ./publish/islandbar --demo $mode > shots/$mode.out 2>&1 &
+              sleep 10
+              import -window root shots/$mode-full.png
+              kill %1 || true
+              sleep 1"
+            convert shots/$mode-full.png -crop 800x760+400+0 +repage shots/$mode.png || true
+            cp ~/.config/IslandBar/log.txt shots/$mode.log 2>/dev/null || true
+          done
+          ls /sys/class/hwmon/ > shots/hwmon.txt 2>&1 || true
+          nvidia-smi > shots/nvidia.txt 2>&1 || true
+          ls -la shots
+
+      - name: Push screenshots to ci-smoke branch
+        run: |
+          cd shots
+          rm -f *-full.png
+          git init -q -b ci-smoke
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "smoke ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-smoke

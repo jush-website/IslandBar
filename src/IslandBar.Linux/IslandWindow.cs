@@ -128,12 +128,19 @@ namespace IslandBar.Linux
 
             // ---- 資料 ----
             _mon.Start();
+            if (Program.Demo == "pair") _s.PairMonitor = true;
             ApplyPair();
             _tick = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _tick.Tick += (_, _) => Refresh();
             _tick.Start();
 
-            Opened += (_, _) => { Refresh(); Recenter(); };
+            Opened += (_, _) =>
+            {
+                Refresh();
+                Recenter();
+                if (Program.Demo != null && Program.Demo != "compact")
+                    DispatcherTimer.RunOnce(() => { _s.Tab = Program.Demo; _pinned = true; Expand(true); }, TimeSpan.FromSeconds(3));
+            };
             Closed += (_, _) => { _tick.Stop(); _mon.Stop(); _pair?.Stop(); };
         }
 
