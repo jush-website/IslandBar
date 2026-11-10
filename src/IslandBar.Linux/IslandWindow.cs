@@ -329,7 +329,7 @@ namespace IslandBar.Linux
                     FontSize = 12,
                     Padding = new Thickness(12, 4),
                     CornerRadius = new CornerRadius(12),
-                    Background = active ? Ui.Brush("#2DD4BF33") : Ui.Brush("#14FFFFFF"),
+                    Background = active ? Ui.Brush("#332DD4BF") : Ui.Brush("#14FFFFFF"),
                     Foreground = active ? Ui.Accent : Ui.Sub,
                     BorderThickness = new Thickness(0)
                 };
@@ -486,7 +486,7 @@ namespace IslandBar.Linux
             if (snap.LocalWorking)
                 r.Set("st.2", "本機", "正在推論" + (snap.LocalWorkingModel != null ? " · " + PairService.ShortModel(snap.LocalWorkingModel) : ""), null, Ui.Green);
 
-            if (snap.Nodes.Count > 0)
+            if (snap.Nodes.Count > 0 && (PairService.IsInstalled || snap.Running))
             {
                 r.Header("nodes", $"電腦（{snap.Nodes.Count(n => n.Online)} / {snap.Nodes.Count} 台在線）");
                 foreach (var n in snap.Nodes.OrderByDescending(n => n.Busy).ThenByDescending(n => n.Online).ThenBy(n => n.Name))

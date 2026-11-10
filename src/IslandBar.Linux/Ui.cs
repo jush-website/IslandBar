@@ -124,6 +124,12 @@ namespace IslandBar.Linux
             r.Label.Foreground = labelBrush ?? Ui.Sub;
             r.Value.Text = value ?? "";
             r.Value.Foreground = valueBrush ?? Ui.Fg;
+            // 沒有數值的說明列：文字佔滿整列並自動換行
+            bool note = string.IsNullOrEmpty(value);
+            Grid.SetColumnSpan(r.Label, note ? 3 : 1);
+            r.Label.TextWrapping = note ? TextWrapping.Wrap : TextWrapping.NoWrap;
+            r.Label.MaxWidth = note ? double.PositiveInfinity : 300;
+            r.Value.IsVisible = !note;
             if (barPct.HasValue)
             {
                 r.Bar.IsVisible = true;
