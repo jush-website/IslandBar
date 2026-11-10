@@ -127,7 +127,7 @@ namespace IslandBar
         {
             var st = new RemoteStatus
             {
-                Version = UpdateService.CurrentVersion,
+                Version = UpdateService.CurrentVersion.ToString(3),
                 Os = "Windows",
                 Host = Environment.MachineName,
                 Cpu = Math.Round(_stats.CpuPercent, 1),
