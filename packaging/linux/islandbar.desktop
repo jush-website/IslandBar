@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IslandBar
+Comment=Dynamic Island system monitor
+Comment[zh_TW]=動態島系統監控
+Exec=islandbar
+Icon=islandbar
+Terminal=false
+Categories=System;Monitor;
+StartupNotify=false

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- IslandBar for Linux desktops: monitoring only (CPU / RAM / disk / network, NVIDIA GPU, temperatures & fans, NVIDIA PAIR). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>islandbar</AssemblyName>
+    <RootNamespace>IslandBar.Linux</RootNamespace>
+    <Version Condition="'$(Version)' == '' Or '$(Version)' == '1.0.0'">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../version.txt').Trim())</Version>
+    <Product>IslandBar</Product>
+    <Description>Dynamic Island system monitor for Linux</Description>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AvaloniaVersion>11.2.1</AvaloniaVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+
+  <!-- Shared with the Windows app -->
+  <ItemGroup>
+    <Compile Include="..\IslandBar\Log.cs" Link="Shared\Log.cs" />
+    <Compile Include="..\IslandBar\Services\PairService.cs" Link="Shared\PairService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\islandbar.png" LogicalName="islandbar.png" />
+  </ItemGroup>
+
+</Project>

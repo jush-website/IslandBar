@@ -12,7 +12,39 @@ permissions:
   contents: write
 
 jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish Linux (x64 / arm64)
+        shell: bash
+        run: |
+          v=$(tr -d '\r\n ' < version.txt)
+          echo "version=$v" >> "$GITHUB_ENV"
+          for rid in linux-x64 linux-arm64; do
+            if ! dotnet publish src/IslandBar.Linux/IslandBar.Linux.csproj -c Release -r $rid --self-contained true \
+                 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+                 -p:DebugType=none -p:Version=$v -o publish/$rid > build-$rid.log 2>&1; then
+              grep -E ': error |error NU|error MSB' build-$rid.log | sort -u | head -40 | sed 's/^/::error::/'
+              tail -20 build-$rid.log
+              exit 1
+            fi
+            grep -E ': warning CS' build-$rid.log | sort -u | head -20 | sed 's/^/::warning::/' || true
+            bash packaging/linux/package.sh $rid $v publish/$rid out
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: out/*
+
   build:
+    needs: linux
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -69,6 +101,11 @@ jobs:
           Copy-Item dist\*.msi out\IslandBar-Setup-${{ steps.ver.outputs.version }}.msi
           Copy-Item publish\IslandBar.exe out\IslandBar-portable.exe
           Get-ChildItem out | Format-Table Name, Length
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: out
 
       - uses: actions/upload-artifact@v4
         with:

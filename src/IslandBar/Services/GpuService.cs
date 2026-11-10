@@ -13,7 +13,7 @@ namespace IslandBar.Services
     /// GPU 使用率（與工作管理員相同：各引擎類型加總後取最大值）＋ NVIDIA 溫度與顯存（nvidia-smi）。
     /// 在背景執行緒每 2 秒取樣一次。
     /// </summary>
-    public sealed class GpuService
+    public sealed class GpuService : IGpuInfo
     {
         private readonly Dictionary<string, PerformanceCounter> _counters = new Dictionary<string, PerformanceCounter>();
         private string _smi;

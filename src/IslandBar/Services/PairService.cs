@@ -9,6 +9,13 @@ using System.Threading.Tasks;
 
 namespace IslandBar.Services
 {
+    /// <summary>PairService 需要的本機 GPU 資訊（Windows 的 GpuService、Linux 版的感測器都實作它）</summary>
+    public interface IGpuInfo
+    {
+        double? Usage { get; }
+        List<(string name, double usedMb)> Processes { get; }
+    }
+
     public sealed class PairEngine
     {
         public string Name { get; set; } = "";           // Ollama / LM Studio / llama.cpp
@@ -88,13 +95,13 @@ namespace IslandBar.Services
     {
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         private CancellationTokenSource _cts;
-        private readonly GpuService _gpu;
+        private readonly IGpuInfo _gpu;
 
         public PairSnapshot Snapshot { get; private set; } = new PairSnapshot();
         public event Action Updated;
         public Func<int[]> ProxyPorts { get; set; } = () => new[] { 11434, 1234, 8080 };
 
-        public PairService(GpuService gpu) { _gpu = gpu; }
+        public PairService(IGpuInfo gpu) { _gpu = gpu; }
 
         /// <summary>GPU 使用率超過多少算「正在跑」</summary>
         public const double BusyThreshold = 30;
@@ -102,8 +109,16 @@ namespace IslandBar.Services
         /// <summary>有新的工作完成（給動態島顯示）</summary>
         public event Action<List<PairJob>> JobsCompleted;
 
-        public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Nvidia Corporation", "Personal AI Router");
+        /// <summary>PAIR 的資料夾：Windows 是 %LocalAppData%，Linux 是 $XDG_CONFIG_HOME 或 ~/.config（與 PAIR 的 appdir 相同）</summary>
+        public static string DataDir => Path.Combine(BaseDir(), "Nvidia Corporation", "Personal AI Router");
+
+        private static string BaseDir()
+        {
+            if (OperatingSystem.IsWindows()) return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            if (!string.IsNullOrEmpty(xdg)) return xdg;
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+        }
 
         public static bool IsInstalled => Directory.Exists(DataDir);
 
@@ -329,7 +344,7 @@ namespace IslandBar.Services
         private static bool IsEngineProcess(string path)
         {
             string n = (path ?? "").ToLowerInvariant();
-            return n.Contains("ollama") || n.Contains("llama-server") || n.Contains("lm studio") || n.Contains("lmstudio") || n.Contains("lms.exe");
+            return n.Contains("ollama") || n.Contains("llama-server") || n.Contains("lm studio") || n.Contains("lmstudio") || n.Contains("lms.exe") || n.EndsWith("/lms") || n.Contains("lm-studio");
         }
 
         private static async Task<PairEngine> PollEngine(string name, int proxyPort, int[] enginePorts)
