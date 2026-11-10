@@ -88,6 +88,7 @@ namespace IslandBar
             try
             {
                 _extrasCts?.Cancel();
+                StopFeatures();
                 _calendar.Stop();
                 _pair?.Stop();
                 UnregisterHotKey(_hwnd, HotkeyOcrId);

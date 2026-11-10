@@ -67,6 +67,7 @@ namespace IslandBar
             _wheelFiles = files;
             _wheelKind = ConvertCatalog.KindOf(files);
             (_wheelPage1, _wheelPage2) = ConvertCatalog.For(files);
+            _wheelPage1 = new List<WheelAction>(_wheelPage1 ?? new List<WheelAction>()) { ShelfAction };   // 最後一格：暫存架
             _wheelPage = 0;
             _wheelHover = -1;
             _wheelClickMode = clickMode;
@@ -300,7 +301,7 @@ namespace IslandBar
         {
             WheelLeaveTimer.Stop();
             var files = DroppedFiles(e);
-            if (files == null || files.Length == 0 || _converting || _fullscreenHidden)
+            if (files == null || files.Length == 0 || _converting || _fullscreenHidden || _shelfDragging)
             {
                 e.Effects = DragDropEffects.None;
                 e.Handled = true;
@@ -390,6 +391,7 @@ namespace IslandBar
 
         private async void RunWheelAction(WheelAction action, string[] files)
         {
+            if (ReferenceEquals(action, ShelfAction)) { AddToShelf(files); return; }
             if (_converting)
             {
                 ShowNotice("上一個轉換還在進行中…", TimeSpan.FromSeconds(2));

@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using IslandBar.Services;
 
 namespace IslandBar
 {
@@ -65,6 +66,31 @@ namespace IslandBar
 
         /// <summary>耳機等播放裝置連上 / 中斷時提示</summary>
         public bool DeviceConnectHud { get; set; } = true;
+
+        /// <summary>允許區網裡的其他 IslandBar 讀這台電腦的狀態（CPU／RAM／GPU，只讀）</summary>
+        public bool AllowRemoteRead { get; set; } = false;
+        public int RemotePort { get; set; } = StatusServer.DefaultPort;
+        /// <summary>要監看的遠端電腦</summary>
+        public List<RemoteHost> RemoteHosts { get; set; } = new List<RemoteHost>();
+        /// <summary>收合時顯示正在跑的遠端 GPU</summary>
+        public bool RemoteCompact { get; set; } = true;
+        /// <summary>遠端 GPU 工作結束、電腦離線時通知</summary>
+        public bool RemoteNotify { get; set; } = true;
+
+        /// <summary>網路狀態：斷線／恢復／換網路時提示</summary>
+        public bool NetworkNotify { get; set; } = true;
+
+        /// <summary>「下載」資料夾有檔案下載完成時提示</summary>
+        public bool DownloadNotify { get; set; } = true;
+
+        /// <summary>這些程式有新通知時，動態島跑彩虹邊框（程式名稱，不含 .exe）</summary>
+        public bool RgbNotify { get; set; } = true;
+        public List<string> RgbApps { get; set; } = new List<string> { "LINE" };
+        /// <summary>彩虹邊框最多跑幾分鐘（打開那個程式或點動態島會提早停）</summary>
+        public int RgbMinutes { get; set; } = 10;
+
+        /// <summary>檔案暫存架裡的檔案</summary>
+        public List<string> ShelfFiles { get; set; } = new List<string>();
 
         /// <summary>NVIDIA PAIR 監控（沒裝 PAIR 的電腦不用開）</summary>
         public bool PairMonitor { get; set; } = false;

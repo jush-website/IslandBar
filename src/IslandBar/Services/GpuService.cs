@@ -25,6 +25,9 @@ namespace IslandBar.Services
         public double? VramUsedGb { get; private set; }
         public double? VramTotalGb { get; private set; }
         public bool VramShared { get; private set; }
+        /// <summary>顯示卡名稱與功耗（NVIDIA：nvidia-smi）</summary>
+        public string Name { get; private set; }
+        public double? PowerW { get; private set; }
 
         /// <summary>正在用 GPU 的程式（NVIDIA：nvidia-smi --query-compute-apps）</summary>
         public List<(string name, double usedMb)> Processes { get; private set; } = new List<(string, double)>();
@@ -190,7 +193,7 @@ namespace IslandBar.Services
         {
             try
             {
-                var psi = new ProcessStartInfo(_smi, "--query-gpu=temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits")
+                var psi = new ProcessStartInfo(_smi, "--query-gpu=temperature.gpu,memory.used,memory.total,name,power.draw --format=csv,noheader,nounits")
                 {
                     CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8
                 };
@@ -206,6 +209,8 @@ namespace IslandBar.Services
                     Temperature = temp;
                     VramUsedGb = used / 1024.0;
                     VramTotalGb = total / 1024.0;
+                    if (parts.Length >= 4) Name = parts[3].Replace("NVIDIA ", "").Replace("GeForce ", "");
+                    PowerW = parts.Length >= 5 && double.TryParse(parts[4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double w) ? w : (double?)null;
                 }
             }
             catch (Exception ex)

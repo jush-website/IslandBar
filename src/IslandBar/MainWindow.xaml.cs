@@ -178,6 +178,7 @@ namespace IslandBar
             _gpu.Start();
 
             StartExtras();
+            StartFeatures();
             StatsTick();
             UpdateDarkModeTile();
             await RefreshWeatherAsync();
@@ -195,6 +196,7 @@ namespace IslandBar
             if (!_settings.AutoHide) SetEdgeHidden(false, animate: true);
             UiTick();
             _ = RefreshWeatherAsync();
+            ApplyFeatureSettings();
         }
 
         /// <summary>在動態島上短暫顯示一則訊息（例如更新進度）</summary>
@@ -446,10 +448,10 @@ namespace IslandBar
                     double dotsW = dots > 0 ? 10 + dots * 10 : 0;
                     if (_currentMedia != null)
                     {
-                        double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW + PairCompactWidth(CompactPairMedia);
+                        double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW + PairCompactWidth(CompactPairMedia) + PairCompactWidth(CompactStatusMedia);
                         return new Size(Math.Max(w, 74) + extra, t);
                     }
-                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0) + PairCompactWidth(CompactPair);
+                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0) + PairCompactWidth(CompactPair) + PairCompactWidth(CompactStatus);
                     return new Size(Math.Max(iw, 130) + extra, t);
                 }
             }
@@ -461,6 +463,7 @@ namespace IslandBar
             var size = TargetSize();
             double radius = _mode == IslandMode.Expanded ? 26 : (_mode == IslandMode.Hud ? 20 : CompactThickness / 2 + 1);
             Island.CornerRadius = CornersFor(radius);
+            RgbRing.CornerRadius = Island.CornerRadius;
             UpdateIslandClip();
 
             if (animate)
@@ -615,6 +618,7 @@ namespace IslandBar
 
         private void ShowHud(string glyph, double? progress, string valueText, string message, TimeSpan duration)
         {
+            _hudClick = null;
             HudGlyph.Text = glyph;
             SideHudGlyph.Text = glyph;
             bool wasMessage = _hudIsMessage;
@@ -830,6 +834,10 @@ namespace IslandBar
             PageQuota.Visibility = TabQuota.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageClip.Visibility = TabClip.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageWeather.Visibility = TabWeather.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageRemote.Visibility = TabRemote.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageShelf.Visibility = TabShelf.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            if (TabRemote.IsChecked == true) BuildRemoteList();
+            if (TabShelf.IsChecked == true) BuildShelfList();
             SetPageExtra(TabWeather.IsChecked == true ? WeatherPageExtra : 0);
             if (TabWeather.IsChecked == true) OnWeatherTabShown();
             if (TabClip.IsChecked == true) BuildClipList();
@@ -904,6 +912,7 @@ namespace IslandBar
 
             NetDown.Text = SystemStats.FormatSpeed(_stats.DownBytesPerSec);
             NetUp.Text = SystemStats.FormatSpeed(_stats.UpBytesPerSec);
+            NetInfo.Text = NetworkInfoText();
 
             var gu = _gpu.Usage;
             GpuValue.Text = gu.HasValue ? $"{gu.Value:0}%" : "—";
@@ -1162,7 +1171,21 @@ namespace IslandBar
         private void Island_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             _dragPending = false;
-            if (!_dragging) return;
+            if (!_dragging)
+            {
+                // 點提示（例如「下載完成」）＝執行它附帶的動作
+                if (_mode == IslandMode.Hud && _hudClick != null)
+                {
+                    var a = _hudClick;
+                    _hudClick = null;
+                    _hudTimer.Stop();
+                    SetMode(IslandMode.Compact);
+                    try { a(); } catch (Exception ex) { Log.Error("HudClick", ex); }
+                    e.Handled = true;
+                }
+                StopRgb();   // 點一下動態島＝看過通知了
+                return;
+            }
             EndDrag();
             e.Handled = true;
         }
