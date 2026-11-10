@@ -86,6 +86,9 @@ namespace IslandBar.Services
             s.VpnName = vpn?.Name;
             var phys = nics.Where(n => !IsVpn(n) && !IsVirtual(n) && n.GetIPProperties().GatewayAddresses.Any(g => !g.Address.Equals(System.Net.IPAddress.Any)))
                 .ToList();
+            // 實體網卡接在 Hyper-V 虛擬交換器後面時，有 IP 的是 vEthernet：找不到實體網卡就用任何有閘道的網卡
+            if (phys.Count == 0)
+                phys = nics.Where(n => !IsVpn(n) && n.GetIPProperties().GatewayAddresses.Any(g => !g.Address.Equals(System.Net.IPAddress.Any))).ToList();
             var wifi = phys.FirstOrDefault(n => n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211);
 
             // Wi‑Fi 名稱：netsh（每 15 秒讀一次就好）
@@ -100,14 +103,14 @@ namespace IslandBar.Services
 
             // 延遲：1.1.1.1 → 8.8.8.8；兩次都失敗才算斷線
             s.LatencyMs = await PingAsync("1.1.1.1") ?? await PingAsync("8.8.8.8");
-            if (s.LatencyMs == null && phys.Count > 0)
+            if (s.LatencyMs != null) _fails = 0;
+            else if (!NetworkInterface.GetIsNetworkAvailable()) _fails = 99;
+            else
             {
-                // ICMP 被擋的網路（部分校園網路）：改試 DNS／HTTPS 連得上就算有網路
-                if (await TcpReachable("1.1.1.1", 443) || await TcpReachable("8.8.8.8", 53)) _fails = 0;
+                // ICMP 被擋的網路（部分校園網路、雲端主機）：改試 HTTPS／DNS 連得上就算有網路
+                if (await TcpReachable("1.1.1.1", 443) || await TcpReachable("8.8.8.8", 53) || await TcpReachable("www.msftconnecttest.com", 80)) _fails = 0;
                 else _fails++;
             }
-            else if (s.LatencyMs == null) _fails = 99;
-            else _fails = 0;
 
             s.Online = _fails < 2;
             s.OfflineSince = s.Online ? null : (State.OfflineSince ?? DateTime.Now);

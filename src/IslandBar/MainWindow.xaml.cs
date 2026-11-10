@@ -912,7 +912,9 @@ namespace IslandBar
 
             NetDown.Text = SystemStats.FormatSpeed(_stats.DownBytesPerSec);
             NetUp.Text = SystemStats.FormatSpeed(_stats.UpBytesPerSec);
-            NetInfo.Text = NetworkInfoText();
+            string netInfo = NetworkInfoText();
+            NetLabel.Text = netInfo.Length > 0 ? "網路 · " + netInfo : "網路";
+            NetLabel.ToolTip = netInfo.Length > 0 ? netInfo : null;
 
             var gu = _gpu.Usage;
             GpuValue.Text = gu.HasValue ? $"{gu.Value:0}%" : "—";

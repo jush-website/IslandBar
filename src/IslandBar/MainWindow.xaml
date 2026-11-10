@@ -658,7 +658,7 @@
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource Glyph}" Text="&#xE774;" FontSize="13" Foreground="#C29BFF" />
-                                    <TextBlock Style="{StaticResource StatLabel}" Text="網路" />
+                                    <TextBlock x:Name="NetLabel" Style="{StaticResource StatLabel}" Text="網路" MaxWidth="150" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
                                     <TextBlock Style="{StaticResource Glyph}" Text="&#xE74B;" FontSize="10" Foreground="{StaticResource Secondary}" />
@@ -668,8 +668,6 @@
                                     <TextBlock Style="{StaticResource Glyph}" Text="&#xE74A;" FontSize="10" Foreground="{StaticResource Secondary}" />
                                     <TextBlock x:Name="NetUp" Text="0 KB/s" FontSize="13" FontWeight="SemiBold" Margin="5,0,0,0" />
                                 </StackPanel>
-                                <TextBlock x:Name="NetInfo" Text="" FontSize="10" Foreground="{StaticResource Tertiary}" Margin="0,3,0,0"
-                                           TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                         </Border>
                         <!-- GPU -->
