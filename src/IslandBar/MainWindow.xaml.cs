@@ -178,6 +178,7 @@ namespace IslandBar
             _gpu.Start();
 
             StartExtras();
+            StartVoice();
             StatsTick();
             UpdateDarkModeTile();
             await RefreshWeatherAsync();

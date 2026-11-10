@@ -66,6 +66,9 @@ namespace IslandBar
         /// <summary>耳機等播放裝置連上 / 中斷時提示</summary>
         public bool DeviceConnectHud { get; set; } = true;
 
+        /// <summary>語音指令（「欸小工具」＋指令）；預設關閉，開了才用麥克風</summary>
+        public bool VoiceCommands { get; set; } = false;
+
         /// <summary>NVIDIA PAIR 監控（沒裝 PAIR 的電腦不用開）</summary>
         public bool PairMonitor { get; set; } = false;
 
