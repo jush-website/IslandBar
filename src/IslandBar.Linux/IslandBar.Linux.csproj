@@ -26,7 +26,6 @@
   <ItemGroup>
     <Compile Include="..\IslandBar\Log.cs" Link="Shared\Log.cs" />
     <Compile Include="..\IslandBar\Services\PairService.cs" Link="Shared\PairService.cs" />
-    <Compile Include="..\IslandBar\Services\StatusServer.cs" Link="Shared\StatusServer.cs" />
   </ItemGroup>
 
   <ItemGroup>

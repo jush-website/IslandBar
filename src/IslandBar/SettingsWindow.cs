@@ -56,7 +56,6 @@ namespace IslandBar
             ("appearance", "", "外觀"),
             ("compact", "", "收合內容"),
             ("notify", "", "通知與提示"),
-            ("remote", "", "遠端電腦"),
             ("gpu", "", "GPU 與 PAIR"),
             ("weather", "", "天氣與行程"),
             ("widgets", "", "桌面小工具"),
@@ -108,7 +107,6 @@ namespace IslandBar
             {
                 case "compact": BuildCompact(page); break;
                 case "notify": BuildNotify(page); break;
-                case "remote": BuildRemote(page); break;
                 case "gpu": BuildGpu(page); break;
                 case "weather": BuildWeather(page); break;
                 case "widgets": BuildWidgets(page); break;
@@ -183,7 +181,6 @@ namespace IslandBar
             p.Children.Add(PageTitle("收合內容"));
             p.Children.Add(Check("顯示 AI 額度點點", S.ShowQuotaDots, v => { S.ShowQuotaDots = v; Changed(); }));
             p.Children.Add(Check("播放音樂時顯示歌名", S.ShowCompactTitle, v => { S.ShowCompactTitle = v; Changed(); }));
-            p.Children.Add(Check("顯示正在跑的遠端 GPU（遠端電腦）", S.RemoteCompact, v => { S.RemoteCompact = v; Changed(); }));
             p.Children.Add(Check("展開時，每個分頁底部固定顯示 AI 額度", S.PinQuotaStrip, v => { S.PinQuotaStrip = v; Changed(); }));
 
             p.Children.Add(Heading("點點顯示的項目", 18));
@@ -218,9 +215,9 @@ namespace IslandBar
         {
             p.Children.Add(PageTitle("通知與提示"));
 
-            p.Children.Add(Heading("聊天訊息彩虹邊框"));
-            p.Children.Add(Note("這些程式有新訊息時（工作列按鈕閃爍、或跳出自己的通知小視窗），動態島會繞一圈彩虹邊框；打開那個程式或點一下動態島就停。"));
-            p.Children.Add(Check("開啟彩虹邊框", S.RgbNotify, v => { S.RgbNotify = v; Changed(); }));
+            p.Children.Add(Heading("聊天訊息燈效邊框"));
+            p.Children.Add(Note("這些程式有新訊息時（工作列按鈕閃爍、或跳出自己的通知小視窗），動態島會亮起燈效邊框（顏色可以自訂）；打開那個程式或點一下動態島就停。"));
+            p.Children.Add(Check("開啟燈效邊框", S.RgbNotify, v => { S.RgbNotify = v; Changed(); }));
             var apps = new TextBox { Text = string.Join(", ", S.RgbApps ?? new List<string>()), Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(6, 4, 6, 4) };
             apps.LostFocus += (s, e) =>
             {
@@ -231,7 +228,8 @@ namespace IslandBar
             p.Children.Add(Labeled("程式名稱（逗號分開，例如 LINE, Discord, Telegram）", apps));
             p.Children.Add(Heading("最多跑多久", 10));
             p.Children.Add(Slider(1, 60, S.RgbMinutes, v => { S.RgbMinutes = (int)Math.Round(v); Changed(); }, v => $"{v:0} 分鐘"));
-            var test = MakeButton("試試看", false);
+            BuildRgbColors(p);
+            var test = MakeButton("在動態島上試試看", false);
             test.Click += (s, e) => _h.Window?.TestRgb();
             p.Children.Add(test);
 
@@ -250,6 +248,118 @@ namespace IslandBar
             p.Children.Add(Heading("Claude 額度的備用來源", 20));
             p.Children.Add(Note("讓 Claude Code 的狀態列把 5 小時／每週額度交給 IslandBar：不需要讀 Claude 的登入憑證，每次用 Claude Code 時更新。Claude Code 底下會多一行「模型 | 5h % | 7d %」。已經有自訂狀態列的話不會覆蓋。"));
             p.Children.Add(HookCheck("用 Claude Code 狀態列取得 Claude 額度", HookBridge.IsClaudeStatusLineInstalled, () => HookBridge.InstallClaudeStatusLine(), HookBridge.UninstallClaudeStatusLine));
+        }
+
+        /// <summary>燈效顏色：預設組合、自訂顏色（點色塊改顏色）、速度、粗細，上面有即時預覽</summary>
+        private void BuildRgbColors(StackPanel p)
+        {
+            S.RgbColors ??= new List<string>(RgbStyle.Rainbow);
+
+            // 預覽：一顆跟動態島一樣的膠囊
+            var preview = new Border
+            {
+                Width = 240, Height = 34, CornerRadius = new CornerRadius(17), HorizontalAlignment = HorizontalAlignment.Left,
+                Background = Frozen(Color.FromRgb(0x0D, 0x0D, 0x0F)), Margin = new Thickness(0, 8, 0, 4),
+                Child = new TextBlock { Text = "LINE 有新訊息", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 }
+            };
+            RotateTransform previewRotate = null;
+            void Refresh()
+            {
+                RgbStyle.Stop(preview, previewRotate);
+                preview.BorderBrush = RgbStyle.Build(RgbStyle.Parse(S.RgbColors), out previewRotate);
+                preview.BorderThickness = new Thickness(Math.Clamp(S.RgbThickness, 1, 5));
+                RgbStyle.Start(preview, previewRotate, S.RgbSpeed);
+            }
+
+            var swatches = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+            void BuildSwatches()
+            {
+                swatches.Children.Clear();
+                var colors = RgbStyle.Parse(S.RgbColors);
+                for (int i = 0; i < colors.Count; i++)
+                {
+                    int idx = i;
+                    var sw = new Border
+                    {
+                        Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Margin = new Thickness(0, 4, 8, 0),
+                        Background = new SolidColorBrush(colors[i]), BorderBrush = Frozen(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF)),
+                        BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
+                        ToolTip = RgbStyle.ToHex(colors[i]) + "\n左鍵：換顏色　右鍵：移除"
+                    };
+                    sw.MouseLeftButtonUp += (s, e) =>
+                    {
+                        var c = RgbStyle.Parse(S.RgbColors)[idx];
+                        using var dlg = new System.Windows.Forms.ColorDialog { FullOpen = true, Color = System.Drawing.Color.FromArgb(c.R, c.G, c.B) };
+                        if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+                        var list = RgbStyle.Parse(S.RgbColors).Select(RgbStyle.ToHex).ToList();
+                        list[idx] = RgbStyle.ToHex(Color.FromRgb(dlg.Color.R, dlg.Color.G, dlg.Color.B));
+                        S.RgbColors = list;
+                        Changed(); BuildSwatches(); Refresh();
+                    };
+                    sw.MouseRightButtonUp += (s, e) =>
+                    {
+                        var list = RgbStyle.Parse(S.RgbColors).Select(RgbStyle.ToHex).ToList();
+                        if (list.Count <= 1) return;
+                        list.RemoveAt(idx);
+                        S.RgbColors = list;
+                        Changed(); BuildSwatches(); Refresh();
+                        e.Handled = true;
+                    };
+                    swatches.Children.Add(sw);
+                }
+                if (colors.Count < RgbStyle.MaxColors)
+                {
+                    var add = new Border
+                    {
+                        Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Margin = new Thickness(0, 4, 8, 0),
+                        Background = Card, Cursor = Cursors.Hand, ToolTip = "加一個顏色",
+                        Child = new TextBlock { Text = "+", FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                    };
+                    add.MouseLeftButtonUp += (s, e) =>
+                    {
+                        using var dlg = new System.Windows.Forms.ColorDialog { FullOpen = true };
+                        if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+                        var list = RgbStyle.Parse(S.RgbColors).Select(RgbStyle.ToHex).ToList();
+                        list.Add(RgbStyle.ToHex(Color.FromRgb(dlg.Color.R, dlg.Color.G, dlg.Color.B)));
+                        S.RgbColors = list;
+                        Changed(); BuildSwatches(); Refresh();
+                    };
+                    swatches.Children.Add(add);
+                }
+            }
+
+            p.Children.Add(Heading("燈效顏色", 12));
+            p.Children.Add(preview);
+            var presets = new WrapPanel();
+            foreach (var (name, colors) in RgbStyle.Presets)
+            {
+                var cols = colors;
+                var chip = new Border
+                {
+                    CornerRadius = new CornerRadius(8), Background = Card, Padding = new Thickness(8, 5, 10, 5),
+                    Margin = new Thickness(0, 6, 6, 0), Cursor = Cursors.Hand
+                };
+                var sp = new StackPanel { Orientation = Orientation.Horizontal };
+                sp.Children.Add(new Border
+                {
+                    Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 0, 6, 0),
+                    Background = RgbStyle.Build(RgbStyle.Parse(cols), out _)
+                });
+                sp.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+                chip.Child = sp;
+                chip.MouseLeftButtonUp += (s, e) => { S.RgbColors = cols.ToList(); Changed(); BuildSwatches(); Refresh(); };
+                presets.Children.Add(chip);
+            }
+            p.Children.Add(presets);
+            p.Children.Add(Note("自訂顏色：點色塊換顏色、右鍵移除、「+」加一個。一個顏色會呼吸閃爍，兩個以上會旋轉漸層。"));
+            p.Children.Add(swatches);
+            BuildSwatches();
+
+            p.Children.Add(Heading("速度", 10));
+            p.Children.Add(Slider(0.6, 8, S.RgbSpeed, v => { S.RgbSpeed = Math.Round(v, 1); Changed(); Refresh(); }, v => $"{v:0.0} 秒一圈"));
+            p.Children.Add(Heading("粗細", 10));
+            p.Children.Add(Slider(1, 5, S.RgbThickness, v => { S.RgbThickness = Math.Round(v * 2) / 2; Changed(); Refresh(); }, v => $"{Math.Round(v * 2) / 2:0.#} px"));
+            Refresh();
         }
 
         private FrameworkElement HookCheck(string text, Func<bool> installed, Func<string> install, Action uninstall)
@@ -272,128 +382,6 @@ namespace IslandBar
                 }
             };
             return cb;
-        }
-
-        // ================================================================
-        //  遠端電腦
-        // ================================================================
-
-        private void BuildRemote(StackPanel p)
-        {
-            p.Children.Add(PageTitle("遠端電腦"));
-            p.Children.Add(Note("在動態島上看同一個區網裡其他電腦（例如 4090 主機、Jetson）的 CPU、RAM、GPU 與訓練進度；遠端 GPU 工作結束時會通知你。被監看的電腦要裝 IslandBar 並開啟「允許區網讀取」：Windows 版在這一頁，Linux 版在動態島的右鍵選單。"));
-
-            p.Children.Add(Heading("這台電腦", 16));
-            var status = new TextBlock { Foreground = Dim, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
-            void RefreshStatus() => status.Text = _h.Window?.RemoteServerStatus ?? "";
-            p.Children.Add(Check("允許區網讀取這台電腦的狀態（只讀，不能控制）", S.AllowRemoteRead, v =>
-            {
-                S.AllowRemoteRead = v;
-                S.Save();
-                _applyTimer.Stop();
-                _h.Apply();
-                RefreshStatus();
-            }));
-            p.Children.Add(status);
-            RefreshStatus();
-            p.Children.Add(Note("第一次開啟時 Windows 防火牆會詢問，請允許「私人網路」。只有區網（同一個子網、私人 IP）的電腦讀得到，網際網路上的人讀不到。"));
-            var port = new TextBox { Text = S.RemotePort.ToString(), Width = 90, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(6, 3, 6, 3) };
-            port.LostFocus += (s, e) =>
-            {
-                if (int.TryParse(port.Text, out int v) && v > 1024 && v < 65536 && v != S.RemotePort) { S.RemotePort = v; S.Save(); _h.Apply(); RefreshStatus(); }
-                port.Text = S.RemotePort.ToString();
-            };
-            p.Children.Add(Labeled("連接埠（預設 14320）", port));
-
-            p.Children.Add(Heading("要監看的電腦", 20));
-            S.RemoteHosts ??= new List<RemoteHost>();
-            var list = new StackPanel();
-            p.Children.Add(list);
-            void BuildList()
-            {
-                list.Children.Clear();
-                if (S.RemoteHosts.Count == 0) list.Children.Add(Note("還沒有加入任何電腦。"));
-                foreach (var h in S.RemoteHosts.ToList())
-                {
-                    var host = h;
-                    var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    var bg = new Border { Background = Card, CornerRadius = new CornerRadius(8) };
-                    Grid.SetColumnSpan(bg, 3);
-                    row.Children.Add(bg);
-                    var info = new StackPanel { Margin = new Thickness(12, 7, 0, 7) };
-                    info.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(host.Name) ? host.Address : host.Name, FontWeight = FontWeights.SemiBold });
-                    var sub = new TextBlock { Text = host.Address, Foreground = Dim, FontSize = 11 };
-                    info.Children.Add(sub);
-                    row.Children.Add(info);
-                    var test = MakeButton("測試", false);
-                    test.Margin = new Thickness(0, 0, 6, 0);
-                    test.VerticalAlignment = VerticalAlignment.Center;
-                    test.Click += async (s, e) =>
-                    {
-                        sub.Text = host.Address + " · 測試中…";
-                        sub.Foreground = Dim;
-                        var (st, err) = await RemoteService.TestAsync(host.Address);
-                        sub.Text = host.Address + " · " + (st != null ? $"OK：{st.Host}（{st.Os}，IslandBar v{st.Version}）" : err);
-                        sub.Foreground = st != null ? Good : Bad;
-                    };
-                    Grid.SetColumn(test, 1);
-                    row.Children.Add(test);
-                    var del = MakeButton("移除", false);
-                    del.Foreground = Bad;
-                    del.Margin = new Thickness(0, 0, 8, 0);
-                    del.VerticalAlignment = VerticalAlignment.Center;
-                    del.Click += (s, e) => { S.RemoteHosts.Remove(host); S.Save(); _h.Apply(); BuildList(); };
-                    Grid.SetColumn(del, 2);
-                    row.Children.Add(del);
-                    list.Children.Add(row);
-                }
-            }
-            BuildList();
-
-            p.Children.Add(Heading("加入電腦", 16));
-            var add = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-            add.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            add.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            add.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
-            add.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var name = new TextBox { Padding = new Thickness(6, 4, 6, 4) };
-            var addr = new TextBox { Padding = new Thickness(6, 4, 6, 4) };
-            add.Children.Add(Labeled("名稱（例如 4090 主機）", name));
-            var addrBox = Labeled("IP 位址（例如 192.168.1.20 或 192.168.1.20:14320）", addr);
-            Grid.SetColumn(addrBox, 2);
-            add.Children.Add(addrBox);
-            var addBtn = MakeButton("加入", true);
-            addBtn.VerticalAlignment = VerticalAlignment.Bottom;
-            addBtn.Margin = new Thickness(10, 0, 0, 0);
-            var result = new TextBlock { FontSize = 12, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
-            addBtn.Click += async (s, e) =>
-            {
-                string a = addr.Text.Trim();
-                if (a.Length == 0) { result.Text = "請輸入 IP 位址"; result.Foreground = Bad; return; }
-                result.Text = "連線測試中…";
-                result.Foreground = Dim;
-                var (st, err) = await RemoteService.TestAsync(a);
-                string n = name.Text.Trim();
-                if (n.Length == 0 && st != null) n = st.Host;
-                S.RemoteHosts.Add(new RemoteHost { Name = n, Address = a });
-                S.Save();
-                _h.Apply();
-                BuildList();
-                name.Text = addr.Text = "";
-                result.Text = st != null ? $"已加入：{st.Host}（{st.Os}）" : "已加入，但目前連不上：" + err;
-                result.Foreground = st != null ? Good : Bad;
-            };
-            Grid.SetColumn(addBtn, 3);
-            add.Children.Add(addBtn);
-            p.Children.Add(add);
-            p.Children.Add(result);
-
-            p.Children.Add(Heading("通知", 20));
-            p.Children.Add(Check("遠端 GPU 工作結束（忙超過 2 分鐘後閒下來）、電腦上線／離線時通知我", S.RemoteNotify, v => { S.RemoteNotify = v; Changed(); }));
-            p.Children.Add(Check("收合時顯示正在跑的遠端 GPU", S.RemoteCompact, v => { S.RemoteCompact = v; Changed(); }));
         }
 
         // ================================================================

@@ -446,8 +446,6 @@
                                      ToolTip="AI 額度與系統資源" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabStats" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9D9;"
                                      ToolTip="系統資訊" Checked="Tab_Checked" />
-                        <RadioButton x:Name="TabRemote" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE977;"
-                                     ToolTip="遠端電腦" Checked="Tab_Checked" Visibility="Collapsed" />
                         <RadioButton x:Name="TabClip" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE77F;"
                                      ToolTip="剪貼簿歷史" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabShelf" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE7B8;"
@@ -765,13 +763,6 @@
                                        Foreground="{StaticResource Tertiary}" Margin="0,4,0,0" HorizontalAlignment="Center" TextWrapping="Wrap"
                                        TextAlignment="Center" MaxWidth="400" />
                         </StackPanel>
-                    </Grid>
-
-                    <!-- == 遠端電腦 == -->
-                    <Grid x:Name="PageRemote" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
-                        <ScrollViewer VerticalScrollBarVisibility="Hidden" Focusable="False">
-                            <StackPanel x:Name="RemoteList" />
-                        </ScrollViewer>
                     </Grid>
 
                     <!-- == 檔案暫存架 == -->

@@ -29,8 +29,6 @@ jobs:
           $dir = Join-Path $env:APPDATA 'IslandBar'
           New-Item -ItemType Directory -Force $dir | Out-Null
           $settings = @{
-            AllowRemoteRead = $true
-            RemoteHosts = @(@{ Name = '本機測試'; Address = '127.0.0.1' }, @{ Name = '4090 主機'; Address = '192.168.77.77' })
             ShelfFiles = @('C:\Windows\notepad.exe', 'C:\Windows\win.ini', 'C:\Windows\System32\drivers\etc')
             AutoUpdate = $false
           } | ConvertTo-Json -Depth 5
@@ -38,9 +36,6 @@ jobs:
           New-Item -ItemType Directory -Force shots | Out-Null
           $shots = (Resolve-Path shots).Path
           $p = Start-Process -FilePath publish\IslandBar.exe -ArgumentList '--shot', $shots -PassThru
-          Start-Sleep 14
-          try { Invoke-WebRequest http://127.0.0.1:14320/islandbar/status -UseBasicParsing -TimeoutSec 5 | Select-Object -ExpandProperty Content | Out-File shots\status.json -Encoding utf8 }
-          catch { "status failed: $_" | Out-File shots\status.json }
           if (-not $p.WaitForExit(120000)) { Stop-Process $p -Force; 'timeout' | Out-File shots\timeout.txt }
           Copy-Item (Join-Path $dir 'log.txt') shots\log.txt -ErrorAction SilentlyContinue
           Get-ChildItem shots | Format-Table Name, Length

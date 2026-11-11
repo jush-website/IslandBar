@@ -834,9 +834,7 @@ namespace IslandBar
             PageQuota.Visibility = TabQuota.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageClip.Visibility = TabClip.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageWeather.Visibility = TabWeather.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-            PageRemote.Visibility = TabRemote.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageShelf.Visibility = TabShelf.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-            if (TabRemote.IsChecked == true) BuildRemoteList();
             if (TabShelf.IsChecked == true) BuildShelfList();
             SetPageExtra(TabWeather.IsChecked == true ? WeatherPageExtra : 0);
             if (TabWeather.IsChecked == true) OnWeatherTabShown();

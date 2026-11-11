@@ -23,14 +23,14 @@ namespace IslandBar
                 await Task.Delay(8000);   // 等額度、GPU、遠端資料讀進來
                 OpenSettings();
                 await Task.Delay(800);
-                foreach (var page in new[] { "appearance", "compact", "notify", "remote", "gpu", "weather", "widgets", "general" })
+                foreach (var page in new[] { "appearance", "compact", "notify", "gpu", "weather", "widgets", "general" })
                 {
                     _settingsWindow.ShowPage(page);
                     await Task.Delay(1200);
                     Save(_settingsWindow.Content as Visual, Path.Combine(dir, "settings-" + page + ".png"));
                 }
                 _settingsWindow.Close();
-                foreach (var tab in new[] { "remote", "shelf", "stats" })
+                foreach (var tab in new[] { "shelf", "stats" })
                 {
                     _window.DebugExpand(tab);
                     await Task.Delay(1500);

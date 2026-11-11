@@ -183,7 +183,8 @@ namespace IslandBar.Services
                     string label;
                     if (p.Id == "antigravity")
                     {
-                        label = "AG " + ShortModel(w.Label);
+                        // Antigravity 2 的分組額度（「Gemini 5h」「Claude/GPT 週」）原樣顯示；舊版是模型名稱，縮短
+                        label = "AG " + (Regex.IsMatch(w.Label, @"(5h|週)$") ? w.Label : ShortModel(w.Label));
                         tip = ($"Antigravity {w.Label}\n{tip}").Trim();
                     }
                     else
@@ -1102,11 +1103,15 @@ namespace IslandBar.Services
             return new ProviderUsage { Id = "antigravity", Name = "Antigravity", Installed = true, Available = false, Message = problem };
         }
 
+        // Antigravity 2 的額度在 RetrieveUserQuotaSummary（Gemini／Claude·GPT 兩組，各有 5 小時與每週）；舊版在 GetUserStatus
+        private static readonly string[] AgEndpoints = { "RetrieveUserQuotaSummary", "GetUserStatus" };
+        private string _agDiagSig = "";
+
         private async Task<string> FetchAntigravityStatus()
         {
             if (_agConn is { } c)
             {
-                var r = await AgRequest(c.port, c.token, c.secure);
+                var r = await AgQuery(c.port, c.token, c.secure, null);
                 if (r != null) return r;
                 _agConn = null;
             }
@@ -1114,49 +1119,100 @@ namespace IslandBar.Services
             if (DateTime.UtcNow < _agNextDiscovery) return null;
             _agNextDiscovery = DateTime.UtcNow.AddSeconds(30);
 
-            var (found, token, ports) = await FindAntigravityServer();
-            if (!found) { _agProblem = "not-running"; return null; }
-            if (token == null) { _agProblem = "no-token"; return null; }
-            string lastError = ports.Count > 0 ? "" : "沒有開啟任何連接埠";
-            foreach (int port in ports)
+            var srv = await FindAntigravityServer();
+            if (!srv.found) { _agProblem = "not-running"; AgDiag("沒有找到執行中的 Antigravity 背景服務（language_server）"); return null; }
+            if (srv.token == null && srv.extToken == null) { _agProblem = "no-token"; AgDiag("找到程序但命令列沒有 --csrf_token"); return null; }
+
+            // 先試所有監聽中的連接埠（HTTPS → HTTP），最後試 extension server 的連接埠（HTTP）
+            var tries = new List<(int port, string token, bool secure)>();
+            foreach (int port in srv.ports)
             {
-                foreach (bool secure in new[] { true, false })
+                if (srv.token != null) { tries.Add((port, srv.token, true)); tries.Add((port, srv.token, false)); }
+            }
+            if (srv.extPort > 0) tries.Add((srv.extPort, srv.extToken ?? srv.token, false));
+
+            var notes = new List<string>();
+            foreach (var t in tries)
+            {
+                var r = await AgQuery(t.port, t.token, t.secure, notes);
+                if (r != null)
                 {
-                    var r = await AgRequest(port, token, secure);
-                    if (r != null) { _agConn = (port, token, secure); return r; }
-                    lastError = $"連接埠 {port} 沒有回應";
+                    _agConn = t;
+                    AgDiag($"已連上：{(t.secure ? "https" : "http")} 連接埠 {t.port}");
+                    return r;
                 }
             }
             _agProblem = "request-failed";
-            _agProblemDetail = lastError;
+            _agProblemDetail = tries.Count == 0 ? "沒有開啟任何連接埠" : "連接埠都沒有回傳額度";
+            AgDiag($"程序找到了（連接埠 {string.Join(",", srv.ports)}，extension {srv.extPort}），但查不到額度：" + string.Join("；", notes.Take(8)));
             return null;
         }
 
-        private static async Task<string> AgRequest(int port, string token, bool secure)
+        /// <summary>同樣的狀況只記一次，方便看記錄檔</summary>
+        private void AgDiag(string text)
+        {
+            if (text == _agDiagSig) return;
+            _agDiagSig = text;
+            Log.Write("Antigravity: " + text);
+        }
+
+        /// <summary>依序試各個端點，回傳第一個解析得到額度的回應</summary>
+        private static async Task<string> AgQuery(int port, string token, bool secure, List<string> notes)
+        {
+            foreach (var ep in AgEndpoints)
+            {
+                var (status, body) = await AgRequest(port, token, secure, ep);
+                if (status == 200 && body != null)
+                {
+                    try { if (ParseAntigravity(body).Count > 0) return body; } catch { }
+                    notes?.Add($"{port}/{(secure ? "https" : "http")}/{ep}: 200 但沒有額度（欄位：{TopKeys(body)}）");
+                }
+                else notes?.Add($"{port}/{(secure ? "https" : "http")}/{ep}: {(status == 0 ? "連不上" : status.ToString())}");
+                if (status == 0) break;   // 這個協定根本連不上，不用再試其他端點
+            }
+            return null;
+        }
+
+        private static string TopKeys(string json)
         {
             try
             {
-                string url = $"{(secure ? "https" : "http")}://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus";
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) return root.ValueKind.ToString();
+                return string.Join(",", root.EnumerateObject().Select(p =>
+                    p.Value.ValueKind == JsonValueKind.Object ? p.Name + "{" + string.Join(",", p.Value.EnumerateObject().Select(q => q.Name).Take(6)) + "}" : p.Name).Take(8));
+            }
+            catch { return "非 JSON"; }
+        }
+
+        private static async Task<(int status, string body)> AgRequest(int port, string token, bool secure, string endpoint)
+        {
+            try
+            {
+                string url = $"{(secure ? "https" : "http")}://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/{endpoint}";
                 using var req = new HttpRequestMessage(HttpMethod.Post, url)
                 {
-                    Content = new StringContent("{\"metadata\":{\"ideName\":\"antigravity\",\"extensionName\":\"antigravity\",\"locale\":\"en\"}}",
+                    Content = new StringContent("{\"metadata\":{\"ideName\":\"antigravity\",\"extensionName\":\"antigravity\",\"ideVersion\":\"unknown\",\"locale\":\"en\"}}",
                         Encoding.UTF8, "application/json")
                 };
                 req.Headers.TryAddWithoutValidation("Connect-Protocol-Version", "1");
-                req.Headers.TryAddWithoutValidation("X-Codeium-Csrf-Token", token);
+                if (!string.IsNullOrEmpty(token)) req.Headers.TryAddWithoutValidation("X-Codeium-Csrf-Token", token);
                 using var resp = await LocalHttp.SendAsync(req);
-                if (!resp.IsSuccessStatusCode) return null;
-                return await resp.Content.ReadAsStringAsync();
+                string body = await resp.Content.ReadAsStringAsync();
+                return ((int)resp.StatusCode, body);
             }
-            catch { return null; }
+            catch { return (0, null); }
         }
 
-        private static async Task<(bool found, string token, List<int> ports)> FindAntigravityServer()
+        private static async Task<(bool found, string token, List<int> ports, int extPort, string extToken)> FindAntigravityServer()
         {
-            // 程式名稱依版本可能是 language_server.exe 或 language_server_windows_x64.exe
+            // 程式名稱依版本可能是 language_server.exe、language_server_windows_x64.exe 或 language-server.exe
             const string script =
-                "$p = Get-CimInstance Win32_Process -Filter \"Name LIKE 'language_server%'\" | Where-Object { $_.CommandLine -match 'antigravity' } | Select-Object -First 1; " +
+                "$p = Get-CimInstance Win32_Process -Filter \"Name LIKE 'language%server%'\" | Where-Object { $_.CommandLine -match 'antigravity' } | " +
+                "Sort-Object { if ($_.CommandLine -match 'antigravity-ide') { 1 } else { 0 } } | Select-Object -First 1; " +
                 "if ($p) { [pscustomobject]@{ cmd = $p.CommandLine; ports = @(Get-NetTCPConnection -State Listen -OwningProcess $p.ProcessId -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort) } | ConvertTo-Json -Compress }";
+            var none = (false, (string)null, new List<int>(), 0, (string)null);
             try
             {
                 string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
@@ -1166,30 +1222,84 @@ namespace IslandBar.Services
                 };
                 using var p = Process.Start(psi);
                 var outTask = p.StandardOutput.ReadToEndAsync();
-                if (await Task.WhenAny(outTask, Task.Delay(15000)) != outTask) { try { p.Kill(); } catch { } return (false, null, new List<int>()); }
+                if (await Task.WhenAny(outTask, Task.Delay(15000)) != outTask) { try { p.Kill(); } catch { } return none; }
                 string output = outTask.Result.Trim();
-                if (string.IsNullOrEmpty(output)) return (false, null, new List<int>());
+                if (string.IsNullOrEmpty(output)) return none;
                 using var doc = JsonDocument.Parse(output);
                 string cmd = doc.RootElement.TryGetProperty("cmd", out var c) ? c.GetString() ?? "" : "";
-                var m = Regex.Match(cmd, @"--csrf_token[= ](\S+)");
+                string Arg(string name)
+                {
+                    var m = Regex.Match(cmd, @"--" + name + @"[= ]+""?([^\s""]+)");
+                    return m.Success ? m.Groups[1].Value : null;
+                }
                 var ports = new List<int>();
                 if (doc.RootElement.TryGetProperty("ports", out var ps))
                 {
-                    if (ps.ValueKind == JsonValueKind.Array) { foreach (var x in ps.EnumerateArray()) if (x.TryGetInt32(out int v)) ports.Add(v); }
+                    if (ps.ValueKind == JsonValueKind.Array) { foreach (var x in ps.EnumerateArray()) if (x.TryGetInt32(out int v) && !ports.Contains(v)) ports.Add(v); }
                     else if (ps.TryGetInt32(out int single)) ports.Add(single);
                 }
-                return (true, m.Success ? m.Groups[1].Value : null, ports);
+                int.TryParse(Arg("extension_server_port"), out int extPort);
+                return (true, Arg("csrf_token"), ports, extPort, Arg("extension_server_csrf_token"));
             }
             catch (Exception ex)
             {
                 Log.Error("Quota.FindAntigravity", ex);
-                return (false, null, new List<int>());
+                return none;
             }
+        }
+
+        /// <summary>
+        /// Antigravity 2：RetrieveUserQuotaSummary 的 response.groups[].buckets[]（每組一個 5 小時、一個每週額度）。
+        /// 標籤做成「Gemini 5h」「Claude/GPT 週」。
+        /// </summary>
+        private static List<QuotaWindow> ParseAntigravitySummary(string json)
+        {
+            var list = new List<QuotaWindow>();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return list;
+            if (root.TryGetProperty("response", out var resp) && resp.ValueKind == JsonValueKind.Object) root = resp;
+            if (!root.TryGetProperty("groups", out var groups) || groups.ValueKind != JsonValueKind.Array) return list;
+            foreach (var g in groups.EnumerateArray())
+            {
+                string gname = g.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? "" : "";
+                string group = Regex.IsMatch(gname, "gemini", RegexOptions.IgnoreCase) ? "Gemini"
+                    : Regex.IsMatch(gname, "claude|gpt", RegexOptions.IgnoreCase) ? "Claude/GPT"
+                    : Regex.Replace(gname, @"\s*models?\s*$", "", RegexOptions.IgnoreCase).Trim();
+                if (!g.TryGetProperty("buckets", out var buckets) || buckets.ValueKind != JsonValueKind.Array) continue;
+                var rows = new List<(int order, QuotaWindow w)>();
+                foreach (var b in buckets.EnumerateArray())
+                {
+                    if (b.TryGetProperty("disabled", out var dis) && dis.ValueKind == JsonValueKind.True) continue;
+                    string bname = b.TryGetProperty("displayName", out var bd) ? bd.GetString() ?? "" : "";
+                    string id = (b.TryGetProperty("bucketId", out var bi) ? bi.GetString() : "") + " " + bname;
+                    bool weekly = Regex.IsMatch(id, "week", RegexOptions.IgnoreCase);
+                    bool fiveHour = Regex.IsMatch(id, @"5h|five|hour", RegexOptions.IgnoreCase) && !weekly;
+                    // remaining：{remainingFraction: x} 或 {case: "remainingFraction", value: x}；有 remaining 但沒有數字＝用完（protobuf 省略 0）
+                    double? remaining = null;
+                    if (b.TryGetProperty("remaining", out var rem) && rem.ValueKind == JsonValueKind.Object)
+                        remaining = Num(rem, "remainingFraction") ?? Num(rem, "value") ?? 0;
+                    else if (b.TryGetProperty("remainingFraction", out _))
+                        remaining = Num(b, "remainingFraction");
+                    if (remaining == null) continue;
+                    var reset = AnyTime(b, "resetTime");
+                    rows.Add((fiveHour ? 0 : weekly ? 1 : 2, new QuotaWindow
+                    {
+                        Label = group + " " + (fiveHour ? "5h" : weekly ? "週" : bname),
+                        UsedPercent = Math.Round((1 - Math.Clamp(remaining.Value, 0, 1)) * 1000) / 10,
+                        ResetsAt = reset
+                    }));
+                }
+                list.AddRange(rows.OrderBy(r => r.order).Select(r => r.w));
+            }
+            return list;
         }
 
         /// <summary>同一模型的 High/Medium/Low 共用額度，合併成一列，取用得最多的那個</summary>
         private static List<QuotaWindow> ParseAntigravity(string json)
         {
+            var summary = ParseAntigravitySummary(json);
+            if (summary.Count > 0) return summary;
             var families = new Dictionary<string, (double remaining, DateTimeOffset? resets)>();
             using var doc = JsonDocument.Parse(json);
             if (!doc.RootElement.TryGetProperty("userStatus", out var us) ||

@@ -19,11 +19,10 @@ using IslandBar.Services;
 namespace IslandBar
 {
     /// <summary>
-    /// v1.14 新功能：遠端電腦監看、網路狀態、下載完成提示、檔案暫存架、LINE 等通知的彩虹邊框。
+    /// v1.14 新功能：網路狀態、下載完成提示、檔案暫存架、LINE 等通知的彩虹邊框。
     /// </summary>
     public partial class MainWindow
     {
-        private static readonly string GRemote = char.ConvertFromUtf32(0xE977);
         private static readonly string GNetOff = char.ConvertFromUtf32(0xF384);
         private static readonly string GNet = char.ConvertFromUtf32(0xE701);
         private static readonly string GDownload = char.ConvertFromUtf32(0xE896);
@@ -33,17 +32,9 @@ namespace IslandBar
         /// <summary>點目前的提示時要做的事（例如開啟下載的檔案位置）</summary>
         private Action _hudClick;
 
-        private StatusServer _statusServer;
-        private RemoteService _remote;
         private readonly NetworkService _net = new NetworkService();
         private DownloadWatcher _downloads;
         private bool _featuresStarted;
-
-        /// <summary>給設定畫面看：本機分享狀態</summary>
-        public string RemoteServerStatus =>
-            !_settings.AllowRemoteRead ? "未開啟"
-            : _statusServer?.Running == true ? $"已開啟（埠 {_statusServer.Port}）：{string.Join("、", LocalIps())}"
-            : "無法開啟：" + (_statusServer?.LastError ?? "未知原因");
 
         /// <summary>在動態島上按右鍵＝開設定</summary>
         public event Action SettingsRequested;
@@ -56,7 +47,6 @@ namespace IslandBar
             _collapseDelay.Stop();
             switch (tab)
             {
-                case "remote": TabRemote.Visibility = Visibility.Visible; TabRemote.IsChecked = true; break;
                 case "shelf": TabShelf.Visibility = Visibility.Visible; TabShelf.IsChecked = true; break;
                 default: TabStats.IsChecked = true; break;
             }
@@ -89,12 +79,6 @@ namespace IslandBar
             };
             try
             {
-                _remote = new RemoteService(() => _settings.RemoteHosts ?? new List<RemoteHost>());
-                _remote.Updated += () => Dispatcher.BeginInvoke(new Action(OnRemoteUpdated));
-                _remote.JobFinished += (e, d) => Dispatcher.BeginInvoke(new Action(() => OnRemoteJobFinished(e, d)));
-                _remote.OnlineChanged += (e, on) => Dispatcher.BeginInvoke(new Action(() => OnRemoteOnlineChanged(e, on)));
-                _remote.Start();
-
                 _net.Updated += () => Dispatcher.BeginInvoke(new Action(UpdateCompactStatus));
                 _net.OnlineChanged += (off, dur) => Dispatcher.BeginInvoke(new Action(() => OnNetOnlineChanged(off, dur)));
                 _net.ConnectionChanged += name => Dispatcher.BeginInvoke(new Action(() =>
@@ -111,8 +95,6 @@ namespace IslandBar
 
         private void StopFeatures()
         {
-            try { _statusServer?.Stop(); } catch { }
-            try { _remote?.Stop(); } catch { }
             try { _net.Stop(); } catch { }
             try { _downloads?.Stop(); } catch { }
             StopAppNotify();
@@ -122,212 +104,11 @@ namespace IslandBar
         public void ApplyFeatureSettings()
         {
             if (!_featuresStarted) return;
-            ApplyRemoteServer();
             ApplyDownloadWatcher();
-            _remote?.PollSoon();
-            UpdateRemoteTab();
             UpdateShelfTab();
             UpdateCompactStatus();
             if (!_settings.RgbNotify) StopRgb();
-        }
-
-        // ================================================================
-        //  遠端電腦
-        // ================================================================
-
-        private void ApplyRemoteServer()
-        {
-            if (_settings.AllowRemoteRead)
-            {
-                int port = _settings.RemotePort > 0 && _settings.RemotePort < 65536 ? _settings.RemotePort : StatusServer.DefaultPort;
-                _statusServer ??= new StatusServer(BuildLocalStatus);
-                if (!_statusServer.Running || _statusServer.Port != port) _statusServer.Start(port);
-            }
-            else _statusServer?.Stop();
-        }
-
-        private static List<string> LocalIps()
-        {
-            try
-            {
-                return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
-                    .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
-                                n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback &&
-                                n.GetIPProperties().GatewayAddresses.Count > 0)
-                    .SelectMany(n => n.GetIPProperties().UnicastAddresses)
-                    .Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                    .Select(a => a.Address.ToString()).Distinct().ToList();
-            }
-            catch { return new List<string>(); }
-        }
-
-        /// <summary>這台電腦的狀態（給別台 IslandBar 讀）；在背景執行緒呼叫</summary>
-        private RemoteStatus BuildLocalStatus()
-        {
-            var st = new RemoteStatus
-            {
-                Version = UpdateService.CurrentVersion.ToString(3),
-                Os = "Windows",
-                Host = Environment.MachineName,
-                Cpu = Math.Round(_stats.CpuPercent, 1),
-                RamUsedGb = Math.Round(_stats.RamUsedGb, 2),
-                RamTotalGb = Math.Round(_stats.RamTotalGb, 2),
-                UptimeSec = Math.Round(_stats.Uptime.TotalSeconds)
-            };
-            if (_gpu.Usage.HasValue || _gpu.VramTotalGb.HasValue)
-            {
-                st.Gpus.Add(new RemoteGpu
-                {
-                    Name = _gpu.Name ?? "GPU",
-                    Util = _gpu.Usage.HasValue ? Math.Round(_gpu.Usage.Value, 1) : (double?)null,
-                    MemUsedGb = _gpu.VramUsedGb.HasValue ? Math.Round(_gpu.VramUsedGb.Value, 2) : (double?)null,
-                    MemTotalGb = _gpu.VramTotalGb.HasValue ? Math.Round(_gpu.VramTotalGb.Value, 2) : (double?)null,
-                    Temp = _gpu.Temperature,
-                    PowerW = _gpu.PowerW.HasValue ? Math.Round(_gpu.PowerW.Value) : (double?)null
-                });
-            }
-            foreach (var (name, mb) in _gpu.Processes.OrderByDescending(p => p.usedMb).Take(5))
-                st.GpuProcs.Add(new RemoteProc { Name = Path.GetFileNameWithoutExtension(name), MemGb = mb > 0 ? Math.Round(mb / 1024, 2) : (double?)null });
-            var bits = new List<string>();
-            if (_logEpoch != null) bits.Add("epoch " + _logEpoch);
-            if (_logLoss != null) bits.Add("loss " + _logLoss);
-            if (bits.Count > 0) st.Training = string.Join(" · ", bits);
-            return st;
-        }
-
-        private void UpdateRemoteTab()
-        {
-            bool any = _settings.RemoteHosts?.Count > 0;
-            TabRemote.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-            if (!any && TabRemote.IsChecked == true) TabMedia.IsChecked = true;
-        }
-
-        private void OnRemoteUpdated()
-        {
-            UpdateCompactStatus();
-            if (TabRemote.IsChecked == true && _mode == IslandMode.Expanded) BuildRemoteList();
-            RaiseDataChanged();
-        }
-
-        /// <summary>給桌面小工具：遠端電腦清單</summary>
-        public List<RemoteEntry> RemoteEntries => _remote?.Entries ?? new List<RemoteEntry>();
-
-        private void OnRemoteJobFinished(RemoteEntry e, TimeSpan busy)
-        {
-            if (!_settings.RemoteNotify) return;
-            string training = e.Status?.Training != null ? "（" + e.Status.Training + "）" : "";
-            string msg = $"{e.DisplayName} 的 GPU 工作結束了，跑了 {ShortDuration(busy)}{training}";
-            ShowHud(GRemote, null, null, msg, TimeSpan.FromSeconds(8));
-            Peek(TimeSpan.FromSeconds(8));
-            TrainingFinished?.Invoke(msg);
-        }
-
-        private void OnRemoteOnlineChanged(RemoteEntry e, bool online)
-        {
-            if (!_settings.RemoteNotify) return;
-            ShowNotice(online ? $"{e.DisplayName} 已上線" : $"{e.DisplayName} 離線了", TimeSpan.FromSeconds(4));
-        }
-
-        private void BuildRemoteList()
-        {
-            RemoteList.Children.Clear();
-            var entries = RemoteEntries;
-            if (entries.Count == 0)
-            {
-                RemoteList.Children.Add(new TextBlock
-                {
-                    Text = "還沒有加入遠端電腦（系統匣 → 設定 → 遠端電腦）",
-                    FontSize = 11, Foreground = (Brush)FindResource("Tertiary"), Margin = new Thickness(2, 20, 0, 0),
-                    HorizontalAlignment = HorizontalAlignment.Center
-                });
-                return;
-            }
-            foreach (var e in entries) RemoteList.Children.Add(RemoteCard(e));
-        }
-
-        private Border RemoteCard(RemoteEntry e)
-        {
-            var secondary = (Brush)FindResource("Secondary");
-            var tertiary = (Brush)FindResource("Tertiary");
-            var stack = new StackPanel();
-            var head = new DockPanel { LastChildFill = true };
-            var state = new TextBlock
-            {
-                FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
-                Text = e.Online ? (e.GpuBusy ? "● 運算中" : "● 在線") : (e.LastSeen == null ? "○ 連線中…" : "○ 離線"),
-                Foreground = e.Online ? (e.GpuBusy ? Brushes.Orange : new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58))) : tertiary
-            };
-            DockPanel.SetDock(state, Dock.Right);
-            head.Children.Add(state);
-            var title = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-            title.Inlines.Add(new Run(e.DisplayName));
-            if (e.Status != null) title.Inlines.Add(new Run("  " + e.Status.Os + (e.Online ? " · 已開機 " + ShortUptime(e.Status.UptimeSec) : "")) { FontSize = 11, FontWeight = FontWeights.Normal, Foreground = tertiary });
-            head.Children.Add(title);
-            stack.Children.Add(head);
-
-            if (!e.Online)
-            {
-                stack.Children.Add(new TextBlock
-                {
-                    Text = (e.Error ?? "連線中…") + (e.LastSeen != null ? $"（最後在線 {e.LastSeen:HH:mm}）" : ""),
-                    FontSize = 11, Foreground = tertiary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-            else if (e.Status != null)
-            {
-                var s = e.Status;
-                string ram = s.RamTotalGb > 0 ? $"RAM {s.RamUsedGb:0.0}/{s.RamTotalGb:0} GB" : "";
-                stack.Children.Add(new TextBlock
-                {
-                    Text = string.Join("   ", new[] { s.Cpu.HasValue ? $"CPU {s.Cpu:0}%" : null, ram }.Where(x => !string.IsNullOrEmpty(x))),
-                    FontSize = 11, Foreground = secondary, Margin = new Thickness(0, 3, 0, 0)
-                });
-                foreach (var g in s.Gpus)
-                {
-                    var bits = new List<string> { g.Util.HasValue ? $"{g.Util:0}%" : "—" };
-                    if (g.MemTotalGb > 0) bits.Add($"{g.MemUsedGb:0.0}/{g.MemTotalGb:0} GB");
-                    if (g.Temp.HasValue) bits.Add($"{g.Temp:0}°C");
-                    if (g.PowerW.HasValue) bits.Add($"{g.PowerW:0} W");
-                    var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
-                    var val = new TextBlock { Text = string.Join(" · ", bits), FontSize = 11, FontWeight = FontWeights.SemiBold };
-                    DockPanel.SetDock(val, Dock.Right);
-                    row.Children.Add(val);
-                    row.Children.Add(new TextBlock { Text = g.Name, FontSize = 11, Foreground = secondary, TextTrimming = TextTrimming.CharacterEllipsis });
-                    stack.Children.Add(row);
-                    stack.Children.Add(Bar((g.Util ?? 0) / 100.0, Color.FromRgb(0xFF, 0xB4, 0x54)));
-                }
-                var extra = new List<string>();
-                if (!string.IsNullOrEmpty(s.Training)) extra.Add(s.Training);
-                if (s.GpuProcs.Count > 0) extra.Add(string.Join("、", s.GpuProcs.Take(3).Select(p => p.Name + (p.MemGb > 0 ? $" {p.MemGb:0.0}G" : ""))));
-                if (extra.Count > 0)
-                    stack.Children.Add(new TextBlock { Text = string.Join("   ", extra), FontSize = 10, Foreground = tertiary, Margin = new Thickness(0, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
-            }
-            return new Border
-            {
-                Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(10, 6, 10, 7),
-                Margin = new Thickness(0, 0, 0, 6),
-                Child = stack
-            };
-        }
-
-        private FrameworkElement Bar(double ratio, Color color)
-        {
-            var g = new Grid { Height = 4, Margin = new Thickness(0, 3, 0, 0) };
-            g.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = (Brush)FindResource("TrackBg") });
-            g.Children.Add(new Border
-            {
-                CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(color), RenderTransformOrigin = new Point(0, 0.5),
-                RenderTransform = new ScaleTransform(Math.Clamp(ratio, 0, 1), 1)
-            });
-            return g;
-        }
-
-        private static string ShortUptime(double sec)
-        {
-            var t = TimeSpan.FromSeconds(sec);
-            return t.TotalDays >= 1 ? $"{(int)t.TotalDays} 天" : t.TotalHours >= 1 ? $"{(int)t.TotalHours} 小時" : $"{t.Minutes} 分";
+            else ApplyRgbStyle();
         }
 
         // ================================================================
@@ -358,7 +139,7 @@ namespace IslandBar
         }
 
         // ================================================================
-        //  收合時的狀態列：斷線、遠端 GPU、暫存檔案
+        //  收合時的狀態列：斷線、暫存檔案
         // ================================================================
 
         private string _compactStatusSig = "";
@@ -367,13 +148,6 @@ namespace IslandBar
         {
             var parts = new List<(string text, Color color)>();
             if (!_net.State.Online) parts.Add(("⚠ 沒有網路", Color.FromRgb(0xFF, 0x45, 0x3A)));
-            if (_settings.RemoteCompact && _remote != null)
-            {
-                var busy = _remote.Entries.Where(e => e.Online && e.GpuBusy).ToList();
-                foreach (var e in busy.Take(2))
-                    parts.Add(($"{e.DisplayName} {e.MaxGpuUtil:0}%", Color.FromRgb(0x64, 0xD2, 0xFF)));
-                if (busy.Count > 2) parts.Add(($"+{busy.Count - 2}", Color.FromRgb(0x64, 0xD2, 0xFF)));
-            }
             int shelf = _settings.ShelfFiles?.Count ?? 0;
             if (shelf > 0) parts.Add(($"暫存 {shelf}", Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)));
 
@@ -705,9 +479,7 @@ namespace IslandBar
             if (fresh)
             {
                 RgbRing.Visibility = Visibility.Visible;
-                RgbRing.Opacity = 1;
-                RgbRotate.BeginAnimation(RotateTransform.AngleProperty,
-                    new DoubleAnimation(0, 360, TimeSpan.FromSeconds(2.4)) { RepeatBehavior = RepeatBehavior.Forever });
+                ApplyRgbStyle();
                 if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
             }
             Peek(TimeSpan.FromSeconds(6));
@@ -733,8 +505,19 @@ namespace IslandBar
             if (_rgbApp == null) return;
             _rgbApp = null;
             _rgbTimer?.Stop();
-            RgbRotate.BeginAnimation(RotateTransform.AngleProperty, null);
+            RgbStyle.Stop(RgbRing, _rgbRotate);
             RgbRing.Visibility = Visibility.Collapsed;
+        }
+
+        private RotateTransform _rgbRotate;
+
+        /// <summary>依設定換邊框顏色、粗細、速度（正在亮的話直接換掉）</summary>
+        private void ApplyRgbStyle()
+        {
+            RgbStyle.Stop(RgbRing, _rgbRotate);
+            RgbRing.BorderBrush = RgbStyle.Build(RgbStyle.Parse(_settings.RgbColors), out _rgbRotate);
+            RgbRing.BorderThickness = new Thickness(Math.Clamp(_settings.RgbThickness, 1, 5));
+            if (_rgbApp != null) RgbStyle.Start(RgbRing, _rgbRotate, _settings.RgbSpeed);
         }
     }
 }
