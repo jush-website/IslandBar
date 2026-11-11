@@ -40,9 +40,25 @@ namespace IslandBar
             base.OnStartup(e);
 
             // Claude Code / Codex 的 hook 呼叫：把事件轉給正在執行的動態島就結束
+            // Claude Code 的狀態列：存下額度、輸出一行文字就結束
+            if (e.Args.Length >= 1 && e.Args[0] == "--statusline")
+            {
+                try { HookBridge.RunStatusLine(); } catch { }
+                Shutdown();
+                return;
+            }
+
             if (e.Args.Length >= 1 && e.Args[0] == "--hook")
             {
                 try { HookBridge.RunClient(e.Args); } catch { }
+                Shutdown();
+                return;
+            }
+
+            // 從安裝程式（msiexec）開起來的會帶著「重新導向防護」，讀不到 junction 後面的 C:\Users\…\.claude：
+            // 透過 explorer 重新開一次，變成跟從開始功能表開的一樣
+            if (Stability.RelaunchWithoutRedirectionGuard(e.Args))
+            {
                 Shutdown();
                 return;
             }
@@ -77,6 +93,7 @@ namespace IslandBar
                 Balloon("IslandBar · GPU", text, Forms.ToolTipIcon.Info);
             _window.OpenRadarRequested += OpenWindy;
             _window.SettingsRequested += () => OpenSettings();
+            _window.RestartRequested += RestartViaExplorer;
             _window.RecoverRequested += () => { foreach (var w in _widgets.ToList()) w.Recover(); };
             _window.Show();
 
@@ -119,6 +136,8 @@ namespace IslandBar
             claudeLoginTop.Click += (s, e) => _window?.RunLoginAction("claude-login");
             var codexLoginTop = new Forms.ToolStripMenuItem("⚠ 重新登入 Codex…") { Font = bold, Visible = false };
             codexLoginTop.Click += (s, e) => _window?.RunLoginAction("codex-login");
+            var restartTop = new Forms.ToolStripMenuItem("⚠ 讀不到 Claude：重新開啟 IslandBar") { Font = bold, Visible = false };
+            restartTop.Click += (s, e) => RestartViaExplorer();
 
             _installUpdateItem = new Forms.ToolStripMenuItem("立即更新") { Visible = false, Font = bold };
             _installUpdateItem.Click += async (s, e) => { if (_pendingUpdate != null) await InstallUpdateAsync(_pendingUpdate); };
@@ -181,12 +200,14 @@ namespace IslandBar
                 var pending = _window?.PendingLoginActions ?? new HashSet<string>();
                 claudeLoginTop.Visible = pending.Contains("claude-login");
                 codexLoginTop.Visible = pending.Contains("codex-login");
+                restartTop.Visible = pending.Contains("islandbar-restart");
                 if (_focusItem != null) _focusItem.Text = _window?.FocusRunning == true ? "結束專注模式" : "專注模式（25 分鐘 + 休息 5 分鐘）";
             };
 
             menu.Items.Add(header);
             menu.Items.Add(claudeLoginTop);
             menu.Items.Add(codexLoginTop);
+            menu.Items.Add(restartTop);
             menu.Items.Add(_installUpdateItem);
             menu.Items.Add(settings);
             menu.Items.Add(new Forms.ToolStripSeparator());
@@ -579,6 +600,25 @@ namespace IslandBar
                     key.DeleteValue(AppName, false);
             }
             catch { }
+        }
+
+        /// <summary>結束後 2 秒由 explorer 重新開啟（不帶任何繼承來的程序限制）</summary>
+        private void RestartViaExplorer()
+        {
+            try
+            {
+                string exe = Environment.ProcessPath;
+                string explorer = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                Log.Write("Restart via explorer requested");
+                Process.Start(new ProcessStartInfo("cmd.exe", $"/c timeout /t 2 /nobreak >nul & \"{explorer}\" \"{exe}\"")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+            }
+            catch (Exception ex) { Log.Error("RestartViaExplorer", ex); return; }
+            ExitApp();
         }
 
         private void ExitApp()

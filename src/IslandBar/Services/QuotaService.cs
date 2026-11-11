@@ -689,7 +689,12 @@ namespace IslandBar.Services
             catch (FileNotFoundException) { why = "不存在"; }
             catch (DirectoryNotFoundException) { why = "資料夾不存在"; }
             catch (UnauthorizedAccessException) { why = "沒有權限讀取（存取被拒）"; }
-            catch (IOException ex) { why = $"無法讀取（{ex.Message.Trim()}，0x{ex.HResult:X8}）"; }
+            catch (IOException ex)
+            {
+                why = $"無法讀取（{ex.Message.Trim()}，0x{ex.HResult:X8}）";
+                // 0x800701C0：路徑經過「未受信任的掛接點」（.claude 是 junction，而 IslandBar 被套用了重新導向防護）
+                if (ex.HResult == unchecked((int)0x800701C0)) ClaudeUntrustedMount = true;
+            }
             catch (Exception ex) { why = $"讀取失敗 {ex.GetType().Name}：{ex.Message.Trim()}"; }
             // 補充：資料夾看得到哪些 .credentials 檔案（只列檔名）
             try
@@ -705,6 +710,9 @@ namespace IslandBar.Services
             return null;
         }
 
+        /// <summary>讀 Claude 資料夾時遇到「未受信任的掛接點」：重新開啟 IslandBar（不是重新登入）才會好</summary>
+        public static bool ClaudeUntrustedMount { get; private set; }
+
         private static string ProcessIntegrity()
         {
             try
@@ -713,7 +721,7 @@ namespace IslandBar.Services
                 var sids = id.Groups?.Select(g => g.Value).ToList() ?? new List<string>();
                 string level = sids.Contains("S-1-16-16384") ? "System" : sids.Contains("S-1-16-12288") ? "High（系統管理員）" :
                                sids.Contains("S-1-16-8192") ? "Medium（一般）" : sids.Contains("S-1-16-4096") ? "Low" : "未知";
-                return $"{id.Name}，{level}";
+                return $"{id.Name}，{level}" + (Stability.RedirectionGuardEnforced ? "，重新導向防護：開啟" : "");
             }
             catch { return "未知"; }
         }
@@ -873,7 +881,14 @@ namespace IslandBar.Services
         private async Task<ProviderUsage> ReadClaudeAsync()
         {
             var result = await ReadClaudeInner();
-            if (result.Installed && !(result.Available && !result.Stale) && (!ClaudeLoggedIn() || _claudeAuthFailed))
+            if (result.Installed && !(result.Available && !result.Stale) && ClaudeUntrustedMount)
+            {
+                // 帳號其實是登入的，只是這個 IslandBar 程序走不進 junction：重新開啟就好
+                result.Attention = "Claude 資料夾讀不到，點這裡重新開啟 IslandBar";
+                result.AttentionAction = "islandbar-restart";
+                result.AttentionNotify = true;
+            }
+            else if (result.Installed && !(result.Available && !result.Stale) && (!ClaudeLoggedIn() || _claudeAuthFailed))
             {
                 result.Attention = "Claude 需重新登入";
                 result.AttentionAction = "claude-login";
@@ -897,7 +912,9 @@ namespace IslandBar.Services
             var recent = _claudeLive;
             TimeSpan age = recent?.UpdatedAt != null ? DateTimeOffset.Now - recent.UpdatedAt.Value : TimeSpan.MaxValue;
             if (recent != null && age < ClaudeInterval) return recent;
-            if (recent != null && DateTime.UtcNow < _claudeNextFetch) return CopyClaude(recent, true, _claudeProblem);
+            // Claude Code 狀態列送來的額度（不需要讀憑證）：比較新就用它
+            var fromStatusLine = ReadClaudeStatusLine();
+            if (recent != null && DateTime.UtcNow < _claudeNextFetch) return NewerClaude(fromStatusLine, CopyClaude(recent, true, _claudeProblem));
 
             if (DateTime.UtcNow >= _claudeNextFetch)
             {
@@ -931,6 +948,7 @@ namespace IslandBar.Services
                 }
             }
 
+            if (fromStatusLine != null && (recent?.UpdatedAt == null || fromStatusLine.UpdatedAt > recent.UpdatedAt)) return fromStatusLine;
             if (recent != null) return CopyClaude(recent, age > ClaudeInterval, _claudeProblem);
 
             // 最後退回 Claude Code 自己的 usage-cache.json
@@ -959,6 +977,48 @@ namespace IslandBar.Services
                     Message = cli != null && !loggedIn ? ClaudeLoginHint : "Claude Code 已登入，但暫時無法取得即時用量，也沒有可用的本機快取。"
                 };
             }
+        }
+
+        // ================================================================
+        //  Claude Code 狀態列（statusLine）送來的額度
+        // ================================================================
+
+        /// <summary>IslandBar.exe --statusline 寫的檔案：Claude Code 每次更新狀態列時的 rate_limits</summary>
+        public static string StatusLineFile =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IslandBar", "claude-statusline.json");
+
+        private static ProviderUsage NewerClaude(ProviderUsage statusLine, ProviderUsage other) =>
+            statusLine != null && (other?.UpdatedAt == null || statusLine.UpdatedAt > other.UpdatedAt) ? statusLine : other;
+
+        private static ProviderUsage ReadClaudeStatusLine()
+        {
+            try
+            {
+                if (!File.Exists(StatusLineFile)) return null;
+                using var doc = JsonDocument.Parse(File.ReadAllText(StatusLineFile));
+                var r = doc.RootElement;
+                var windows = new List<QuotaWindow>();
+                foreach (var (key, label) in new[] { ("five_hour", "5 小時額度"), ("seven_day", "每週 · 所有模型") })
+                {
+                    if (!r.TryGetProperty(key, out var w) || w.ValueKind != JsonValueKind.Object) continue;
+                    double? pct = Num(w, "used_percentage") ?? Num(w, "utilization");
+                    if (pct == null) continue;
+                    var reset = AnyTime(w, "resets_at");
+                    windows.Add(new QuotaWindow
+                    {
+                        Label = label, UsedPercent = pct, ResetsAt = reset,
+                        ResetPassed = reset.HasValue && reset.Value < DateTimeOffset.Now
+                    });
+                }
+                if (windows.Count == 0) return null;
+                var updated = AnyTime(r, "updatedAt") ?? new DateTimeOffset(File.GetLastWriteTime(StatusLineFile));
+                return new ProviderUsage
+                {
+                    Id = "claude", Name = "Claude", Installed = true, Available = true, Windows = windows, UpdatedAt = updated,
+                    Message = $"來自 Claude Code 狀態列（{Stamp(updated)}，用 Claude Code 時更新）"
+                };
+            }
+            catch { return null; }
         }
 
         private static void SaveClaudeCache(ProviderUsage live)

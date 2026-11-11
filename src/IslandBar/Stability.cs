@@ -109,6 +109,68 @@ namespace IslandBar
             catch (Exception ex) { Log.Error("Relaunch", ex); }
         }
 
+        // ---------------- 重新導向防護（Redirection Guard） ----------------
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetProcessMitigationPolicy(IntPtr process, int policy, out uint buffer, UIntPtr length);
+
+        private const int ProcessRedirectionTrustPolicy = 16;
+
+        /// <summary>
+        /// 這個程序是否被套用了「重新導向防護」：從 msiexec（安裝／更新完自動啟動）開起來的程序會繼承它，
+        /// 這時一般使用者建立的 junction（例如把 C:\Users\…\.claude 連到別的磁碟）都走不進去，
+        /// 讀 Claude 憑證會出現 0x800701C0「路徑包含未受信任的掛接點」。
+        /// </summary>
+        public static bool RedirectionGuardEnforced
+        {
+            get
+            {
+                try
+                {
+                    // 舊版 Windows 不認得這個政策：當作沒有
+                    if (!GetProcessMitigationPolicy(new IntPtr(-1), ProcessRedirectionTrustPolicy, out uint flags, (UIntPtr)4)) return false;
+                    return (flags & 1) != 0;   // EnforceRedirectionTrust
+                }
+                catch { return false; }
+            }
+        }
+
+        private static string RelaunchMarker =>
+            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IslandBar", "relaunch.txt");
+
+        /// <summary>
+        /// 被套用了重新導向防護就透過 explorer 重新開一次（跟從開始功能表開的一樣），回傳 true＝這個程序應該直接結束。
+        /// 30 秒內已經重開過一次就不再重開，避免無限循環。
+        /// </summary>
+        public static bool RelaunchWithoutRedirectionGuard(string[] args)
+        {
+            try
+            {
+                if (!RedirectionGuardEnforced) return false;
+                var marker = new System.IO.FileInfo(RelaunchMarker);
+                if (marker.Exists && DateTime.Now - marker.LastWriteTime < TimeSpan.FromSeconds(30))
+                {
+                    Log.Write("Redirection guard: 重新開啟後仍然有防護，繼續執行（Claude 憑證可能讀不到）");
+                    return false;
+                }
+                string exe = Environment.ProcessPath;
+                if (string.IsNullOrEmpty(exe)) return false;
+                System.IO.Directory.CreateDirectory(marker.DirectoryName);
+                System.IO.File.WriteAllText(marker.FullName, DateTime.Now.ToString("o"));
+                Log.Write("Redirection guard: 由安裝程式啟動，改用 explorer 重新開啟");
+                Process.Start(new ProcessStartInfo(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), "\"" + exe + "\"")
+                {
+                    UseShellExecute = false
+                });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("RelaunchWithoutRedirectionGuard", ex);
+                return false;
+            }
+        }
+
         /// <summary>啟動參數有 --wait-pid 時，等舊的那個結束（最多 15 秒）</summary>
         public static void WaitForPrevious(string[] args)
         {

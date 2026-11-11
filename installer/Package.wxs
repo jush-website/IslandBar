@@ -54,8 +54,8 @@
       <ComponentGroupRef Id="AppComponents" />
     </Feature>
 
-    <!-- 安裝完成後自動啟動 -->
-    <CustomAction Id="LaunchIslandBar" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]IslandBar.exe&quot;"
+    <!-- 安裝完成後自動啟動：透過 explorer 開，才不會繼承 msiexec 的「重新導向防護」（否則讀不到 junction 後面的 .claude 資料夾） -->
+    <CustomAction Id="LaunchIslandBar" Directory="INSTALLFOLDER" ExeCommand="&quot;[WindowsFolder]explorer.exe&quot; &quot;[INSTALLFOLDER]IslandBar.exe&quot;"
                   Return="asyncNoWait" Execute="immediate" Impersonate="yes" />
     <InstallExecuteSequence>
       <Custom Action="LaunchIslandBar" After="InstallFinalize" Condition="NOT REMOVE" />

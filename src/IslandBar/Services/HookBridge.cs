@@ -62,6 +62,88 @@ namespace IslandBar.Services
             }
         }
 
+        // ---------------- Claude Code 狀態列：IslandBar.exe --statusline ----------------
+
+        /// <summary>
+        /// Claude Code 更新狀態列時執行：從 stdin 讀 JSON，把 rate_limits（5 小時／每週額度）存起來給動態島用，
+        /// 再輸出一行狀態列文字（模型 · 5h % · 7d %）。不需要讀 Claude 的登入憑證。
+        /// </summary>
+        public static void RunStatusLine()
+        {
+            string json = ReadStdin(TimeSpan.FromSeconds(2));
+            string line = "IslandBar";
+            try
+            {
+                using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+                var r = doc.RootElement;
+                string model = r.TryGetProperty("model", out var m) ? (Str(m, "display_name") ?? Str(m, "id") ?? "") : "";
+                var parts = new List<string>();
+                if (model.Length > 0) parts.Add(model);
+                if (r.TryGetProperty("rate_limits", out var rl) && rl.ValueKind == JsonValueKind.Object)
+                {
+                    var o = new JsonObject { ["updatedAt"] = DateTimeOffset.Now.ToString("o") };
+                    foreach (var p in rl.EnumerateObject()) o[p.Name] = JsonNode.Parse(p.Value.GetRawText());
+                    string file = QuotaService.StatusLineFile;
+                    Directory.CreateDirectory(Path.GetDirectoryName(file));
+                    string tmp = file + "." + Environment.ProcessId + ".tmp";
+                    File.WriteAllText(tmp, o.ToJsonString());
+                    File.Move(tmp, file, true);
+                    foreach (var (key, label) in new[] { ("five_hour", "5h"), ("seven_day", "7d") })
+                        if (rl.TryGetProperty(key, out var w) && w.ValueKind == JsonValueKind.Object &&
+                            w.TryGetProperty("used_percentage", out var pct) && pct.ValueKind == JsonValueKind.Number)
+                            parts.Add($"{label} {pct.GetDouble():0}%");
+                }
+                if (parts.Count > 0) line = string.Join(" | ", parts);
+            }
+            catch { }
+            try
+            {
+                using var stdout = Console.OpenStandardOutput();
+                var bytes = Encoding.UTF8.GetBytes(line + "\n");
+                stdout.Write(bytes, 0, bytes.Length);
+            }
+            catch { }
+        }
+
+        private static string StatusLineCommand =>
+            $"\"{(Environment.ProcessPath ?? "IslandBar.exe").Replace('\\', '/')}\" --statusline";
+
+        public static bool IsClaudeStatusLineInstalled()
+        {
+            try { return File.Exists(ClaudeSettingsPath) && File.ReadAllText(ClaudeSettingsPath).Contains("--statusline"); }
+            catch { return false; }
+        }
+
+        /// <summary>設定 Claude Code 的 statusLine 指向 IslandBar（已經有自訂狀態列就不覆蓋）</summary>
+        public static string InstallClaudeStatusLine()
+        {
+            string path = ClaudeSettingsPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            JsonObject root;
+            if (File.Exists(path))
+            {
+                File.Copy(path, path + ".islandbar.bak", true);
+                root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? new JsonObject();
+            }
+            else root = new JsonObject();
+            string existing = root["statusLine"]?["command"]?.ToString();
+            if (!string.IsNullOrEmpty(existing) && !existing.Contains("--statusline"))
+                throw new InvalidOperationException("Claude Code 已經有自訂的狀態列（" + existing + "），為了不覆蓋它就沒有加。");
+            root["statusLine"] = new JsonObject { ["type"] = "command", ["command"] = StatusLineCommand, ["padding"] = 0 };
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            return path;
+        }
+
+        public static void UninstallClaudeStatusLine()
+        {
+            string path = ClaudeSettingsPath;
+            if (!File.Exists(path)) return;
+            var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+            if (root == null) return;
+            if ((root["statusLine"]?["command"]?.ToString() ?? "").Contains("--statusline")) root.Remove("statusLine");
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        }
+
         private static string ReadStdin(TimeSpan timeout)
         {
             try

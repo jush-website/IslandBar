@@ -48,8 +48,12 @@ namespace IslandBar
             }
         }
 
+        /// <summary>要求重新開啟 IslandBar（App 處理）</summary>
+        public event Action RestartRequested;
+
         public async void RunLoginAction(string action)
         {
+            if (action == "islandbar-restart") { RestartRequested?.Invoke(); return; }
             string cli, args, name;
             if (action == "claude-login")
             {

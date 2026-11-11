@@ -10,6 +10,12 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.14.1 修好「Claude 需重新登入」
+
+- **找到 Claude 一直顯示「需重新登入」的原因**：自動更新後，IslandBar 是由 Windows 安裝程式開起來的，會帶著安裝程式的「重新導向防護」，走不進用 junction 連到別處的 `C:\Users\…\.claude` 資料夾，所以讀不到登入資料（其實帳號是登入的）。現在安裝完改由檔案總管開啟，從安裝程式開起來的也會自動重新開一次，不會再出現。
+- 如果還是讀不到 Claude 資料夾，動態島與系統匣會顯示「重新開啟 IslandBar」，點一下就好，不用重新登入。
+- **Claude 額度的備用來源**：設定 → 通知與提示 →「用 Claude Code 狀態列取得 Claude 額度」。開啟後 Claude Code 每次更新狀態列時，會把 5 小時／每週額度交給 IslandBar，完全不需要讀登入資料，也不會被用量 API 限流（429）影響。
+
 ## v1.14.0 設定畫面、遠端電腦、暫存架
 
 - **新的設定畫面**：點一下系統匣圖示（或在動態島上按右鍵）就會打開，外觀、收合內容、通知、遠端電腦、GPU 與 PAIR、天氣與行程、桌面小工具、一般設定都在這裡，改了立刻生效。系統匣選單只留常用功能。
