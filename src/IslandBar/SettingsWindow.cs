@@ -501,7 +501,7 @@ namespace IslandBar
         private void BuildWidgets(StackPanel p)
         {
             p.Children.Add(PageTitle("桌面小工具"));
-            p.Children.Add(Note("釘在桌面上的時鐘、天氣、電腦效能、行程、AI 額度、PAIR。可以有多個，各自選區塊、順序與大小；在小工具上按右鍵也能設定。"));
+            p.Children.Add(Note("釘在桌面上的時鐘、天氣、電腦效能、行程、AI 額度、PAIR、一鍵加速。可以有多個，各自選區塊、順序與大小；在小工具上按右鍵也能設定。"));
             p.Children.Add(Check("顯示桌面小工具", S.WidgetEnabled, v => _h.SetWidgets?.Invoke(v)));
             var row = new WrapPanel();
             var add = MakeButton("＋ 新增小工具", true);

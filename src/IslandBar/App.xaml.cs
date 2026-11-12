@@ -101,6 +101,14 @@ namespace IslandBar
             int shotIdx = Array.IndexOf(e.Args, "--shot");
             if (shotIdx >= 0 && shotIdx + 1 < e.Args.Length) RunShots(e.Args[shotIdx + 1]);
             _settings.MigrateWidgets();
+            // v1.15.2：第一個桌面小工具自動加上「一鍵加速」區塊（之後可以在小工具設定拿掉）
+            if (_settings.WidgetSectionsVersion < 2)
+            {
+                var firstWidget = _settings.Widgets?.FirstOrDefault();
+                if (firstWidget != null && !firstWidget.Sections.Contains("boost")) firstWidget.Sections.Add("boost");
+                _settings.WidgetSectionsVersion = 2;
+                _settings.Save();
+            }
             if (_settings.WidgetEnabled) ShowWidgets();
             if (_settings.WindyPinned) OpenWindy();
             if (updateFailCode != 0)
