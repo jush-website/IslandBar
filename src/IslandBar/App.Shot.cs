@@ -36,12 +36,24 @@ namespace IslandBar
                     await Task.Delay(1500);
                     Save(_window.IslandVisual, Path.Combine(dir, "island-" + tab + ".png"));
                 }
+                // 桌面小工具（含一鍵加速區塊）
+                _settings.MigrateWidgets();
+                var wcfg = _settings.Widgets.First();
+                wcfg.Sections = new System.Collections.Generic.List<string> { "clock", "perf", "boost" };
+                _settings.WidgetEnabled = true;
+                CloseWidgets();
+                ShowWidgets();
+                await Task.Delay(2500);
+                if (_widgets.Count > 0) Save(_widgets[0].Content as Visual, Path.Combine(dir, "widget.png"));
+
                 var boost = await _window.RunBoostAsync();
                 await Task.Delay(300);
                 Save(_window.IslandVisual, Path.Combine(dir, "island-boost.png"));
                 if (boost != null)
                     File.WriteAllText(Path.Combine(dir, "boost.txt"), IslandBar.MainWindow.BoostSummary(boost) +
                         $"\ntrimmed={boost.TrimmedProcesses} temp={boost.TempFiles}/{boost.TempBytes} dumps={boost.DumpFiles}/{boost.DumpBytes} dns={boost.DnsFlushed}");
+                await Task.Delay(1500);
+                if (_widgets.Count > 0) Save(_widgets[0].Content as Visual, Path.Combine(dir, "widget-after.png"));
                 _window.DebugTestRgb();
                 await Task.Delay(1200);
                 Save(_window.IslandVisual, Path.Combine(dir, "island-rgb.png"));

@@ -548,6 +548,11 @@ namespace IslandBar
 
         private static readonly string GBoost = char.ConvertFromUtf32(0xEC4A);
         private bool _boosting;
+
+        /// <summary>給桌面小工具：最近一次加速的結果與時間、是否正在加速</summary>
+        public CleanupResult LastBoost { get; private set; }
+        public DateTime? LastBoostAt { get; private set; }
+        public bool Boosting => _boosting;
         private int _highRamTicks;
         private DateTime _lastAutoTrim = DateTime.MinValue;
         private System.Windows.Threading.DispatcherTimer _boostTimer;
@@ -562,6 +567,7 @@ namespace IslandBar
             if (_boosting) return null;
             _boosting = true;
             BoostText.Text = "加速中…";
+            RaiseDataChanged();
             ShowHud(GBoost, null, null, "加速中…", TimeSpan.FromMinutes(2));
             try
             {
@@ -574,6 +580,8 @@ namespace IslandBar
                 ShowHud(GBoost, null, null, BoostSummary(r), TimeSpan.FromSeconds(6));
                 Peek(TimeSpan.FromSeconds(6));
                 StatsTick();
+                LastBoost = r;
+                LastBoostAt = DateTime.Now;
                 return r;
             }
             catch (Exception ex)
@@ -586,6 +594,7 @@ namespace IslandBar
             {
                 _boosting = false;
                 BoostText.Text = "一鍵加速";
+                RaiseDataChanged();   // 桌面小工具更新「加速中／上次加速」
             }
         }
 

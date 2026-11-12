@@ -53,7 +53,7 @@ namespace IslandBar
 
         public static readonly (string id, string name)[] Sections =
         {
-            ("clock", "時鐘"), ("weather", "天氣"), ("perf", "電腦效能"), ("events", "行程"), ("quota", "AI 額度"), ("pair", "NVIDIA PAIR")
+            ("clock", "時鐘"), ("weather", "天氣"), ("perf", "電腦效能"), ("events", "行程"), ("quota", "AI 額度"), ("pair", "NVIDIA PAIR"), ("boost", "一鍵加速")
         };
 
         public DesktopWidget(MainWindow main, AppSettings settings, WidgetConfig cfg)
@@ -220,6 +220,8 @@ namespace IslandBar
             void Gap() { if (!first) _stack.Children.Add(new Border { Height = 1, Background = Track, Margin = new Thickness(0, 12, 0, 12) }); first = false; }
 
             _perfRows.Clear();
+            _boostRam = null;
+            _boostBar = null;
             _time = null;
             // 依設定的順序排列
             foreach (var id in _cfg.Sections.Distinct().ToList())
@@ -232,6 +234,7 @@ namespace IslandBar
                     case "events": Gap(); BuildEvents(); break;
                     case "quota": if (_main.QuotaItems.Count > 0) { Gap(); BuildQuota(); } break;
                     case "pair": Gap(); BuildPair(); break;
+                    case "boost": Gap(); BuildBoost(); break;
                 }
             }
             if (first)
@@ -239,7 +242,7 @@ namespace IslandBar
 
             UpdateClock();
             _clockTimer.Start();
-            if (_perfRows.Count > 0) { UpdatePerf(); _perfTimer.Start(); } else _perfTimer.Stop();
+            if (_perfRows.Count > 0 || _boostRam != null) { UpdatePerf(); _perfTimer.Start(); } else _perfTimer.Stop();
         }
 
         private void BuildClock()
@@ -368,8 +371,74 @@ namespace IslandBar
             _perfRows[id] = new PerfRow { Row = row, Label = lab, Value = val, Bar = scale };
         }
 
+        // ---------------- 一鍵加速 ----------------
+
+        private TextBlock _boostRam;
+        private ScaleTransform _boostBar;
+
+        private void BuildBoost()
+        {
+            _stack.Children.Add(new TextBlock { Text = "一鍵加速", FontSize = 12, Foreground = Secondary, Margin = new Thickness(0, 0, 0, 6) });
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            _boostRam = new TextBlock { FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+            left.Children.Add(_boostRam);
+            var bar = new Grid { Height = 5, Margin = new Thickness(0, 6, 12, 0) };
+            bar.Children.Add(new Border { CornerRadius = new CornerRadius(2.5), Background = Track });
+            _boostBar = new ScaleTransform(0, 1);
+            bar.Children.Add(new Border { CornerRadius = new CornerRadius(2.5), Background = Hex("#64D2FF"), RenderTransformOrigin = new Point(0, 0.5), RenderTransform = _boostBar });
+            left.Children.Add(bar);
+            row.Children.Add(left);
+
+            bool busy = _main.Boosting;
+            var label = new TextBlock { Text = busy ? "加速中…" : "加速", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            content.Children.Add(new TextBlock
+            {
+                Text = char.ConvertFromUtf32(0xEC4A), FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 15,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0)
+            });
+            content.Children.Add(label);
+            var btn = new Border
+            {
+                Child = content, CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 7, 14, 7),
+                Background = Hex(busy ? "#3364D2FF" : "#6664D2FF"), Cursor = busy ? Cursors.Wait : Cursors.Hand, VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "整理記憶體、清暫存檔（不會動到個人資料）"
+            };
+            // 按鈕上按下去不要變成拖曳小工具
+            btn.MouseLeftButtonDown += (s, e) => e.Handled = true;
+            btn.MouseLeftButtonUp += async (s, e) =>
+            {
+                e.Handled = true;
+                if (_main.Boosting) return;
+                label.Text = "加速中…";
+                await _main.RunBoostAsync();
+            };
+            btn.MouseEnter += (s, e) => { if (!_main.Boosting) btn.Background = Hex("#9964D2FF"); };
+            btn.MouseLeave += (s, e) => { if (!_main.Boosting) btn.Background = Hex("#6664D2FF"); };
+            Grid.SetColumn(btn, 1);
+            row.Children.Add(btn);
+            _stack.Children.Add(row);
+
+            if (_main.LastBoost != null && _main.LastBoostAt is DateTime at)
+            {
+                var r = _main.LastBoost;
+                string text = $"上次 {at:HH:mm}：記憶體 {r.RamPercentBefore:0}%→{r.RamPercentAfter:0}%" + (r.DiskFreed > 0 ? $"，清掉 {CleanupService.Size(r.DiskFreed)}" : "");
+                _stack.Children.Add(new TextBlock { Text = text, FontSize = 11, Foreground = Tertiary, Margin = new Thickness(0, 6, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+            }
+        }
+
         private void UpdatePerf()
         {
+            if (_boostRam != null)
+            {
+                var (pct, used, total) = CleanupService.Memory();
+                _boostRam.Text = $"記憶體 {pct:0}%  {used / 1073741824.0:0.0}/{total / 1073741824.0:0} GB";
+                _boostBar.ScaleX = Math.Clamp(pct / 100, 0, 1);
+            }
             if (_perfRows.Count == 0) return;
             var st = _main.Stats;
             var gpu = _main.Gpu;
