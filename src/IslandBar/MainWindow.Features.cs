@@ -412,11 +412,30 @@ namespace IslandBar
                 if (pid == 0) return null;
                 if (_procNames.TryGetValue(pid, out var n)) return n;
                 if (_procNames.Count > 300) _procNames.Clear();
-                n = Process.GetProcessById((int)pid).ProcessName;
+                n = FastProcessName(pid);
                 _procNames[pid] = n;
                 return n;
             }
             catch { return null; }
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool QueryFullProcessImageName(IntPtr process, int flags, System.Text.StringBuilder name, ref int size);
+
+        /// <summary>只問這一個程序的執行檔名稱（Process.GetProcessById 會列舉整台電腦的程序，在 UI 執行緒上太慢）</summary>
+        private static string FastProcessName(uint pid)
+        {
+            IntPtr h = OpenProcess(0x1000, false, pid);   // PROCESS_QUERY_LIMITED_INFORMATION
+            if (h == IntPtr.Zero) return "";
+            try
+            {
+                var sb = new System.Text.StringBuilder(1024);
+                int size = sb.Capacity;
+                return QueryFullProcessImageName(h, 0, sb, ref size) ? Path.GetFileNameWithoutExtension(sb.ToString()) : "";
+            }
+            finally { CloseHandle(h); }
         }
 
         private string WatchedApp(IntPtr hwnd)
@@ -459,14 +478,15 @@ namespace IslandBar
             try
             {
                 if (idObject != 0 || hwnd == IntPtr.Zero || hwnd == _hwnd) return;
+                if (!_settings.RgbNotify || _settings.RgbApps == null || _settings.RgbApps.Count == 0) return;
                 if (GetAncestor(hwnd, 2) != hwnd || !IsWindowVisible(hwnd)) return;   // GA_ROOT：只看最上層視窗
-                string app = WatchedApp(hwnd);
-                if (app == null || AppInForeground(app)) return;
+                // 先用便宜的大小檢查：通知小視窗通常很小，主視窗開起來不算
                 if (!GetWindowRect(hwnd, out var r)) return;
                 int w = r.Right - r.Left, h = r.Bottom - r.Top;
                 double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
-                // 通知小視窗通常很小；主視窗開起來不算
                 if (w <= 0 || h <= 0 || w > 560 * dpi || h > 420 * dpi) return;
+                string app = WatchedApp(hwnd);
+                if (app == null || AppInForeground(app)) return;
                 StartRgb(app);
             }
             catch { }

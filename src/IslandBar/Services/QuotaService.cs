@@ -1119,32 +1119,39 @@ namespace IslandBar.Services
             if (DateTime.UtcNow < _agNextDiscovery) return null;
             _agNextDiscovery = DateTime.UtcNow.AddSeconds(30);
 
-            var srv = await FindAntigravityServer();
-            if (!srv.found) { _agProblem = "not-running"; AgDiag("沒有找到執行中的 Antigravity 背景服務（language_server）"); return null; }
-            if (srv.token == null && srv.extToken == null) { _agProblem = "no-token"; AgDiag("找到程序但命令列沒有 --csrf_token"); return null; }
+            var servers = await FindAntigravityServers();
+            if (servers.Count == 0) { _agProblem = "not-running"; AgDiag("沒有找到執行中的 Antigravity 背景服務（language_server）"); return null; }
+            if (servers.All(sv => sv.token == null && sv.extToken == null)) { _agProblem = "no-token"; AgDiag("找到程序但命令列沒有 --csrf_token：" + string.Join(" / ", servers.Select(sv => sv.desc))); return null; }
 
-            // 先試所有監聽中的連接埠（HTTPS → HTTP），最後試 extension server 的連接埠（HTTP）
-            var tries = new List<(int port, string token, bool secure)>();
-            foreach (int port in srv.ports)
-            {
-                if (srv.token != null) { tries.Add((port, srv.token, true)); tries.Add((port, srv.token, false)); }
-            }
-            if (srv.extPort > 0) tries.Add((srv.extPort, srv.extToken ?? srv.token, false));
-
+            // 每個 Antigravity 背景程序都試：所有監聽中的連接埠（HTTPS → HTTP），最後試 extension server 的連接埠（HTTP）
             var notes = new List<string>();
-            foreach (var t in tries)
+            foreach (var srv in servers)
             {
-                var r = await AgQuery(t.port, t.token, t.secure, notes);
-                if (r != null)
+                var tries = new List<(int port, string token, bool secure)>();
+                foreach (int port in srv.ports)
                 {
-                    _agConn = t;
-                    AgDiag($"已連上：{(t.secure ? "https" : "http")} 連接埠 {t.port}");
-                    return r;
+                    foreach (var tok in new[] { srv.token, srv.extToken }.Where(t => t != null).Distinct())
+                    {
+                        tries.Add((port, tok, true));
+                        tries.Add((port, tok, false));
+                    }
+                }
+                if (srv.extPort > 0 && !srv.ports.Contains(srv.extPort)) tries.Add((srv.extPort, srv.extToken ?? srv.token, false));
+                foreach (var t in tries)
+                {
+                    var r = await AgQuery(t.port, t.token, t.secure, notes);
+                    if (r != null)
+                    {
+                        _agConn = t;
+                        AgDiag($"已連上：{(t.secure ? "https" : "http")} 連接埠 {t.port}（{srv.desc}）");
+                        return r;
+                    }
                 }
             }
             _agProblem = "request-failed";
-            _agProblemDetail = tries.Count == 0 ? "沒有開啟任何連接埠" : "連接埠都沒有回傳額度";
-            AgDiag($"程序找到了（連接埠 {string.Join(",", srv.ports)}，extension {srv.extPort}），但查不到額度：" + string.Join("；", notes.Take(8)));
+            _agProblemDetail = "連接埠都沒有回傳額度";
+            AgDiag("找到 " + servers.Count + " 個程序，但查不到額度。程序：" + string.Join(" / ", servers.Select(sv => sv.desc)) +
+                   "。嘗試：" + string.Join("；", notes.Take(12)));
             return null;
         }
 
@@ -1197,7 +1204,11 @@ namespace IslandBar.Services
                         Encoding.UTF8, "application/json")
                 };
                 req.Headers.TryAddWithoutValidation("Connect-Protocol-Version", "1");
-                if (!string.IsNullOrEmpty(token)) req.Headers.TryAddWithoutValidation("X-Codeium-Csrf-Token", token);
+                if (!string.IsNullOrEmpty(token))
+                {
+                    req.Headers.TryAddWithoutValidation("X-Codeium-Csrf-Token", token);
+                    req.Headers.TryAddWithoutValidation("X-Csrf-Token", token);
+                }
                 using var resp = await LocalHttp.SendAsync(req);
                 string body = await resp.Content.ReadAsStringAsync();
                 return ((int)resp.StatusCode, body);
@@ -1205,14 +1216,16 @@ namespace IslandBar.Services
             catch { return (0, null); }
         }
 
-        private static async Task<(bool found, string token, List<int> ports, int extPort, string extToken)> FindAntigravityServer()
+        /// <summary>找所有 Antigravity 的 language_server 程序；desc 是給記錄檔看的說明（只有參數名稱，不含 token 值）</summary>
+        private static async Task<List<(string token, List<int> ports, int extPort, string extToken, string desc)>> FindAntigravityServers()
         {
             // 程式名稱依版本可能是 language_server.exe、language_server_windows_x64.exe 或 language-server.exe
             const string script =
-                "$p = Get-CimInstance Win32_Process -Filter \"Name LIKE 'language%server%'\" | Where-Object { $_.CommandLine -match 'antigravity' } | " +
-                "Sort-Object { if ($_.CommandLine -match 'antigravity-ide') { 1 } else { 0 } } | Select-Object -First 1; " +
-                "if ($p) { [pscustomobject]@{ cmd = $p.CommandLine; ports = @(Get-NetTCPConnection -State Listen -OwningProcess $p.ProcessId -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort) } | ConvertTo-Json -Compress }";
-            var none = (false, (string)null, new List<int>(), 0, (string)null);
+                "$ps = @(Get-CimInstance Win32_Process -Filter \"Name LIKE 'language%server%'\" | Where-Object { $_.CommandLine -match 'antigravity' }); " +
+                "$out = @($ps | ForEach-Object { [pscustomobject]@{ name = $_.Name; cmd = $_.CommandLine; " +
+                "ports = @(Get-NetTCPConnection -State Listen -OwningProcess $_.ProcessId -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort -Unique) } }); " +
+                "ConvertTo-Json -InputObject $out -Compress -Depth 4";
+            var list = new List<(string token, List<int> ports, int extPort, string extToken, string desc)>();
             try
             {
                 string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
@@ -1222,30 +1235,38 @@ namespace IslandBar.Services
                 };
                 using var p = Process.Start(psi);
                 var outTask = p.StandardOutput.ReadToEndAsync();
-                if (await Task.WhenAny(outTask, Task.Delay(15000)) != outTask) { try { p.Kill(); } catch { } return none; }
+                if (await Task.WhenAny(outTask, Task.Delay(15000)) != outTask) { try { p.Kill(); } catch { } return list; }
                 string output = outTask.Result.Trim();
-                if (string.IsNullOrEmpty(output)) return none;
+                if (string.IsNullOrEmpty(output)) return list;
                 using var doc = JsonDocument.Parse(output);
-                string cmd = doc.RootElement.TryGetProperty("cmd", out var c) ? c.GetString() ?? "" : "";
-                string Arg(string name)
+                var items = doc.RootElement.ValueKind == JsonValueKind.Array ? doc.RootElement.EnumerateArray().ToList() : new List<JsonElement> { doc.RootElement };
+                foreach (var it in items)
                 {
-                    var m = Regex.Match(cmd, @"--" + name + @"[= ]+""?([^\s""]+)");
-                    return m.Success ? m.Groups[1].Value : null;
+                    string cmd = it.TryGetProperty("cmd", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() ?? "" : "";
+                    string name = it.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : "?";
+                    string Arg(string flag)
+                    {
+                        var m = Regex.Match(cmd, @"(?:^|\s)--" + flag + @"(?:=|\s+)""?([^\s""]+)");
+                        return m.Success ? m.Groups[1].Value : null;
+                    }
+                    var ports = new List<int>();
+                    if (it.TryGetProperty("ports", out var ps))
+                    {
+                        if (ps.ValueKind == JsonValueKind.Array) { foreach (var x in ps.EnumerateArray()) if (x.TryGetInt32(out int v) && !ports.Contains(v)) ports.Add(v); }
+                        else if (ps.TryGetInt32(out int single)) ports.Add(single);
+                    }
+                    int.TryParse(Arg("extension_server_port"), out int extPort);
+                    // 記錄檔只寫參數名稱（app_data_dir 寫值），token 不寫
+                    var flags = Regex.Matches(cmd, @"(?:^|\s)--([A-Za-z0-9_\-]+)").Select(m => m.Groups[1].Value).Distinct().ToList();
+                    string dataDir = Arg("app_data_dir");
+                    string desc = $"{name} 連接埠[{string.Join(",", ports)}] 參數[{string.Join(" ", flags)}]" + (dataDir != null ? $" app_data_dir={dataDir}" : "");
+                    list.Add((Arg("csrf_token"), ports, extPort, Arg("extension_server_csrf_token"), desc));
                 }
-                var ports = new List<int>();
-                if (doc.RootElement.TryGetProperty("ports", out var ps))
-                {
-                    if (ps.ValueKind == JsonValueKind.Array) { foreach (var x in ps.EnumerateArray()) if (x.TryGetInt32(out int v) && !ports.Contains(v)) ports.Add(v); }
-                    else if (ps.TryGetInt32(out int single)) ports.Add(single);
-                }
-                int.TryParse(Arg("extension_server_port"), out int extPort);
-                return (true, Arg("csrf_token"), ports, extPort, Arg("extension_server_csrf_token"));
+                // 桌面版（不是 antigravity-ide）優先
+                list = list.OrderBy(x => x.desc.Contains("antigravity-ide") ? 1 : 0).ToList();
             }
-            catch (Exception ex)
-            {
-                Log.Error("Quota.FindAntigravity", ex);
-                return none;
-            }
+            catch (Exception ex) { Log.Error("Quota.FindAntigravity", ex); }
+            return list;
         }
 
         /// <summary>

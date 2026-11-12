@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,8 +51,38 @@ namespace IslandBar
 
         // ---------------- 看門狗 ----------------
 
+        // 目前 UI 執行緒正在跑的工作（卡住時寫進記錄檔，才知道是誰）
+        private static volatile DispatcherOperation _curOp;
+        private static long _curOpStart;
+
+        private static string DescribeOp(DispatcherOperation op)
+        {
+            if (op == null) return "沒有正在執行的工作（可能卡在 Windows 訊息或畫面繪製）";
+            static string Name(Delegate d) => d == null ? "?" : $"{d.Method.DeclaringType?.Name}.{d.Method.Name}";
+            try
+            {
+                var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                var method = typeof(DispatcherOperation).GetField("_method", flags)?.GetValue(op) as Delegate;
+                string s = $"{op.Priority} {Name(method)}";
+                // 計時器：再往下找是哪個 Tick 處理常式
+                if (method?.Target is DispatcherTimer timer &&
+                    typeof(DispatcherTimer).GetField("Tick", flags)?.GetValue(timer) is EventHandler tick)
+                    s += " → " + string.Join(", ", tick.GetInvocationList().Select(Name));
+                return s;
+            }
+            catch { return op.Priority.ToString(); }
+        }
+
         private static void StartWatchdog(Dispatcher ui)
         {
+            try
+            {
+                ui.Hooks.OperationStarted += (s, e) => { _curOp = e.Operation; Interlocked.Exchange(ref _curOpStart, Environment.TickCount64); };
+                ui.Hooks.OperationCompleted += (s, e) => { if (ReferenceEquals(_curOp, e.Operation)) _curOp = null; };
+                ui.Hooks.OperationAborted += (s, e) => { if (ReferenceEquals(_curOp, e.Operation)) _curOp = null; };
+            }
+            catch (Exception ex) { Log.Error("Watchdog.Hooks", ex); }
+
             var t = new Thread(() =>
             {
                 long lastLoggedHang = 0;
@@ -60,14 +91,17 @@ namespace IslandBar
                     Thread.Sleep(5000);
                     try
                     {
-                        ui.BeginInvoke(new Action(() => Interlocked.Exchange(ref _lastPong, Environment.TickCount64)), DispatcherPriority.Background);
+                        // Normal 優先權：畫面一直在重繪（動畫）時也輪得到，不會被誤判成卡住
+                        ui.BeginInvoke(new Action(() => Interlocked.Exchange(ref _lastPong, Environment.TickCount64)), DispatcherPriority.Normal);
                     }
                     catch { return; } // Dispatcher 已關閉
                     long silent = Environment.TickCount64 - Interlocked.Read(ref _lastPong);
                     if (silent > 15000 && silent - lastLoggedHang > 15000)
                     {
                         lastLoggedHang = silent;
-                        Log.Write($"Watchdog: UI 已經 {silent / 1000} 秒沒有回應");
+                        var op = _curOp;
+                        long opSec = op != null ? (Environment.TickCount64 - Interlocked.Read(ref _curOpStart)) / 1000 : 0;
+                        Log.Write($"Watchdog: UI 已經 {silent / 1000} 秒沒有回應；正在執行：{DescribeOp(op)}" + (op != null ? $"（{opSec} 秒）" : ""));
                     }
                     // 電腦睡眠喚醒時 TickCount 會跳，所以要連續超過才算
                     if (silent > 45000)

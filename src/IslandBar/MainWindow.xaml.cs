@@ -875,9 +875,18 @@ namespace IslandBar
         }
         private DateTime _lastDay = DateTime.MinValue;
 
-        private void StatsTick()
+        private bool _statsSampling;
+
+        private async void StatsTick()
         {
-            _stats.Update();
+            // 讀網卡、磁碟、電池有時會卡一下（遠端桌面切換、網路磁碟），放到背景做，不拖住畫面
+            if (!_statsSampling)
+            {
+                _statsSampling = true;
+                try { await System.Threading.Tasks.Task.Run(() => _stats.Update()); }
+                catch (Exception ex) { Log.Error("Stats.Update", ex); }
+                finally { _statsSampling = false; }
+            }
             if (_mode == IslandMode.Expanded && TabStats.IsChecked == true) UpdateStatsUi();
             RefreshItems(); // 系統資源點點每秒更新
             ExtrasTick();

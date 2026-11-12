@@ -57,12 +57,20 @@ namespace IslandBar
             ring.BeginAnimation(UIElement.OpacityProperty, null);
             ring.Opacity = 1;
             if (rotate != null)
-                rotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, dur) { RepeatBehavior = RepeatBehavior.Forever });
+            {
+                var spin = new DoubleAnimation(0, 360, dur) { RepeatBehavior = RepeatBehavior.Forever };
+                Timeline.SetDesiredFrameRate(spin, 30);   // 動態島是軟體繪製，30 fps 就夠順，也比較省 CPU
+                rotate.BeginAnimation(RotateTransform.AngleProperty, spin);
+            }
             else
-                ring.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0.25, new Duration(TimeSpan.FromTicks(dur.Ticks / 2)))
+            {
+                var pulse = new DoubleAnimation(1, 0.25, new Duration(TimeSpan.FromTicks(dur.Ticks / 2)))
                 {
                     AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-                });
+                };
+                Timeline.SetDesiredFrameRate(pulse, 30);
+                ring.BeginAnimation(UIElement.OpacityProperty, pulse);
+            }
         }
 
         public static void Stop(UIElement ring, RotateTransform rotate)
