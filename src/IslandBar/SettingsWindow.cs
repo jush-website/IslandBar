@@ -564,7 +564,7 @@ namespace IslandBar
 
         private static CheckBox Check(string text, bool value, Action<bool> changed)
         {
-            var cb = new CheckBox { Content = text, IsChecked = value, Foreground = Brushes.White, Margin = new Thickness(0, 6, 0, 0) };
+            var cb = new CheckBox { Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap }, IsChecked = value, Foreground = Brushes.White, Margin = new Thickness(0, 6, 0, 0) };
             cb.Click += (s, e) => changed(cb.IsChecked == true);
             return cb;
         }

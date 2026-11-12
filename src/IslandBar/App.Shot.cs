@@ -36,6 +36,12 @@ namespace IslandBar
                     await Task.Delay(1500);
                     Save(_window.IslandVisual, Path.Combine(dir, "island-" + tab + ".png"));
                 }
+                var boost = await _window.RunBoostAsync();
+                await Task.Delay(300);
+                Save(_window.IslandVisual, Path.Combine(dir, "island-boost.png"));
+                if (boost != null)
+                    File.WriteAllText(Path.Combine(dir, "boost.txt"), MainWindow.BoostSummary(boost) +
+                        $"\ntrimmed={boost.TrimmedProcesses} temp={boost.TempFiles}/{boost.TempBytes} dumps={boost.DumpFiles}/{boost.DumpBytes} dns={boost.DnsFlushed}");
                 _window.DebugTestRgb();
                 await Task.Delay(1200);
                 Save(_window.IslandVisual, Path.Combine(dir, "island-rgb.png"));
