@@ -48,6 +48,7 @@ namespace IslandBar
             switch (tab)
             {
                 case "shelf": TabShelf.Visibility = Visibility.Visible; TabShelf.IsChecked = true; break;
+                case "quick": TabQuick.IsChecked = true; break;
                 default: TabStats.IsChecked = true; break;
             }
             SetMode(IslandMode.Expanded);
@@ -88,6 +89,7 @@ namespace IslandBar
                 _net.Start();
 
                 StartAppNotify();
+                StartAutoTrim();
             }
             catch (Exception ex) { Log.Error("StartFeatures", ex); }
             ApplyFeatureSettings();
@@ -518,6 +520,86 @@ namespace IslandBar
             RgbRing.BorderBrush = RgbStyle.Build(RgbStyle.Parse(_settings.RgbColors), out _rgbRotate);
             RgbRing.BorderThickness = new Thickness(Math.Clamp(_settings.RgbThickness, 1, 5));
             if (_rgbApp != null) RgbStyle.Start(RgbRing, _rgbRotate, _settings.RgbSpeed);
+        }
+
+        // ================================================================
+        //  一鍵加速：整理記憶體、清暫存檔（不碰個人資料）
+        // ================================================================
+
+        private static readonly string GBoost = char.ConvertFromUtf32(0xEC4A);
+        private bool _boosting;
+        private int _highRamTicks;
+        private DateTime _lastAutoTrim = DateTime.MinValue;
+        private System.Windows.Threading.DispatcherTimer _boostTimer;
+
+        private void Boost_Click(object sender, RoutedEventArgs e) => _ = RunBoostAsync();
+
+        private void IslandSettings_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
+
+        /// <summary>系統匣、設定畫面、快速設定的「一鍵加速」</summary>
+        public async Task<CleanupResult> RunBoostAsync()
+        {
+            if (_boosting) return null;
+            _boosting = true;
+            BoostText.Text = "加速中…";
+            ShowHud(GBoost, null, null, "加速中…", TimeSpan.FromMinutes(2));
+            try
+            {
+                var progress = new Progress<string>(t => { if (_mode == IslandMode.Hud && _hudIsMessage) HudMessage.Text = t; });
+                var r = await CleanupService.RunAsync(new CleanupOptions
+                {
+                    Memory = _settings.CleanMemory, Temp = _settings.CleanTemp, CrashDumps = _settings.CleanCrashDumps, Dns = _settings.CleanDns
+                }, progress);
+                try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+                ShowHud(GBoost, null, null, BoostSummary(r), TimeSpan.FromSeconds(6));
+                Peek(TimeSpan.FromSeconds(6));
+                StatsTick();
+                return r;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Boost", ex);
+                ShowNotice("加速失敗：" + ex.Message, TimeSpan.FromSeconds(4));
+                return null;
+            }
+            finally
+            {
+                _boosting = false;
+                BoostText.Text = "一鍵加速";
+            }
+        }
+
+        public static string BoostSummary(CleanupResult r)
+        {
+            var bits = new List<string>();
+            if (r.RamUsedBefore > 0) bits.Add($"記憶體 {r.RamPercentBefore:0}% → {r.RamPercentAfter:0}%" + (r.RamFreed > 0 ? $"（釋放 {CleanupService.Size(r.RamFreed)}）" : ""));
+            if (r.DiskFreed > 0) bits.Add($"清掉 {CleanupService.Size(r.DiskFreed)} 暫存檔");
+            return "加速完成：" + (bits.Count > 0 ? string.Join("，", bits) : "電腦已經很乾淨了");
+        }
+
+        /// <summary>記憶體用量連續一分鐘超過門檻就自動整理（只整理記憶體，最多 30 分鐘一次）</summary>
+        private void StartAutoTrim()
+        {
+            _boostTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            _boostTimer.Tick += async (s, e) =>
+            {
+                if (!_settings.AutoTrimMemory || _boosting) { _highRamTicks = 0; return; }
+                var (pct, _, _) = CleanupService.Memory();
+                _highRamTicks = pct >= Math.Clamp(_settings.AutoTrimThreshold, 50, 99) ? _highRamTicks + 1 : 0;
+                if (_highRamTicks < 2 || DateTime.Now - _lastAutoTrim < TimeSpan.FromMinutes(30)) return;
+                _lastAutoTrim = DateTime.Now;
+                _highRamTicks = 0;
+                _boosting = true;
+                try
+                {
+                    var r = await CleanupService.TrimMemoryAsync();
+                    if (r.RamFreed > 0 && !_userHidden && !_fullscreenHidden)
+                        ShowHud(GBoost, null, null, $"記憶體用量偏高，已自動整理：{r.RamPercentBefore:0}% → {r.RamPercentAfter:0}%", TimeSpan.FromSeconds(4));
+                }
+                catch (Exception ex) { Log.Error("AutoTrim", ex); }
+                finally { _boosting = false; }
+            };
+            _boostTimer.Start();
         }
     }
 }

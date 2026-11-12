@@ -84,6 +84,15 @@ namespace IslandBar
         /// <summary>邊框粗細（px）</summary>
         public double RgbThickness { get; set; } = 2;
 
+        /// <summary>一鍵加速要做哪些事</summary>
+        public bool CleanMemory { get; set; } = true;
+        public bool CleanTemp { get; set; } = true;
+        public bool CleanCrashDumps { get; set; } = true;
+        public bool CleanDns { get; set; } = true;
+        /// <summary>記憶體用量超過門檻時自動整理記憶體（最多 30 分鐘一次）</summary>
+        public bool AutoTrimMemory { get; set; } = false;
+        public int AutoTrimThreshold { get; set; } = 90;
+
         /// <summary>檔案暫存架裡的檔案</summary>
         public List<string> ShelfFiles { get; set; } = new List<string>();
 

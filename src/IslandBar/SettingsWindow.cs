@@ -56,6 +56,7 @@ namespace IslandBar
             ("appearance", "", "外觀"),
             ("compact", "", "收合內容"),
             ("notify", "", "通知與提示"),
+            ("boost", "\uEC4A", "一鍵加速"),
             ("gpu", "", "GPU 與 PAIR"),
             ("weather", "", "天氣與行程"),
             ("widgets", "", "桌面小工具"),
@@ -107,6 +108,7 @@ namespace IslandBar
             {
                 case "compact": BuildCompact(page); break;
                 case "notify": BuildNotify(page); break;
+                case "boost": BuildBoost(page); break;
                 case "gpu": BuildGpu(page); break;
                 case "weather": BuildWeather(page); break;
                 case "widgets": BuildWidgets(page); break;
@@ -360,6 +362,52 @@ namespace IslandBar
             p.Children.Add(Heading("粗細", 10));
             p.Children.Add(Slider(1, 5, S.RgbThickness, v => { S.RgbThickness = Math.Round(v * 2) / 2; Changed(); Refresh(); }, v => $"{Math.Round(v * 2) / 2:0.#} px"));
             Refresh();
+        }
+
+        // ================================================================
+        //  一鍵加速
+        // ================================================================
+
+        private void BuildBoost(StackPanel p)
+        {
+            p.Children.Add(PageTitle("一鍵加速"));
+            p.Children.Add(Note("像手機的加速工具：整理記憶體、清掉沒用的暫存檔。只清不會影響使用的東西，不會碰你的文件、桌面、下載、資源回收筒、瀏覽器資料，也不會關掉任何程式。展開動態島 → 快速設定 →「一鍵加速」，或系統匣選單也能用。"));
+
+            var (pct, used, total) = Services.CleanupService.Memory();
+            var mem = new TextBlock { FontSize = 13, Margin = new Thickness(0, 8, 0, 0), Text = $"目前記憶體：{pct:0}%（{Services.CleanupService.Size(used)} / {Services.CleanupService.Size(total)}）" };
+            p.Children.Add(mem);
+
+            var result = new TextBlock { FontSize = 13, Foreground = Good, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+            var run = MakeButton("立即加速", true);
+            run.Click += async (s, e) =>
+            {
+                if (_h.Window == null) return;
+                run.IsEnabled = false;
+                result.Foreground = Dim;
+                result.Text = "加速中…";
+                var r = await _h.Window.RunBoostAsync();
+                run.IsEnabled = true;
+                if (r == null) { result.Text = "正在加速中，請稍等"; return; }
+                result.Foreground = Good;
+                result.Text = MainWindow.BoostSummary(r) +
+                    $"\n整理了 {r.TrimmedProcesses} 個程式的記憶體，刪掉 {r.TempFiles + r.DumpFiles} 個暫存／當機記錄檔" + (r.DnsFlushed ? "，DNS 快取已清除" : "") + "。";
+                var m = Services.CleanupService.Memory();
+                mem.Text = $"目前記憶體：{m.percent:0}%（{Services.CleanupService.Size(m.used)} / {Services.CleanupService.Size(m.total)}）";
+            };
+            p.Children.Add(run);
+            p.Children.Add(result);
+
+            p.Children.Add(Heading("要清哪些", 20));
+            p.Children.Add(Check("整理記憶體：請各程式把暫時用不到的記憶體還給系統（不會關掉程式；正在用的視窗不動）", S.CleanMemory, v => { S.CleanMemory = v; S.Save(); }));
+            p.Children.Add(Check("暫存檔：只清 Temp 資料夾裡超過一天沒動過的檔案（正在用的會自動略過）", S.CleanTemp, v => { S.CleanTemp = v; S.Save(); }));
+            p.Children.Add(Check("當機傾印與錯誤報告（程式當掉時留下的除錯檔）", S.CleanCrashDumps, v => { S.CleanCrashDumps = v; S.Save(); }));
+            p.Children.Add(Check("DNS 快取（網址查詢的暫存，清掉可以解決部分網站連不上）", S.CleanDns, v => { S.CleanDns = v; S.Save(); }));
+
+            p.Children.Add(Heading("自動整理", 20));
+            p.Children.Add(Check("記憶體用量太高時自動整理記憶體（最多 30 分鐘一次）", S.AutoTrimMemory, v => { S.AutoTrimMemory = v; S.Save(); }));
+            p.Children.Add(Heading("超過多少算太高", 8));
+            p.Children.Add(Slider(70, 98, S.AutoTrimThreshold, v => { S.AutoTrimThreshold = (int)Math.Round(v); S.Save(); }, v => $"{v:0}%"));
+            p.Children.Add(Note("說明：Windows 本來就會自己管理記憶體，整理後的數字會立刻下降，但程式要用時會再拿回去；真正卡頓多半是開太多程式，或記憶體本身不夠。"));
         }
 
         private FrameworkElement HookCheck(string text, Func<bool> installed, Func<string> install, Action uninstall)

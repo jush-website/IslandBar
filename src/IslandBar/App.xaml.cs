@@ -170,6 +170,8 @@ namespace IslandBar
             accounts.DropDownItems.Add(new Forms.ToolStripSeparator());
             accounts.DropDownItems.Add(refreshQuota);
 
+            var boost = new Forms.ToolStripMenuItem("一鍵加速（整理記憶體、清暫存檔）");
+            boost.Click += (s, e) => { if (_window != null) _ = _window.RunBoostAsync(); };
             var windy = new Forms.ToolStripMenuItem("Windy 雷達…");
             windy.Click += (s, e) => OpenWindy();
 
@@ -215,6 +217,7 @@ namespace IslandBar
             menu.Items.Add(_recentItem);
             menu.Items.Add(ocr);
             menu.Items.Add(_focusItem);
+            menu.Items.Add(boost);
             menu.Items.Add(windy);
             menu.Items.Add(accounts);
             menu.Items.Add(new Forms.ToolStripSeparator());

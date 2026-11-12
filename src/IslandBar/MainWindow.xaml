@@ -826,7 +826,13 @@
                                            HorizontalAlignment="Right" VerticalAlignment="Center" />
                             </Grid>
                         </Border>
-                        <UniformGrid Grid.Row="1" Columns="3" Rows="2" Margin="-4,4,-4,-4">
+                        <UniformGrid Grid.Row="1" Columns="4" Rows="2" Margin="-4,4,-4,-4">
+                            <Button x:Name="BoostTile" Style="{StaticResource TileButton}" Click="Boost_Click" ToolTip="整理記憶體、清暫存檔（不會動到個人資料）">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xEC4A;" FontSize="17" Foreground="#64D2FF" />
+                                    <TextBlock x:Name="BoostText" Text="一鍵加速" FontSize="11" Margin="0,6,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                             <Button x:Name="DarkModeTile" Style="{StaticResource TileButton}" Click="DarkMode_Click">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Glyph}" Text="&#xE708;" FontSize="17" />
@@ -860,7 +866,13 @@
                             <Button Style="{StaticResource TileButton}" Click="Settings_Click">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Glyph}" Text="&#xE713;" FontSize="17" />
-                                    <TextBlock Text="設定" FontSize="11" Margin="0,6,0,0" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Windows 設定" FontSize="11" Margin="0,6,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource TileButton}" Click="IslandSettings_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE771;" FontSize="17" />
+                                    <TextBlock Text="動態島設定" FontSize="11" Margin="0,6,0,0" HorizontalAlignment="Center" />
                                 </StackPanel>
                             </Button>
                         </UniformGrid>
