@@ -1,0 +1,8 @@
+2026-11-12 13:14:55.830  IslandBar v1.15.1 started (installed=False)
+2026-11-12 13:14:55.838  [ERROR] Audio.GetDefaultAudioEndpoint（找不到預設播放裝置？）: COMException: Element not found. (0x80070490)
+2026-11-12 13:14:56.707  Media session: (none)
+2026-11-12 13:14:56.741  Downloads: watching C:\Users\runneradmin\Downloads
+2026-11-12 13:15:01.865  Antigravity: 沒有找到執行中的 Antigravity 背景服務（language_server）
+2026-11-12 13:15:16.348  [ERROR] Audio.GetDefaultAudioEndpoint（找不到預設播放裝置？）: COMException: Element not found. (0x80070490)
+2026-11-12 13:15:19.404  [ERROR] Audio.GetDefaultAudioEndpoint（找不到預設播放裝置？）: COMException: Element not found. (0x80070490)
+2026-11-12 13:15:25.560  Cleanup: RAM 19% → 14%（133 個程式）、暫存 46 個 287.2 MB、當機記錄 0 個 0.0 MB、DNS 已清
