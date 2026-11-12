@@ -390,6 +390,7 @@ namespace IslandBar
                 if (r == null) { result.Text = "正在加速中，請稍等"; return; }
                 result.Foreground = Good;
                 result.Text = MainWindow.BoostSummary(r) +
+                    (r.RamFreed > 0 ? $"（釋放 {Services.CleanupService.Size(r.RamFreed)} 記憶體）" : "") +
                     $"\n整理了 {r.TrimmedProcesses} 個程式的記憶體，刪掉 {r.TempFiles + r.DumpFiles} 個暫存／當機記錄檔" + (r.DnsFlushed ? "，DNS 快取已清除" : "") + "。";
                 var m = Services.CleanupService.Memory();
                 mem.Text = $"目前記憶體：{m.percent:0}%（{Services.CleanupService.Size(m.used)} / {Services.CleanupService.Size(m.total)}）";

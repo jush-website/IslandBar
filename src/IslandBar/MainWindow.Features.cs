@@ -571,10 +571,11 @@ namespace IslandBar
 
         public static string BoostSummary(CleanupResult r)
         {
+            // 動態島的提示列不長，寫短一點；釋放多少記憶體寫在設定畫面
             var bits = new List<string>();
-            if (r.RamUsedBefore > 0) bits.Add($"記憶體 {r.RamPercentBefore:0}% → {r.RamPercentAfter:0}%" + (r.RamFreed > 0 ? $"（釋放 {CleanupService.Size(r.RamFreed)}）" : ""));
-            if (r.DiskFreed > 0) bits.Add($"清掉 {CleanupService.Size(r.DiskFreed)} 暫存檔");
-            return "加速完成：" + (bits.Count > 0 ? string.Join("，", bits) : "電腦已經很乾淨了");
+            if (r.RamUsedBefore > 0) bits.Add($"記憶體 {r.RamPercentBefore:0}%→{r.RamPercentAfter:0}%");
+            if (r.DiskFreed > 0) bits.Add($"清掉 {CleanupService.Size(r.DiskFreed)}");
+            return "加速完成" + (bits.Count > 0 ? "：" + string.Join("，", bits) : "：電腦已經很乾淨了");
         }
 
         /// <summary>記憶體用量連續一分鐘超過門檻就自動整理（只整理記憶體，最多 30 分鐘一次）</summary>
