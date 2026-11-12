@@ -40,7 +40,7 @@ namespace IslandBar
                 await Task.Delay(300);
                 Save(_window.IslandVisual, Path.Combine(dir, "island-boost.png"));
                 if (boost != null)
-                    File.WriteAllText(Path.Combine(dir, "boost.txt"), MainWindow.BoostSummary(boost) +
+                    File.WriteAllText(Path.Combine(dir, "boost.txt"), IslandBar.MainWindow.BoostSummary(boost) +
                         $"\ntrimmed={boost.TrimmedProcesses} temp={boost.TempFiles}/{boost.TempBytes} dumps={boost.DumpFiles}/{boost.DumpBytes} dns={boost.DnsFlushed}");
                 _window.DebugTestRgb();
                 await Task.Delay(1200);
