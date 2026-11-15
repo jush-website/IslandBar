@@ -59,6 +59,8 @@ namespace IslandBar
             FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft JhengHei UI");
             FontSize = 13.5;
             SourceInitialized += (s, e) => DarkTitleBar();
+            try { Resources.MergedDictionaries.Add((ResourceDictionary)System.Windows.Markup.XamlReader.Parse(ScrollBarXaml)); } catch (Exception ex) { Log.Error("AssistantWindow.Style", ex); }
+            _content.Background = Bg;
             KeyDown += (s, e) => { if (e.Key == Key.Escape) Close(); };
 
             var grid = new Grid();
@@ -461,6 +463,38 @@ namespace IslandBar
             br.Freeze();
             return br;
         }
+
+        /// <summary>深色細捲軸（預設的捲軸是亮灰色，跟深色畫面不搭）</summary>
+        private const string ScrollBarXaml = @"
+<ResourceDictionary xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>
+  <Style TargetType='ScrollBar'>
+    <Setter Property='Width' Value='10' />
+    <Setter Property='MinWidth' Value='10' />
+    <Setter Property='Background' Value='Transparent' />
+    <Setter Property='Template'>
+      <Setter.Value>
+        <ControlTemplate TargetType='ScrollBar'>
+          <Grid Background='Transparent'>
+            <Track x:Name='PART_Track' IsDirectionReversed='True'>
+              <Track.Thumb>
+                <Thumb>
+                  <Thumb.Template>
+                    <ControlTemplate TargetType='Thumb'>
+                      <Border x:Name='T' Background='#3A3A40' CornerRadius='3' Width='6' Margin='2,2,2,2' />
+                      <ControlTemplate.Triggers>
+                        <Trigger Property='IsMouseOver' Value='True'><Setter TargetName='T' Property='Background' Value='#55555D' /></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>";
 
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 

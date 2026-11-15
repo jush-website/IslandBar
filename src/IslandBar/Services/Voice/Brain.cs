@@ -45,9 +45,11 @@ namespace IslandBar.Services.Voice
         public Func<string> PreferredModel { get; set; } = () => "";
         public Func<string> CustomUrl { get; set; } = () => "";
         public LocalLlm Local { get; }
+        /// <summary>測試用：把 AI 的原始回應寫進記錄檔</summary>
+        public static bool Debug { get; set; }
 
         private readonly Commands _cmd;
-        private static readonly HttpClient Probe = new HttpClient { Timeout = TimeSpan.FromMilliseconds(1500) };
+        private static readonly HttpClient Probe = new HttpClient { Timeout = TimeSpan.FromMilliseconds(1200) };
         private static readonly HttpClient Chat = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
         private BrainInfo _cached;
         private DateTime _cachedAt;
@@ -75,9 +77,14 @@ namespace IslandBar.Services.Voice
                 string custom = (CustomUrl() ?? "").Trim().TrimEnd('/');
                 if (custom.Length > 0) urls.Add(custom.EndsWith("/v1") ? custom[..^3] : custom);
                 foreach (int p in Ports() ?? Array.Empty<int>()) urls.Add($"http://127.0.0.1:{p}");
-                foreach (var url in urls.Distinct())
+                // 同時問所有的埠（沒開的會很快失敗），再照順序挑第一個有模型的
+                var distinct = urls.Distinct().ToList();
+                var probes = distinct.Select(u => ListModelsAsync(u, ct)).ToList();
+                await Task.WhenAll(probes);
+                for (int i = 0; i < distinct.Count; i++)
                 {
-                    var models = await ListModelsAsync(url, ct);
+                    string url = distinct[i];
+                    var models = probes[i].Result;
                     if (models.Count == 0) continue;
                     string model = ChooseModel(models, PreferredModel());
                     if (model == null) continue;
@@ -192,6 +199,7 @@ namespace IslandBar.Services.Voice
                     Log.Write($"Voice: AI 回應 {(int)resp.StatusCode}：{Truncate(json, 300)}");
                     throw new InvalidOperationException($"AI 大腦回應錯誤（{(int)resp.StatusCode}）");
                 }
+                if (Debug) Log.Write("Voice（除錯）AI 原始回應：" + Truncate(json, 900));
                 var msg = JsonNode.Parse(json)?["choices"]?[0]?["message"];
                 if (msg == null) throw new InvalidOperationException("AI 大腦回應格式不對");
                 string content = StripThink(msg["content"]?.GetValue<string>() ?? "");

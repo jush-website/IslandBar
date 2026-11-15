@@ -19,6 +19,7 @@ namespace IslandBar.Services.Voice
 
         public string VoiceName { get; set; } = "";
         public double Rate { get; set; } = 1.0;
+        public long LastBytes { get; private set; }
 
         public static List<(string name, string lang)> Voices()
         {
@@ -59,6 +60,7 @@ namespace IslandBar.Services.Voice
                 if (seq != _seq) return TimeSpan.Zero;   // 已經被下一句取代
                 ms.Position = 0;
                 var dur = WavDuration(ms);
+                LastBytes = ms.Length;
                 ms.Position = 0;
                 _player = new SoundPlayer(ms);
                 _player.Play();   // 非同步播放

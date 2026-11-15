@@ -89,7 +89,8 @@ namespace IslandBar
                     // 48 kHz 雙聲道麥克風常見的取樣率：先重新取樣成 48k 再丟進去（確認引擎會自己轉）
                     var up = Resample(samples, rate, 48000);
                     sw.Restart();
-                    W($"48 kHz：{sw.ElapsedMilliseconds} ms →「{await stt.RecognizeAsync(up, 48000)}」");
+                    string t48 = await stt.RecognizeAsync(up, 48000);
+                    W($"48 kHz：{sw.ElapsedMilliseconds} ms →「{t48}」");
                 }
                 W("簡轉繁：" + SpeechToText.ToTraditional("打开软件，帮我设置一个计时器，网络视频"));
 
@@ -99,12 +100,15 @@ namespace IslandBar
                     foreach (var v in Speaker.Voices()) W($"  {v.name} {v.lang}");
                     using var sp = new Speaker();
                     var dur = await sp.SpeakAsync("測試語音");
-                    W($"合成 OK，{dur.TotalSeconds:0.0} 秒");
+                    W($"合成 OK，{dur.TotalSeconds:0.0} 秒，{sp.LastBytes} bytes");
                 }
                 catch (Exception ex) { W("語音失敗：" + ex.Message); }
 
+                Brain.Debug = true;
+                foreach (var modelId in (Environment.GetEnvironmentVariable("ISLANDBAR_TEST_MODELS") ?? "qwen3.5-0.8b,qwen3.5-2b").Split(','))
+                {
                 W("\n== 本機小模型（llama-server）");
-                var model = ModelStore.LocalModel(Environment.GetEnvironmentVariable("ISLANDBAR_TEST_MODEL") ?? "qwen3.5-0.8b");
+                var model = ModelStore.LocalModel(modelId.Trim());
                 sw.Restart();
                 await ModelStore.DownloadLocalModelAsync(model, new Progress<DownloadProgress>(_ => { }), CancellationToken.None);
                 W($"下載 {model.Name} {sw.Elapsed.TotalSeconds:0.0} 秒，llama={ModelStore.LlamaReady}");
@@ -146,6 +150,7 @@ namespace IslandBar
                             catch (Exception ex) { W($"問：{q}\n失敗：{ex.Message}"); }
                         }
                     }
+                }
                 }
             }
             catch (Exception ex) { W("錯誤：" + ex); }

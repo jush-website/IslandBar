@@ -69,7 +69,7 @@ namespace IslandBar.Services.Voice
             if (Regex.IsMatch(t, @"^(上一首|上一曲|previous|前一首)(歌)?$")) return await Media("previous");
             if (Regex.IsMatch(t, @"^(暫停|停止|停一下|停|先停|pause|stop)(音樂|播放|歌)?$|^(音樂|歌)(暫停|停止|停)$")) return await Media("pause");
             if (Regex.IsMatch(t, @"^(繼續|繼續播放|播放|播放音樂|放音樂|放歌|play|resume)$")) return await Media("play");
-            if (Regex.IsMatch(t, @"(現在|正在)?(放|播|聽)(的)?(是)?(什麼|哪首|啥)(歌)?|這(首|是)(什麼|哪首)歌|歌名")) return Done(_host.NowPlaying());
+            if (Regex.IsMatch(t, @"(現在|正在)?(放|播|聽)(的)?(是)?(什麼|哪首|啥)(歌)?|這(首|是)(什麼|哪首)歌|這首歌(叫|是)(什麼|啥)|什麼歌|歌名")) return Done(_host.NowPlaying());
 
             // ---- 音量 ----
             m = Regex.Match(t, @"音量(調到|調成|設成|設為|設定為|開到|轉到|改成|到|為)?(\d{1,3}|[零一二兩三四五六七八九十百]+)");
@@ -79,7 +79,7 @@ namespace IslandBar.Services.Voice
             if (Regex.IsMatch(t, @"(大聲|音量(調|開|轉)?(大|高)|聲音(調|開|轉)?(大|高)|volumeup)")) return Done(_host.SetVolume(null, "up"));
             if (Regex.IsMatch(t, @"(小聲|音量(調|關|轉)?(小|低)|聲音(調|關|轉)?(小|低)|volumedown)")) return Done(_host.SetVolume(null, "down"));
             m = Regex.Match(t, @"^(我想聽|我要聽|播放|播|放一首|放一些|來點|來一首|play)(.+?)(的歌|的音樂|的專輯|的歌曲)?$");
-            if (m.Success && m.Groups[2].Value.Length > 0) return PlayMusic(m.Groups[2].Value);
+            if (m.Success && m.Groups[2].Value.Length > 0) return PlayMusic(RawAfter(text, @"我想聽|我要聽|播放|播|放一首|放一些|來點|來一首|play", @"的歌曲|的歌|的音樂|的專輯") ?? m.Groups[2].Value);
 
             // ---- 計時、提醒 ----
             if (Regex.IsMatch(t, @"^(取消|關掉|停止)(所有的?)?(提醒|計時|倒數)")) { int n = _cancelReminders(); return Done(n > 0 ? $"已取消 {n} 個提醒" : "目前沒有提醒"); }
@@ -95,7 +95,7 @@ namespace IslandBar.Services.Voice
             // ---- 時間、狀態 ----
             if (Regex.IsMatch(t, @"(現在)?幾點(了|鐘)?$|現在時間|what(')?stime")) return Done(_host.Status("time"));
             if (Regex.IsMatch(t, @"(今天)(是)?(幾號|幾月幾號|星期幾|禮拜幾|日期)")) return Done(_host.Status("date"));
-            if (Regex.IsMatch(t, @"天氣|會不會下雨|會下雨嗎|氣溫|幾度|要帶傘")) return Done(_host.Status("weather"));
+            if (Regex.IsMatch(t, @"天氣|下雨|下雪|颱風|氣溫|幾度|要帶傘|冷不冷|熱不熱")) return Done(_host.Status("weather"));
             if (Regex.IsMatch(t, @"加速|清理(記憶體|電腦|一下)?$|電腦(好|很|有點)?(卡|慢|lag)|boost")) return Done(await _host.BoostAsync());
             if (Regex.IsMatch(t, @"額度|用量|quota|token")) return Done(_host.Status("quota"));
             if (Regex.IsMatch(t, @"^(電腦|系統)?(狀態|效能)|cpu|記憶體(用量|使用)?|顯卡|gpu|溫度")) return Done(_host.Status(t.Contains("gpu") || t.Contains("顯卡") ? "gpu" : "all"));
@@ -104,19 +104,32 @@ namespace IslandBar.Services.Voice
 
             // ---- 搜尋 ----
             m = Regex.Match(t, @"^(在)?(youtube|油管|yt)(上)?(搜尋|搜|找|查|播放|播)?(.+)$");
-            if (m.Success && m.Groups[5].Value.Length > 0) return WebSearch(m.Groups[5].Value, "youtube");
+            if (m.Success && m.Groups[5].Value.Length > 0) return WebSearch(RawAfter(text, @"(在\s*)?(youtube|油管|yt)\s*(上)?\s*(搜尋|搜|找|查|播放|播)?", null) ?? m.Groups[5].Value, "youtube");
             m = Regex.Match(t, @"^(google|谷歌|搜尋|搜索|查一下|查查|查|找一下|search)(一下)?(.+)$");
-            if (m.Success && m.Groups[3].Value.Length > 0) return WebSearch(m.Groups[3].Value, "google");
+            if (m.Success && m.Groups[3].Value.Length > 0) return WebSearch(RawAfter(text, @"(google|谷歌|搜尋|搜索|查一下|查查|查|找一下|search)(一下)?", null) ?? m.Groups[3].Value, "google");
 
             // ---- 打開程式、網站 ----
             m = Regex.Match(t, @"^(打開|開啟|啟動|執行|開|open|launch|start|進入|去)(.+?)(網站|網頁|程式|軟體|app|應用程式)?$");
             if (m.Success && m.Groups[2].Value.Length > 0)
             {
-                var r = Open(m.Groups[2].Value);
+                var r = Open(RawAfter(text, @"打開|開啟|啟動|執行|開|open|launch|start|進入|去", @"網站|網頁|程式|軟體|app|應用程式") ?? m.Groups[2].Value);
                 if (r.Ok) return r;
                 return null;   // 讓 AI 再試著理解
             }
             return null;
+        }
+
+        /// <summary>從原本的句子（保留大小寫、網址的點）取出動詞後面的東西</summary>
+        private static string RawAfter(string text, string verbs, string suffixes)
+        {
+            var m = Regex.Match(text ?? "", @"(" + verbs + @")\s*(.+)$", RegexOptions.IgnoreCase);
+            if (!m.Success) return null;
+            string rest = m.Groups[m.Groups.Count - 1].Value.Trim();
+            rest = Regex.Replace(rest, @"[\s，。、！？!?,；;～~…」』""']+$", "");
+            rest = Regex.Replace(rest, @"(一下|好嗎|好不好|可以嗎|謝謝|吧|啦|喔|哦|呢|嗎)+$", "");
+            if (!string.IsNullOrEmpty(suffixes)) rest = Regex.Replace(rest, "(" + suffixes + ")$", "", RegexOptions.IgnoreCase);
+            rest = rest.Trim();
+            return rest.Length > 0 ? rest : null;
         }
 
         private static string Clean(string s) => Regex.Replace(s ?? "", @"^(要|去|記得|該)+", "").Trim();
