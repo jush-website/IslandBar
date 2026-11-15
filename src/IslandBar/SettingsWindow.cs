@@ -28,6 +28,7 @@ namespace IslandBar
         public Action EditWidgets { get; set; }
         public Action<bool> SetPair { get; set; }
         public Action<string> Notify { get; set; }
+        public Action OpenAssistant { get; set; }
     }
 
     /// <summary>
@@ -54,6 +55,7 @@ namespace IslandBar
         private static readonly (string id, string glyph, string title)[] Pages =
         {
             ("appearance", "", "外觀"),
+            ("voice", "\uE720", "語音助理"),
             ("compact", "", "收合內容"),
             ("notify", "", "通知與提示"),
             ("boost", "\uEC4A", "一鍵加速"),
@@ -78,7 +80,13 @@ namespace IslandBar
             FontSize = 13;
             KeyDown += (s, e) => { if (e.Key == Key.Escape) Close(); };
             _applyTimer.Tick += (s, e) => { _applyTimer.Stop(); _h.Apply(); };
-            Closed += (s, e) => { if (_applyTimer.IsEnabled) { _applyTimer.Stop(); _h.Apply(); } };
+            Closed += (s, e) =>
+            {
+                if (_applyTimer.IsEnabled) { _applyTimer.Stop(); _h.Apply(); }
+                Services.Voice.VoiceDownloads.Changed -= OnVoiceDownload;
+                _h.Window?.Assistant?.StopKeyCapture();
+            };
+            Services.Voice.VoiceDownloads.Changed += OnVoiceDownload;
 
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
@@ -109,6 +117,7 @@ namespace IslandBar
                 case "compact": BuildCompact(page); break;
                 case "notify": BuildNotify(page); break;
                 case "boost": BuildBoost(page); break;
+                case "voice": BuildVoice(page); break;
                 case "gpu": BuildGpu(page); break;
                 case "weather": BuildWeather(page); break;
                 case "widgets": BuildWidgets(page); break;
@@ -409,6 +418,214 @@ namespace IslandBar
             p.Children.Add(Heading("超過多少算太高", 8));
             p.Children.Add(Slider(70, 98, S.AutoTrimThreshold, v => { S.AutoTrimThreshold = (int)Math.Round(v); S.Save(); }, v => $"{v:0}%"));
             p.Children.Add(Note("說明：Windows 本來就會自己管理記憶體，整理後的數字會立刻下降，但程式要用時會再拿回去；真正卡頓多半是開太多程式，或記憶體本身不夠。"));
+        }
+
+        // ================================================================
+        //  語音助理
+        // ================================================================
+
+        private TextBlock _sttStatus, _llmStatus, _brainStatus;
+        private Button _sttButton, _llmButton;
+
+        private void BuildVoice(StackPanel p)
+        {
+            var a = _h.Window?.Assistant;
+            p.Children.Add(PageTitle("語音助理"));
+            p.Children.Add(Note("按住說話鍵說話，放開就執行：開程式、放音樂、調音量、計時提醒、查天氣和 AI 額度…。語音辨識在你的電腦上跑（只用 CPU），聽不懂的說法交給 PAIR 叢集或本機小模型，不需要任何雲端帳號。麥克風只有按住時才會打開。"));
+            p.Children.Add(Check("啟用語音助理", S.AssistantEnabled, v => { S.AssistantEnabled = v; Changed(); }));
+            var open = MakeButton("開啟對話視窗", false);
+            open.Click += (s, e) => _h.OpenAssistant?.Invoke();
+            p.Children.Add(open);
+
+            // ---- 說話鍵 ----
+            p.Children.Add(Heading("說話鍵", 20));
+            var keyRow = new WrapPanel();
+            var keyLabel = new Border
+            {
+                Background = Card, CornerRadius = new CornerRadius(8), Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 8, 8, 0),
+                Child = new TextBlock { Text = Services.Voice.PushToTalkKey.KeyName(S.AssistantKey), FontWeight = FontWeights.SemiBold }
+            };
+            keyRow.Children.Add(keyLabel);
+            var change = MakeButton("換一個鍵…", false);
+            change.Click += (s, e) =>
+            {
+                if (a == null) return;
+                change.Content = "現在按下想用的鍵（或滑鼠側鍵）…";
+                change.IsEnabled = false;
+                a.StartKeyCapture(vk =>
+                {
+                    if (vk == 0x1B) { change.Content = "換一個鍵…"; change.IsEnabled = true; return; }   // Esc＝不換
+                    S.AssistantKey = vk;
+                    Changed();
+                    ((TextBlock)keyLabel.Child).Text = Services.Voice.PushToTalkKey.KeyName(vk);
+                    change.Content = "換一個鍵…";
+                    change.IsEnabled = true;
+                });
+            };
+            keyRow.Children.Add(change);
+            p.Children.Add(keyRow);
+            p.Children.Add(Note("建議用右 Ctrl、右 Alt、Caps Lock、F13 以上，或滑鼠側鍵。按住一下下（約 0.2 秒）才開始聽；中間按了別的鍵（例如 Ctrl+C）就當成快捷鍵、不會開麥克風。說到一半按 Esc 取消。"));
+
+            // ---- 麥克風 ----
+            p.Children.Add(Heading("麥克風", 16));
+            var mics = Services.Voice.MicRecorder.Devices();
+            var micBox = new ComboBox { MinWidth = 320, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+            micBox.Items.Add(new ComboBoxItem { Content = "系統預設的麥克風", Tag = "" });
+            foreach (var (id, name) in mics) micBox.Items.Add(new ComboBoxItem { Content = name, Tag = id });
+            micBox.SelectedIndex = Math.Max(0, mics.FindIndex(m => m.id == S.AssistantMic) + 1);
+            micBox.SelectionChanged += (s, e) => { S.AssistantMic = (micBox.SelectedItem as ComboBoxItem)?.Tag as string ?? ""; S.Save(); };
+            p.Children.Add(micBox);
+            p.Children.Add(Note("如果預設麥克風是藍牙耳機，按住說話的那幾秒耳機會切到通話模式（音質暫時變差），放開就恢復。可以改選電腦或視訊鏡頭的麥克風避免。"));
+
+            // ---- 語音辨識 ----
+            p.Children.Add(Heading("語音辨識（SenseVoice，本機 CPU）", 16));
+            _sttStatus = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+            p.Children.Add(_sttStatus);
+            _sttButton = MakeButton("", true);
+            _sttButton.Click += (s, e) =>
+            {
+                var job = Services.Voice.VoiceDownloads.Get("stt");
+                if (job != null && job.Running) { job.Cancel(); return; }
+                Services.Voice.VoiceDownloads.Start("stt", (prog, ct) => Services.Voice.ModelStore.DownloadSttAsync(prog, ct));
+            };
+            p.Children.Add(_sttButton);
+            p.Children.Add(Check("辨識模型一直留在記憶體（反應快一點；不勾的話閒置 10 分鐘會釋放，約 300 MB）", S.AssistantKeepLoaded, v => { S.AssistantKeepLoaded = v; Changed(); }));
+            UpdateSttUi();
+
+            // ---- AI 大腦 ----
+            p.Children.Add(Heading("AI 大腦（聽不懂的說法交給它）", 20));
+            _brainStatus = new TextBlock { FontSize = 13, Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0), Text = "目前：偵測中…" };
+            p.Children.Add(Segmented(new[] { ("自動（PAIR → 本機）", 0), ("只用 PAIR／Ollama", 1), ("只用本機小模型", 2), ("關閉", 3) },
+                S.AssistantBrain switch { "pair" => 1, "local" => 2, "off" => 3, _ => 0 },
+                v => { S.AssistantBrain = v switch { 1 => "pair", 2 => "local", 3 => "off", _ => "auto" }; Changed(); _ = RefreshBrainStatus(); }));
+            p.Children.Add(_brainStatus);
+            p.Children.Add(Note("自動：先找 PAIR 叢集／本機的 Ollama、LM Studio（" + string.Join("、", S.PairProxyPorts ?? new int[0]) + " 埠），找不到才用下面的本機小模型。關閉：只用固定說法（開程式、音樂、音量、計時…）。"));
+
+            var modelRow = new WrapPanel();
+            var modelBox = new ComboBox { MinWidth = 260, Margin = new Thickness(0, 8, 8, 0), IsEditable = true, Text = S.AssistantModel ?? "" };
+            modelBox.Items.Add("");
+            modelBox.LostFocus += (s, e) => { S.AssistantModel = (modelBox.Text ?? "").Trim(); S.Save(); };
+            modelBox.SelectionChanged += (s, e) => { if (modelBox.SelectedItem is string m) { S.AssistantModel = m; S.Save(); } };
+            var refresh = MakeButton("列出 PAIR 的模型", false);
+            refresh.Click += async (s, e) =>
+            {
+                refresh.IsEnabled = false;
+                var found = new List<string>();
+                foreach (int port in S.PairProxyPorts ?? new int[0])
+                    found.AddRange(await Services.Voice.Brain.ListModelsAsync($"http://127.0.0.1:{port}", default));
+                if (!string.IsNullOrWhiteSpace(S.AssistantLlmUrl))
+                    found.AddRange(await Services.Voice.Brain.ListModelsAsync(S.AssistantLlmUrl.Trim().TrimEnd('/').Replace("/v1", ""), default));
+                modelBox.Items.Clear();
+                modelBox.Items.Add("");
+                foreach (var m in found.Distinct()) modelBox.Items.Add(m);
+                refresh.IsEnabled = true;
+                refresh.Content = found.Count > 0 ? $"找到 {found.Distinct().Count()} 個模型" : "沒有找到（PAIR／Ollama 沒開？）";
+                modelBox.IsDropDownOpen = found.Count > 0;
+            };
+            modelRow.Children.Add(modelBox);
+            modelRow.Children.Add(refresh);
+            p.Children.Add(Labeled("PAIR／Ollama 要用的模型（空白＝自動挑，優先 Qwen）", modelRow));
+            var url = new TextBox { Text = S.AssistantLlmUrl ?? "", Padding = new Thickness(6, 4, 6, 4), MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 320 };
+            url.LostFocus += (s, e) => { S.AssistantLlmUrl = url.Text.Trim(); S.Save(); _ = RefreshBrainStatus(); };
+            p.Children.Add(Labeled("其他電腦上的 Ollama／LM Studio 網址（選填，例如 http://192.168.1.20:11434）", url));
+
+            p.Children.Add(Heading("本機小模型（沒有 PAIR 時用，只用 CPU）", 16));
+            p.Children.Add(Segmented(Services.Voice.ModelStore.LocalModels.Select((m, i) => ($"{m.Name}（{m.SizeText}）", i)),
+                Math.Max(0, Array.FindIndex(Services.Voice.ModelStore.LocalModels, m => m.Id == S.AssistantLocalModel)),
+                i => { S.AssistantLocalModel = Services.Voice.ModelStore.LocalModels[i].Id; Changed(); UpdateLlmUi(); }));
+            _llmStatus = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+            p.Children.Add(_llmStatus);
+            _llmButton = MakeButton("", false);
+            _llmButton.Click += (s, e) =>
+            {
+                var job = Services.Voice.VoiceDownloads.Get("llm");
+                if (job != null && job.Running) { job.Cancel(); return; }
+                var m = Services.Voice.ModelStore.LocalModel(S.AssistantLocalModel);
+                Services.Voice.VoiceDownloads.Start("llm", (prog, ct) => Services.Voice.ModelStore.DownloadLocalModelAsync(m, prog, ct));
+            };
+            p.Children.Add(_llmButton);
+            p.Children.Add(Note("會從 llama.cpp 官方 GitHub 下載 llama-server（約 24 MB），模型從 Hugging Face 下載。用到時才在背景啟動，閒置 10 分鐘自動關掉、把記憶體還回去。"));
+            UpdateLlmUi();
+
+            // ---- 語音回答 ----
+            p.Children.Add(Heading("語音回答", 20));
+            p.Children.Add(Check("用語音念出回覆（Windows 內建語音）", S.AssistantSpeak, v => { S.AssistantSpeak = v; Changed(); }));
+            p.Children.Add(Check("開始／結束說話時發出提示音", S.AssistantSounds, v => { S.AssistantSounds = v; Changed(); }));
+            var voices = Services.Voice.Speaker.Voices();
+            var voiceBox = new ComboBox { MinWidth = 320, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+            voiceBox.Items.Add(new ComboBoxItem { Content = "自動（優先中文（台灣））", Tag = "" });
+            foreach (var (name, lang) in voices.OrderBy(v => v.lang.StartsWith("zh-TW", StringComparison.OrdinalIgnoreCase) ? 0 : v.lang.StartsWith("zh") ? 1 : 2))
+                voiceBox.Items.Add(new ComboBoxItem { Content = $"{name}（{lang}）", Tag = name });
+            voiceBox.SelectedIndex = Math.Max(0, voiceBox.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => (string)i.Tag == (S.AssistantVoice ?? "")));
+            voiceBox.SelectionChanged += (s, e) => { S.AssistantVoice = (voiceBox.SelectedItem as ComboBoxItem)?.Tag as string ?? ""; Changed(); };
+            p.Children.Add(Labeled("聲音", voiceBox));
+            if (!voices.Any(v => v.lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase)))
+                p.Children.Add(Note("⚠ 這台電腦沒有中文語音：Windows 設定 → 時間與語言 → 語音 → 新增語音 →「中文（台灣）」。"));
+            p.Children.Add(Heading("語速", 8));
+            p.Children.Add(Slider(0.6, 2.0, S.AssistantRate, v => { S.AssistantRate = Math.Round(v, 1); Changed(); }, v => $"{v:0.0}×"));
+            var test = MakeButton("試聽", false);
+            test.Click += (s, e) =>
+            {
+                if (a == null) return;
+                a.ApplySettings();
+                _ = a.Speaker.SpeakAsync("你好，我是 IslandBar 的語音助理。按住說話鍵就可以叫我。");
+            };
+            p.Children.Add(test);
+            _ = RefreshBrainStatus();
+        }
+
+        private async Task RefreshBrainStatus()
+        {
+            var a = _h.Window?.Assistant;
+            if (a == null || _brainStatus == null) return;
+            try { _brainStatus.Text = "目前：" + await a.Brain.DescribeAsync(default); }
+            catch { _brainStatus.Text = "目前：—"; }
+        }
+
+        private void OnVoiceDownload(Services.Voice.VoiceDownloads.Job job)
+        {
+            if (_page != "voice") return;
+            if (job.Key == "stt") UpdateSttUi();
+            else UpdateLlmUi();
+            if (!job.Running && job.Error == null) { _h.Window?.Assistant?.ApplySettings(); _ = RefreshBrainStatus(); }
+        }
+
+        private void UpdateSttUi()
+        {
+            if (_sttStatus == null) return;
+            var job = Services.Voice.VoiceDownloads.Get("stt");
+            if (job != null && job.Running)
+            {
+                _sttStatus.Foreground = Dim;
+                _sttStatus.Text = "下載中：" + job.Progress;
+                _sttButton.Content = "取消下載";
+                return;
+            }
+            bool ready = Services.Voice.ModelStore.SttReady;
+            _sttStatus.Foreground = ready ? Good : (job?.Error != null ? Bad : Dim);
+            _sttStatus.Text = ready ? "✓ 已下載，可以用了" : job?.Error != null ? "下載失敗：" + job.Error : "還沒下載（" + Services.Voice.ModelStore.SttSizeText + "，只要下載一次）";
+            _sttButton.Content = ready ? "重新下載" : "下載辨識模型";
+            _sttButton.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void UpdateLlmUi()
+        {
+            if (_llmStatus == null) return;
+            var m = Services.Voice.ModelStore.LocalModel(S.AssistantLocalModel);
+            var job = Services.Voice.VoiceDownloads.Get("llm");
+            if (job != null && job.Running)
+            {
+                _llmStatus.Foreground = Dim;
+                _llmStatus.Text = "下載中：" + job.Progress;
+                _llmButton.Content = "取消下載";
+                _llmButton.Visibility = Visibility.Visible;
+                return;
+            }
+            bool ready = Services.Voice.ModelStore.LlamaReady && Services.Voice.ModelStore.LocalModelReady(m);
+            _llmStatus.Foreground = ready ? Good : (job?.Error != null ? Bad : Dim);
+            _llmStatus.Text = ready ? $"✓ {m.Name} 已下載。{m.Note}" : job?.Error != null ? "下載失敗：" + job.Error : $"{m.Name}：{m.Note}。還沒下載（{m.SizeText}）";
+            _llmButton.Content = $"下載 {m.Name}";
+            _llmButton.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private FrameworkElement HookCheck(string text, Func<bool> installed, Func<string> install, Action uninstall)

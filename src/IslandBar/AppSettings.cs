@@ -93,6 +93,28 @@ namespace IslandBar
         public bool AutoTrimMemory { get; set; } = false;
         public int AutoTrimThreshold { get; set; } = 90;
 
+        /// <summary>語音助理：按住說話鍵說話，放開就執行</summary>
+        public bool AssistantEnabled { get; set; } = true;
+        /// <summary>說話鍵（Windows 虛擬鍵碼；0xA3＝右 Ctrl，5／6＝滑鼠側鍵）</summary>
+        public int AssistantKey { get; set; } = 0xA3;
+        /// <summary>麥克風裝置 ID（空白＝系統預設）</summary>
+        public string AssistantMic { get; set; } = "";
+        /// <summary>AI 大腦：auto（PAIR／Ollama，沒開就用本機小模型）、pair、local、off（只用基本指令）</summary>
+        public string AssistantBrain { get; set; } = "auto";
+        /// <summary>PAIR／Ollama 上要用的模型（空白＝自動挑）</summary>
+        public string AssistantModel { get; set; } = "";
+        /// <summary>自訂 OpenAI 相容網址（例如 http://192.168.1.10:11434），空白＝不用</summary>
+        public string AssistantLlmUrl { get; set; } = "";
+        public string AssistantLocalModel { get; set; } = "qwen3.5-2b";
+        /// <summary>用語音念出回覆</summary>
+        public bool AssistantSpeak { get; set; } = true;
+        public string AssistantVoice { get; set; } = "";
+        public double AssistantRate { get; set; } = 1.1;
+        /// <summary>開始／結束說話的提示音</summary>
+        public bool AssistantSounds { get; set; } = true;
+        /// <summary>辨識模型一直留在記憶體（反應快一點，多用約 300 MB）</summary>
+        public bool AssistantKeepLoaded { get; set; } = false;
+
         /// <summary>檔案暫存架裡的檔案</summary>
         public List<string> ShelfFiles { get; set; } = new List<string>();
 

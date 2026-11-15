@@ -40,6 +40,16 @@ jobs:
           Copy-Item (Join-Path $dir 'log.txt') shots\log.txt -ErrorAction SilentlyContinue
           Get-ChildItem shots | Format-Table Name, Length
 
+      - name: Assistant self-test
+        shell: pwsh
+        timeout-minutes: 25
+        run: |
+          $shots = (Resolve-Path shots).Path
+          $p = Start-Process -FilePath publish\IslandBar.exe -ArgumentList '--assistant-test', $shots -PassThru
+          if (-not $p.WaitForExit(1200000)) { Stop-Process $p -Force; 'timeout' | Out-File shots\assistant-timeout.txt }
+          Remove-Item shots\zh.wav -ErrorAction SilentlyContinue
+          Get-Content shots\assistant-test.txt -ErrorAction SilentlyContinue
+
       - name: Push screenshots to ci-smoke branch
         shell: bash
         run: |

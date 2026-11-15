@@ -23,13 +23,47 @@ namespace IslandBar
                 await Task.Delay(8000);   // 等額度、GPU、遠端資料讀進來
                 OpenSettings();
                 await Task.Delay(800);
-                foreach (var page in new[] { "appearance", "compact", "notify", "boost", "gpu", "weather", "widgets", "general" })
+                Services.Voice.Commands.DryRun = true;
+                foreach (var page in new[] { "appearance", "voice", "compact", "notify", "boost", "gpu", "weather", "widgets", "general" })
                 {
                     _settingsWindow.ShowPage(page);
                     await Task.Delay(1200);
                     Save(_settingsWindow.Content as Visual, Path.Combine(dir, "settings-" + page + ".png"));
                 }
                 _settingsWindow.Close();
+
+                // 語音助理：動態島的聆聽／思考／回覆、對話視窗
+                foreach (var v in new[] { "listen", "think", "reply" })
+                {
+                    _window.DebugVoice(v);
+                    await Task.Delay(900);
+                    Save(_window.IslandVisual, Path.Combine(dir, "island-voice-" + v + ".png"));
+                }
+                var asst = _window.Assistant;
+                if (asst != null)
+                {
+                    asst.ClearHistory();
+                    foreach (var say in new[] { "打開記事本", "音量調到三十", "十分鐘後提醒我關火", "台灣最高的山是哪一座", "現在幾點" })
+                        await asst.HandleAsync(say, speak: false);
+                    await Task.Delay(500);
+                    Save(_window.IslandVisual, Path.Combine(dir, "island-voice-last.png"));
+                    OpenAssistant();
+                    await Task.Delay(1500);
+                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-chat.png"));
+                    _assistantWindow.ShowPage("reminders");
+                    await Task.Delay(800);
+                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-reminders.png"));
+                    _assistantWindow.ShowPage("help");
+                    await Task.Delay(800);
+                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-help.png"));
+                    asst.ClearHistory();
+                    _assistantWindow.ShowPage("chat");
+                    await Task.Delay(800);
+                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-empty.png"));
+                    _assistantWindow.Close();
+                    File.WriteAllText(Path.Combine(dir, "voice-rules.txt"), string.Join("\n", RuleSamples()));
+                }
+
                 foreach (var tab in new[] { "shelf", "stats", "quick" })
                 {
                     _window.DebugExpand(tab);

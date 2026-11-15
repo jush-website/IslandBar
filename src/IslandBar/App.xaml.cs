@@ -93,6 +93,8 @@ namespace IslandBar
                 Balloon("IslandBar · GPU", text, Forms.ToolTipIcon.Info);
             _window.OpenRadarRequested += OpenWindy;
             _window.SettingsRequested += () => OpenSettings();
+            _window.AssistantWindowRequested += OpenAssistant;
+            _window.SettingsPageRequested += page => OpenSettings(page);
             _window.RestartRequested += RestartViaExplorer;
             _window.RecoverRequested += () => { foreach (var w in _widgets.ToList()) w.Recover(); };
             _window.Show();
@@ -100,6 +102,8 @@ namespace IslandBar
             CreateTrayIcon();
             int shotIdx = Array.IndexOf(e.Args, "--shot");
             if (shotIdx >= 0 && shotIdx + 1 < e.Args.Length) RunShots(e.Args[shotIdx + 1]);
+            int atIdx = Array.IndexOf(e.Args, "--assistant-test");
+            if (atIdx >= 0 && atIdx + 1 < e.Args.Length) RunAssistantTest(e.Args[atIdx + 1]);
             _settings.MigrateWidgets();
             // v1.15.2：第一個桌面小工具自動加上「一鍵加速」區塊（之後可以在小工具設定拿掉）
             if (_settings.WidgetSectionsVersion < 2)
@@ -153,6 +157,8 @@ namespace IslandBar
             var settings = new Forms.ToolStripMenuItem("設定…") { Font = bold };
             settings.Click += (s, e) => OpenSettings();
 
+            var assistant = new Forms.ToolStripMenuItem("語音助理…");
+            assistant.Click += (s, e) => OpenAssistant();
             var openWheel = new Forms.ToolStripMenuItem("格式轉換：選擇檔案…");
             openWheel.Click += (s, e) =>
             {
@@ -220,6 +226,7 @@ namespace IslandBar
             menu.Items.Add(restartTop);
             menu.Items.Add(_installUpdateItem);
             menu.Items.Add(settings);
+            menu.Items.Add(assistant);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(openWheel);
             menu.Items.Add(_recentItem);
@@ -269,6 +276,23 @@ namespace IslandBar
         // ================================================================
 
         private SettingsWindow _settingsWindow;
+        private AssistantWindow _assistantWindow;
+
+        /// <summary>語音助理的對話視窗</summary>
+        public void OpenAssistant()
+        {
+            if (_window?.Assistant == null) return;
+            if (_assistantWindow != null)
+            {
+                if (_assistantWindow.WindowState == WindowState.Minimized) _assistantWindow.WindowState = WindowState.Normal;
+                _assistantWindow.Activate();
+                return;
+            }
+            _assistantWindow = new AssistantWindow(_window.Assistant, _settings, page => OpenSettings(page));
+            _assistantWindow.Closed += (s, e) => _assistantWindow = null;
+            _assistantWindow.Show();
+            _assistantWindow.Activate();
+        }
 
         public void OpenSettings(string page = null)
         {
@@ -311,7 +335,8 @@ namespace IslandBar
                         if (first != null && !first.Sections.Contains("pair")) { first.Sections.Add("pair"); _settings.Save(); foreach (var w in _widgets) w.Rebuild(); }
                     }
                 },
-                Notify = text => Balloon("IslandBar", text, Forms.ToolTipIcon.Info)
+                Notify = text => Balloon("IslandBar", text, Forms.ToolTipIcon.Info),
+                OpenAssistant = OpenAssistant
             };
             _settingsWindow = new SettingsWindow(host);
             _settingsWindow.Closed += (s, e) => _settingsWindow = null;

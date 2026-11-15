@@ -21,7 +21,7 @@ namespace IslandBar
 {
     public partial class MainWindow : Window
     {
-        private enum IslandMode { Compact, Expanded, Hud, Wheel }
+        private enum IslandMode { Compact, Expanded, Hud, Wheel, Voice }
 
         // Segoe Fluent / MDL2 圖示
         private static readonly string GPlay = char.ConvertFromUtf32(0xE768);
@@ -433,6 +433,8 @@ namespace IslandBar
                     return new Size(_hudIsMessage ? 380 : 300, 40);
                 case IslandMode.Wheel:
                     return new Size(440, 300);
+                case IslandMode.Voice:
+                    return new Size(420, VoiceHeight());
                 default:
                 {
                     int dots = _settings.ShowQuotaDots ? _dotCount : 0;
@@ -461,7 +463,7 @@ namespace IslandBar
         {
             ApplyCompactThickness();
             var size = TargetSize();
-            double radius = _mode == IslandMode.Expanded ? 26 : (_mode == IslandMode.Hud ? 20 : CompactThickness / 2 + 1);
+            double radius = _mode == IslandMode.Expanded ? 26 : (_mode == IslandMode.Hud || _mode == IslandMode.Voice ? 20 : CompactThickness / 2 + 1);
             Island.CornerRadius = CornersFor(radius);
             RgbRing.CornerRadius = Island.CornerRadius;
             UpdateIslandClip();
@@ -488,6 +490,7 @@ namespace IslandBar
             ShowView(SideHudView, _mode == IslandMode.Hud && side && !_hudIsMessage, animate);
             ShowView(ExpandedView, _mode == IslandMode.Expanded, animate);
             ShowView(WheelView, _mode == IslandMode.Wheel, animate);
+            ShowView(VoiceView, _mode == IslandMode.Voice, animate);
             HudView.Width = _hudIsMessage ? 380 : 300;
 
             // 自動隱藏：非收合狀態一律露出；收合狀態排程收回
@@ -550,6 +553,7 @@ namespace IslandBar
             if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
             if (_focusPhase == FocusPhase.Focus) Island.Opacity = 1;
             if (_mode == IslandMode.Wheel) { _wheelMouseEntered = true; return; }
+            if (_mode == IslandMode.Voice) { VoiceHover(true); return; }
             if (_mode != IslandMode.Expanded) _expandDelay.Start();
         }
 
@@ -557,6 +561,7 @@ namespace IslandBar
         {
             if (_dragging) return;
             _expandDelay.Stop();
+            if (_mode == IslandMode.Voice) VoiceHover(false);
             if (_mode == IslandMode.Expanded || (_mode == IslandMode.Wheel && _wheelClickMode && _wheelMouseEntered)) _collapseDelay.Start();
             else if (_mode == IslandMode.Compact) ScheduleAutoHide();
         }
@@ -618,6 +623,7 @@ namespace IslandBar
 
         private void ShowHud(string glyph, double? progress, string valueText, string message, TimeSpan duration)
         {
+            if (_mode == IslandMode.Voice && VoiceBusy) return;   // 語音助理在聽／在想：不要被音量提示蓋掉
             _hudClick = null;
             HudGlyph.Text = glyph;
             SideHudGlyph.Text = glyph;
@@ -1190,6 +1196,11 @@ namespace IslandBar
                     _hudTimer.Stop();
                     SetMode(IslandMode.Compact);
                     try { a(); } catch (Exception ex) { Log.Error("HudClick", ex); }
+                    e.Handled = true;
+                }
+                else if (_mode == IslandMode.Voice)
+                {
+                    VoiceClicked();
                     e.Handled = true;
                 }
                 StopRgb();   // 點一下動態島＝看過通知了
