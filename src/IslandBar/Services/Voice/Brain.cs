@@ -181,7 +181,7 @@ namespace IslandBar.Services.Voice
             "你是 IslandBar 的語音助理，住在使用者 Windows 電腦螢幕上方的動態島。" +
             "一律用繁體中文（台灣用語）回答，口語、簡短：一到兩句話，適合直接念出來；不要用 Markdown、條列、表情符號或網址。" +
             "使用者要你操作電腦（開程式、開網站、搜尋、放音樂、調音量、計時、提醒、查電腦狀態、AI 額度、天氣、加速）時，呼叫對應的工具，" +
-            "做完用一句話說結果。一般問題直接回答。不確定就說不知道，不要編造。使用者的話是語音辨識的結果，可能有錯字，請猜最合理的意思。";
+            "做完用一句話說結果；沒有呼叫工具就不能說已經做好了。時間日期、天氣、AI 額度、電腦狀態一定要先呼叫 get_status 查，不要自己猜數字。一般問題直接回答。不確定就說不知道，不要編造。使用者的話是語音辨識的結果，可能有錯字，請猜最合理的意思。";
 
         public async Task<CommandResult> AskAsync(string text, IReadOnlyList<ChatTurn> history, BrainInfo brain, CancellationToken ct)
         {
@@ -196,8 +196,7 @@ namespace IslandBar.Services.Voice
             foreach (var h in (history ?? Array.Empty<ChatTurn>()).TakeLast(6))
                 if (!string.IsNullOrWhiteSpace(h.Text)) messages.Add(new JsonObject { ["role"] = h.Role == "user" ? "user" : "assistant", ["content"] = h.Text });
             bool qwen3 = Regex.IsMatch(brain.Model ?? "", @"qwen3(?!\.)", RegexOptions.IgnoreCase);
-            string now = DateTime.Now.ToString("M/d dddd HH:mm", new CultureInfo("zh-TW"));
-            messages.Add(new JsonObject { ["role"] = "user", ["content"] = text + $"\n（現在時間 {now}）" + (qwen3 ? " /no_think" : "") });
+            messages.Add(new JsonObject { ["role"] = "user", ["content"] = text + (qwen3 ? " /no_think" : "") });
 
             var sw = Stopwatch.StartNew();
             for (int round = 0; round < 4; round++)

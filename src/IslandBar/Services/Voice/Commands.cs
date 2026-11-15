@@ -83,8 +83,8 @@ namespace IslandBar.Services.Voice
 
             // ---- 計時、提醒 ----
             if (Regex.IsMatch(t, @"^(取消|關掉|停止)(所有的?)?(提醒|計時|倒數)")) { int n = _cancelReminders(); return Done(n > 0 ? $"已取消 {n} 個提醒" : "目前沒有提醒"); }
-            m = Regex.Match(t, @"^(.*?)(之後|以後|後)提醒我(.*)$");
-            if (m.Success && TryDuration(m.Groups[1].Value, out var d1)) return Done(_addReminder(d1, Clean(m.Groups[3].Value)));
+            m = Regex.Match(t, @"^(.*?)(之後|以後|後)(要|請|記得|再)?(提醒|叫)我(.*)$");
+            if (m.Success && TryDuration(m.Groups[1].Value, out var d1)) return Done(_addReminder(d1, Clean(m.Groups[5].Value)));
             m = Regex.Match(t, @"^提醒我(.*?)(之後|以後|後)(.*)$");
             if (m.Success && TryDuration(m.Groups[1].Value, out var d2)) return Done(_addReminder(d2, Clean(m.Groups[3].Value)));
             m = Regex.Match(t, @"^(計時|倒數|倒數計時|定時|設定?計時器?|timer)(.+)$");

@@ -32,7 +32,7 @@ namespace IslandBar
             "打開記事本", "幫我開 Spotify", "開啟下載資料夾", "打開藍牙設定", "打開 youtube", "打開 github.com", "開啟小算盤",
             "下一首", "暫停", "繼續播放", "播放周杰倫", "我想聽 AC/DC 的歌", "這首歌叫什麼",
             "音量調到三十", "音量 50", "大聲一點", "小聲一點", "靜音", "取消靜音",
-            "計時五分鐘", "倒數一個半小時", "10分鐘後提醒我關火", "提醒我三十秒後喝水", "取消提醒",
+            "計時五分鐘", "倒數一個半小時", "10分鐘後提醒我關火", "提醒我三十秒後喝水", "等一下二十分鐘後要提醒我去收衣服", "取消提醒",
             "現在幾點", "今天星期幾", "明天會下雨嗎", "我的 AI 額度還剩多少", "電腦狀態", "顯卡溫度", "電腦好卡", "鎖定電腦",
             "YouTube 搜尋 lofi", "搜尋台北美食", "台灣最高的山是哪一座", "幫我寫一首詩"
         };
@@ -107,7 +107,7 @@ namespace IslandBar
                 catch (Exception ex) { W("語音失敗：" + ex.Message); }
 
                 Brain.Debug = true;
-                foreach (var modelId in (Environment.GetEnvironmentVariable("ISLANDBAR_TEST_MODELS") ?? "qwen3.5-0.8b,qwen3.5-2b").Split(','))
+                foreach (var modelId in (Environment.GetEnvironmentVariable("ISLANDBAR_TEST_MODELS") ?? "qwen3.5-2b").Split(','))
                 {
                 W("\n== 本機小模型（llama-server）");
                 var model = ModelStore.LocalModel(modelId.Trim());
