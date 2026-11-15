@@ -100,7 +100,9 @@ namespace IslandBar
                     foreach (var v in Speaker.Voices()) W($"  {v.name} {v.lang}");
                     using var sp = new Speaker();
                     var dur = await sp.SpeakAsync("測試語音");
-                    W($"合成 OK，{dur.TotalSeconds:0.0} 秒，{sp.LastBytes} bytes");
+                    W($"中文：{dur.TotalSeconds:0.0} 秒，{sp.LastBytes} bytes（沒有中文語音時是空的）");
+                    dur = await sp.SpeakAsync("Hello, this is a speech test.");
+                    W($"英文：{dur.TotalSeconds:0.0} 秒，{sp.LastBytes} bytes");
                 }
                 catch (Exception ex) { W("語音失敗：" + ex.Message); }
 

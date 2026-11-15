@@ -80,7 +80,7 @@ namespace IslandBar.Services.Voice
         public static readonly LocalModelInfo[] LocalModels =
         {
             new LocalModelInfo { Id = "qwen3.5-2b", Name = "Qwen3.5 2B", File = "Qwen3.5-2B-Q4_K_M.gguf", Repo = "unsloth/Qwen3.5-2B-GGUF", SizeText = "1.2 GB", Note = "建議：中文好、會用工具，一般 CPU 每秒十幾到幾十個字" },
-            new LocalModelInfo { Id = "qwen3.5-0.8b", Name = "Qwen3.5 0.8B", File = "Qwen3.5-0.8B-Q4_K_M.gguf", Repo = "unsloth/Qwen3.5-0.8B-GGUF", SizeText = "0.5 GB", Note = "比較快、比較省記憶體，但比較笨" }
+            new LocalModelInfo { Id = "qwen3.5-0.8b", Name = "Qwen3.5 0.8B", File = "Qwen3.5-0.8B-Q4_K_M.gguf", Repo = "unsloth/Qwen3.5-0.8B-GGUF", SizeText = "0.5 GB", Note = "比較快、比較省記憶體，但不太會操作電腦（比較適合問答）" }
         };
 
         public static LocalModelInfo LocalModel(string id) => LocalModels.FirstOrDefault(m => m.Id == id) ?? LocalModels[0];

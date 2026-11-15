@@ -52,7 +52,6 @@ namespace IslandBar.Services.Voice
                 StopServer();
                 if (!Installed) throw new InvalidOperationException("還沒下載本機小模型");
 
-                int threads = Math.Clamp(Environment.ProcessorCount - 2, 2, 8);
                 var psi = new ProcessStartInfo(ModelStore.LlamaServer)
                 {
                     WorkingDirectory = ModelStore.LlamaDir,
@@ -61,7 +60,7 @@ namespace IslandBar.Services.Voice
                     RedirectStandardOutput = true,
                     RedirectStandardError = true
                 };
-                foreach (var a in new[] { "-m", ModelStore.LocalModelPath(m), "--host", "127.0.0.1", "--port", Port.ToString(), "-c", "4096", "-t", threads.ToString(), "--jinja", "-np", "1" })
+                foreach (var a in new[] { "-m", ModelStore.LocalModelPath(m), "--host", "127.0.0.1", "--port", Port.ToString(), "-c", "4096", "--jinja", "-np", "1" })
                     psi.ArgumentList.Add(a);
                 var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 var tail = new System.Collections.Concurrent.ConcurrentQueue<string>();
@@ -73,9 +72,10 @@ namespace IslandBar.Services.Voice
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
                 AddToJob(p);
+                try { p.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }   // 前景的程式、遊戲優先
                 _proc = p;
                 _procModel = m.Id;
-                Log.Write($"Voice: 啟動 llama-server（{m.Name}，{threads} 執行緒）");
+                Log.Write($"Voice: 啟動 llama-server（{m.Name}）");
 
                 // 載入模型：一般 CPU 幾秒～十幾秒
                 while (sw.Elapsed < TimeSpan.FromSeconds(120))

@@ -113,6 +113,31 @@ namespace IslandBar.Services.Voice
             return mode == "pair" ? "找不到 PAIR／Ollama（只能用基本指令）" : "沒有可用的 AI（只能用基本指令）";
         }
 
+        /// <summary>
+        /// 預熱本機模型：啟動 llama-server 並先把系統提示和工具說明算好放進快取（使用者還在說話時就做，放開後回答比較快）。
+        /// </summary>
+        public async Task PrewarmAsync(CancellationToken ct)
+        {
+            try
+            {
+                var b = await FindAsync(true, ct);
+                if (b == null || !b.Local) return;
+                string url = await Local.EnsureAsync(ct);
+                var body = new JsonObject
+                {
+                    ["model"] = b.Model,
+                    ["messages"] = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt }, new JsonObject { ["role"] = "user", ["content"] = "你好" } },
+                    ["tools"] = Tools(),
+                    ["max_tokens"] = 1,
+                    ["stream"] = false,
+                    ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false }
+                };
+                using var req = new HttpRequestMessage(HttpMethod.Post, url + "/v1/chat/completions") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+                using var resp = await Chat.SendAsync(req, ct);
+            }
+            catch (Exception ex) { Log.Write("Voice: 預熱本機模型失敗：" + ex.Message); }
+        }
+
         public static async Task<List<string>> ListModelsAsync(string baseUrl, CancellationToken ct)
         {
             var list = new List<string>();
@@ -166,12 +191,13 @@ namespace IslandBar.Services.Voice
 
             var messages = new JsonArray
             {
-                new JsonObject { ["role"] = "system", ["content"] = SystemPrompt + $" 現在時間：{DateTime.Now.ToString("yyyy/M/d dddd HH:mm", new CultureInfo("zh-TW"))}。" }
+                new JsonObject { ["role"] = "system", ["content"] = SystemPrompt }   // 固定不變：本機模型可以重用快取，第二句起快很多
             };
             foreach (var h in (history ?? Array.Empty<ChatTurn>()).TakeLast(6))
                 if (!string.IsNullOrWhiteSpace(h.Text)) messages.Add(new JsonObject { ["role"] = h.Role == "user" ? "user" : "assistant", ["content"] = h.Text });
             bool qwen3 = Regex.IsMatch(brain.Model ?? "", @"qwen3(?!\.)", RegexOptions.IgnoreCase);
-            messages.Add(new JsonObject { ["role"] = "user", ["content"] = text + (qwen3 ? " /no_think" : "") });
+            string now = DateTime.Now.ToString("M/d dddd HH:mm", new CultureInfo("zh-TW"));
+            messages.Add(new JsonObject { ["role"] = "user", ["content"] = text + $"\n（現在時間 {now}）" + (qwen3 ? " /no_think" : "") });
 
             var sw = Stopwatch.StartNew();
             for (int round = 0; round < 4; round++)

@@ -135,6 +135,8 @@ namespace IslandBar.Services.Voice
             }
             _listenStart = DateTime.UtcNow;
             _ = Stt.PreloadAsync();
+            // 這次開機用過本機模型：趁使用者在說話時先把模型叫起來
+            if (LastBrainLabel.StartsWith("本機") && !LocalLlm.Running) _ = Brain.PrewarmAsync(CancellationToken.None);
             SetState(VoiceState.Listening);
         }
 
