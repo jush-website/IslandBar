@@ -1,0 +1,59 @@
+name: Probe
+
+# 手動執行：查詢語音助理要下載的檔案（模型、llama.cpp）在不在、叫什麼名字，結果推到 ci-smoke 分支的 probe.txt
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - name: Probe
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $o = @()
+          $rels = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=3'
+          foreach ($r in $rels) {
+            $o += "== $($r.tag_name) $($r.published_at)"
+            foreach ($a in $r.assets) { if ($a.name -match 'win') { $o += "  $($a.name) $([math]::Round($a.size/1MB,1))MB" } }
+          }
+          $urls = @(
+            'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx',
+            'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt',
+            'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/test_wavs/zh.wav',
+            'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf',
+            'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf',
+            'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
+            'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2'
+          )
+          foreach ($u in $urls) {
+            try { $h = Invoke-WebRequest -Method Head -Uri $u -MaximumRedirection 10 -UseBasicParsing; $o += "OK $([math]::Round([long]$h.Headers['Content-Length'][0]/1MB,1))MB $u" }
+            catch { $o += "FAIL $($_.Exception.Message) $u" }
+          }
+          try { $t = Invoke-RestMethod 'https://huggingface.co/api/models/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tree/main/test_wavs'; foreach ($f in $t) { $o += "wav $($f.path) $($f.size)" } } catch { $o += "tree fail" }
+          Add-Type -AssemblyName System.Speech
+          $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+          foreach ($v in $s.GetInstalledVoices()) { $o += "sapi $($v.VoiceInfo.Name) $($v.VoiceInfo.Culture)" }
+          try {
+            [void][Windows.Media.SpeechSynthesis.SpeechSynthesizer, Windows.Media.SpeechSynthesis, ContentType = WindowsRuntime]
+            foreach ($v in [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices) { $o += "winrt $($v.DisplayName) $($v.Language)" }
+          } catch { $o += "winrt fail $($_.Exception.Message)" }
+          $o | Out-File -Encoding utf8 out\probe.txt
+          $o
+
+      - name: Push
+        shell: bash
+        run: |
+          cd out
+          git init -q -b ci-smoke
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "probe"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-smoke
