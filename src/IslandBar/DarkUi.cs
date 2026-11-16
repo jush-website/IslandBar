@@ -88,6 +88,13 @@ namespace IslandBar
 
         private const string ScrollBarXaml = @"
 <ResourceDictionary xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>
+  <Style TargetType='TextBox'>
+    <Setter Property='Background' Value='#1E1E22' />
+    <Setter Property='Foreground' Value='White' />
+    <Setter Property='BorderBrush' Value='#3A3A40' />
+    <Setter Property='CaretBrush' Value='White' />
+    <Setter Property='SelectionBrush' Value='#34D3C0' />
+  </Style>
   <Style TargetType='ScrollBar'>
     <Setter Property='Width' Value='10' />
     <Setter Property='MinWidth' Value='10' />

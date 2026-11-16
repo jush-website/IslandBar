@@ -138,7 +138,9 @@ namespace IslandBar
             using (var dc = dv.RenderOpen())
             {
                 dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x34)), null, new Rect(0, 0, fe.ActualWidth, fe.ActualHeight));
-                dc.DrawRectangle(new VisualBrush(fe), null, new Rect(0, 0, fe.ActualWidth, fe.ActualHeight));
+                // 不要讓 VisualBrush 依內容範圍縮放（透明的視窗會被放大變形）
+                var vb = new VisualBrush(fe) { Stretch = Stretch.None, ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, fe.ActualWidth, fe.ActualHeight), AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top };
+                dc.DrawRectangle(vb, null, new Rect(0, 0, fe.ActualWidth, fe.ActualHeight));
             }
             rtb.Render(dv);
             var enc = new PngBitmapEncoder();
