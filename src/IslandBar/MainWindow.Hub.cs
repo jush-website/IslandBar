@@ -56,24 +56,95 @@ namespace IslandBar
         //  笑臉跟著天氣換表情
         // ================================================================
 
-        private static readonly FontFamily EmojiFont = new FontFamily("Segoe UI Emoji");
-
-        /// <summary>依現在的天氣挑表情（臉、角落的小圖示、顏色、說明）</summary>
-        public static (string face, string badge, Color tint, string mood) WeatherMood(int code, double temp, bool isDay)
+        /// <summary>依現在的天氣挑表情：表情、顏色、說明</summary>
+        public static (string face, Color tint, string mood) WeatherMood(int code, double temp, bool isDay)
         {
             Color C(byte r, byte g, byte b) => Color.FromRgb(r, g, b);
-            if (code >= 95) return ("😱", "⚡", C(0xFF, 0xD5, 0x4A), "雷雨");
-            if (code is 71 or 73 or 75 or 77 or 85 or 86) return ("🥶", "❄", C(0x9F, 0xD8, 0xFF), "下雪");
-            if (code is >= 51 and <= 67 or >= 80 and <= 82) return (code is 65 or 82 ? "😭" : "😢", "☔", C(0x7C, 0xC4, 0xFF), WeatherService.Describe(code));
-            if (code is 45 or 48) return ("😶", "🌫", C(0xB8, 0xB8, 0xC0), "有霧");
-            if (temp >= 32) return ("🥵", isDay ? "☀" : null, C(0xFF, 0x8A, 0x50), "好熱");
-            if (temp <= 12) return ("🥶", null, C(0x9F, 0xD8, 0xFF), "好冷");
-            if (code is 0 or 1) return isDay ? ("😎", null, C(0xFF, 0xD5, 0x4A), "晴天") : ("😴", "🌙", C(0xC9, 0xB8, 0xFF), "晴朗的夜晚");
-            if (code == 2) return ("🙂", "⛅", Colors.White, "局部多雲");
-            return ("😐", "☁", C(0xC8, 0xC8, 0xD0), "陰天");
+            if (code >= 95) return ("shock", C(0xFF, 0xD5, 0x4A), "雷雨");
+            if (code is 71 or 73 or 75 or 77 or 85 or 86) return ("cold", C(0x9F, 0xD8, 0xFF), "下雪");
+            if (code is 65 or 82) return ("cry", C(0x7C, 0xC4, 0xFF), "大雨");
+            if (code is >= 51 and <= 67 or >= 80 and <= 82) return ("sad", C(0x7C, 0xC4, 0xFF), WeatherService.Describe(code));
+            if (code is 45 or 48) return ("fog", C(0xB8, 0xB8, 0xC0), "有霧");
+            if (temp >= 32) return ("hot", C(0xFF, 0x8A, 0x50), "好熱");
+            if (temp <= 12) return ("cold", C(0x9F, 0xD8, 0xFF), "好冷");
+            if (code is 0 or 1) return isDay ? ("cool", C(0xFF, 0xD5, 0x4A), "晴天") : ("sleep", C(0xC9, 0xB8, 0xFF), "晴朗的夜晚");
+            if (code == 2) return ("smile", C(0xF2, 0xF2, 0xF2), "局部多雲");
+            return ("flat", C(0xC8, 0xC8, 0xD0), "陰天");
         }
 
-        /// <summary>動態島旁的笑臉跟著當地天氣換表情；還沒拿到天氣時用原本的笑臉圖示</summary>
+        /// <summary>畫一張 20×20 的小臉（實心的臉＋深色五官，小尺寸也看得清楚）</summary>
+        public static FrameworkElement DrawFace(string face, Color tint)
+        {
+            var dark = new SolidColorBrush(Color.FromRgb(0x10, 0x10, 0x12));
+            var c = new Canvas { Width = 20, Height = 20 };
+            void Add(UIElement e) => c.Children.Add(e);
+            System.Windows.Shapes.Path P(string data, Brush stroke, Brush fill = null, double th = 1.5) => new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse(data), Stroke = stroke, Fill = fill, StrokeThickness = th,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round
+            };
+            void Dot(double x, double y, double r)
+            {
+                var e = new System.Windows.Shapes.Ellipse { Width = r * 2, Height = r * 2, Fill = dark };
+                Canvas.SetLeft(e, x - r); Canvas.SetTop(e, y - r); Add(e);
+            }
+            var head = new System.Windows.Shapes.Ellipse { Width = 18, Height = 18, Fill = new SolidColorBrush(tint), Opacity = face == "fog" ? 0.75 : 1 };
+            Canvas.SetLeft(head, 1); Canvas.SetTop(head, 1); Add(head);
+            var tear = new SolidColorBrush(Color.FromRgb(0x2F, 0x7B, 0xFF));
+            switch (face)
+            {
+                case "cool":   // 太陽眼鏡
+                    Add(P("M4.4,7.2 H15.6 V8.2 Q15.6,10.6 13.1,10.6 Q11,10.6 10.6,8.6 H9.4 Q9,10.6 6.9,10.6 Q4.4,10.6 4.4,8.2 Z", null, dark, 0));
+                    Add(P("M6.2,12.6 Q10,15.8 13.8,12.6", dark));
+                    break;
+                case "smile":
+                    Dot(7.2, 8.4, 1.15); Dot(12.8, 8.4, 1.15);
+                    Add(P("M6.2,12.2 Q10,15.6 13.8,12.2", dark));
+                    break;
+                case "flat":
+                    Dot(7.2, 8.6, 1.15); Dot(12.8, 8.6, 1.15);
+                    Add(P("M7,13.2 H13", dark));
+                    break;
+                case "sad":    // 下雨：嘴角往下＋一滴淚
+                    Dot(7.2, 8.6, 1.15); Dot(12.8, 8.6, 1.15);
+                    Add(P("M7,14.4 Q10,11.8 13,14.4", dark));
+                    Add(P("M13.6,10.2 Q15.2,12.6 13.6,13.4 Q12,12.6 13.6,10.2 Z", null, tear, 0));
+                    break;
+                case "cry":    // 大雨：閉眼大哭
+                    Add(P("M5.6,8.2 Q7.2,9.8 8.8,8.2", dark)); Add(P("M11.2,8.2 Q12.8,9.8 14.4,8.2", dark));
+                    Add(P("M6.6,14.8 Q10,11.4 13.4,14.8", dark));
+                    Add(P("M6.2,10 Q7.8,12.6 6.2,13.4 Q4.6,12.6 6.2,10 Z", null, tear, 0));
+                    Add(P("M13.8,10 Q15.4,12.6 13.8,13.4 Q12.2,12.6 13.8,10 Z", null, tear, 0));
+                    break;
+                case "shock":  // 雷雨：嚇到
+                    Dot(7.2, 8.2, 1.6); Dot(12.8, 8.2, 1.6);
+                    var o = new System.Windows.Shapes.Ellipse { Width = 3.4, Height = 4, Fill = dark };
+                    Canvas.SetLeft(o, 8.3); Canvas.SetTop(o, 11.4); Add(o);
+                    break;
+                case "cold":   // 冷：發抖的嘴
+                    Dot(7.2, 8.4, 1.15); Dot(12.8, 8.4, 1.15);
+                    Add(P("M5.8,13.4 L7.5,12.3 L9.2,13.4 L10.8,12.3 L12.5,13.4 L14.2,12.3", dark, null, 1.3));
+                    break;
+                case "hot":    // 熱：張嘴流汗
+                    Dot(7.2, 8.4, 1.15); Dot(12.8, 8.4, 1.15);
+                    Add(P("M6,11.6 Q10,17 14,11.6 Z", null, dark, 0));
+                    Add(P("M16.6,2.6 Q18.4,5.2 16.6,6.2 Q14.8,5.2 16.6,2.6 Z", null, new SolidColorBrush(Color.FromRgb(0x5B, 0xB8, 0xFF)), 0));
+                    break;
+                case "sleep":  // 晴朗的夜晚：睡著
+                    Add(P("M5.6,8.8 Q7.2,10.2 8.8,8.8", dark)); Add(P("M11.2,8.8 Q12.8,10.2 14.4,8.8", dark));
+                    var m = new System.Windows.Shapes.Ellipse { Width = 2.4, Height = 2.4, Fill = dark };
+                    Canvas.SetLeft(m, 8.8); Canvas.SetTop(m, 12.2); Add(m);
+                    var z = new TextBlock { Text = "z", FontSize = 6.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(tint) };
+                    Canvas.SetLeft(z, 16.2); Canvas.SetTop(z, -2.6); Add(z);
+                    break;
+                default:       // 霧：沒表情
+                    Dot(7.2, 8.6, 1.15); Dot(12.8, 8.6, 1.15);
+                    Add(P("M7.4,13.2 H12.6", dark));
+                    break;
+            }
+            return c;
+        }
+
         public FrameworkElement ChatFabVisual => ChatFab;
 
         /// <summary>截圖測試用：套用某種天氣的表情</summary>
@@ -86,21 +157,15 @@ namespace IslandBar
             if (ChatFabGlyph == null) return;
             if (f == null)
             {
-                ChatFabGlyph.FontFamily = (FontFamily)FindResource("IconFont");
-                ChatFabGlyph.Text = "\uE76E";
-                ChatFabGlyph.Tag = null;
-                ChatFabBadge.Visibility = Visibility.Collapsed;
+                ChatFabFace.Visibility = Visibility.Collapsed;
+                ChatFabGlyph.Visibility = Visibility.Visible;
                 ChatFab.ToolTip = "對話（再按一次收起）";
                 return;
             }
-            var (face, badge, tint, mood) = WeatherMood(f.Code, f.Temp, f.IsDay);
-            ChatFabGlyph.FontFamily = EmojiFont;
-            ChatFabGlyph.Text = face;
-            ChatFabGlyph.Tag = tint;   // 記下天氣的顏色，打開對話時還是用它
-            ChatFabGlyph.Foreground = new SolidColorBrush(tint);
-            ChatFabBadge.Text = badge ?? "";
-            ChatFabBadge.Visibility = string.IsNullOrEmpty(badge) ? Visibility.Collapsed : Visibility.Visible;
-            ChatFabBadge.Foreground = new SolidColorBrush(tint);
+            var (face, tint, mood) = WeatherMood(f.Code, f.Temp, f.IsDay);
+            ChatFabFace.Child = DrawFace(face, tint);
+            ChatFabFace.Visibility = Visibility.Visible;
+            ChatFabGlyph.Visibility = Visibility.Collapsed;
             ChatFab.ToolTip = $"對話（{_settings.City} {f.Temp:0}° {mood}）";
         }
 
@@ -142,7 +207,7 @@ namespace IslandBar
             ChatFab.Margin = new Thickness(x, y, 0, 0);
             ChatFab.Visibility = Visibility.Visible;
             ChatFabRing.Opacity = _chatDock != null ? 1 : 0;
-            ChatFabGlyph.Foreground = ChatFabGlyph.Tag is Color tint ? new SolidColorBrush(tint) : _chatDock != null ? (Brush)FindResource("Accent") : Brushes.White;
+            ChatFabGlyph.Foreground = _chatDock != null ? (Brush)FindResource("Accent") : Brushes.White;
         }
 
         /// <summary>收進邊緣的動畫：對話按鈕跟著一起動</summary>
@@ -168,11 +233,13 @@ namespace IslandBar
             if (_hiddenToEdge) SetEdgeHidden(false, animate: true);
             ChatFab.Opacity = 1;
             ChatFabGlyph.FontSize = 15;
+            ChatFabFace.Width = ChatFabFace.Height = 21;
         }
 
         private void ChatFab_MouseLeave(object sender, MouseEventArgs e)
         {
             ChatFabGlyph.FontSize = 14;
+            ChatFabFace.Width = ChatFabFace.Height = 19;
             if (_mode == IslandMode.Compact && _chatDock == null) ScheduleAutoHide();
         }
 

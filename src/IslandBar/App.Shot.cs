@@ -95,13 +95,28 @@ namespace IslandBar
                     File.WriteAllText(Path.Combine(dir, "voice-rules.txt"), string.Join("\n", RuleSamples()));
                 }
 
-                // 笑臉跟著天氣換表情
-                int mi = 0;
-                foreach (var (code, temp, day) in new[] { (0, 26.0, true), (0, 22.0, false), (2, 24.0, true), (3, 20.0, true), (61, 18.0, true), (82, 18.0, true), (95, 25.0, true), (73, -2.0, true), (45, 15.0, true), (1, 35.0, true), (3, 8.0, true) })
+                // 笑臉跟著天氣換表情：每一種畫一張放大圖
                 {
-                    _window.DebugFabMood(code, temp, day);
-                    await Task.Delay(250);
-                    Save(_window.ChatFabVisual, Path.Combine(dir, $"fab-mood-{mi++:00}-{code}-{temp:0}{(day ? "d" : "n")}.png"));
+                    var row = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Background = new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x34)) };
+                    foreach (var (code, temp, day) in new[] { (0, 26.0, true), (0, 22.0, false), (2, 24.0, true), (3, 20.0, true), (61, 18.0, true), (82, 18.0, true), (95, 25.0, true), (73, -2.0, true), (45, 15.0, true), (1, 35.0, true), (3, 8.0, true) })
+                    {
+                        var (face, tint, mood) = IslandBar.MainWindow.WeatherMood(code, temp, day);
+                        var cell = new System.Windows.Controls.StackPanel { Margin = new Thickness(8) };
+                        var bg = new System.Windows.Controls.Border { Width = 56, Height = 56, CornerRadius = new CornerRadius(28), Background = new SolidColorBrush(Color.FromRgb(0x0D, 0x0D, 0x0F)) };
+                        bg.Child = new System.Windows.Controls.Viewbox { Width = 38, Height = 38, Child = IslandBar.MainWindow.DrawFace(face, tint) };
+                        cell.Children.Add(bg);
+                        cell.Children.Add(new System.Windows.Controls.TextBlock { Text = mood, Foreground = Brushes.White, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) });
+                        row.Children.Add(cell);
+                    }
+                    row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    row.Arrange(new Rect(row.DesiredSize));
+                    row.UpdateLayout();
+                    var rtb = new RenderTargetBitmap((int)Math.Ceiling(row.ActualWidth * 2), (int)Math.Ceiling(row.ActualHeight * 2), 192, 192, PixelFormats.Pbgra32);
+                    rtb.Render(row);
+                    var enc = new PngBitmapEncoder();
+                    enc.Frames.Add(BitmapFrame.Create(rtb));
+                    using (var fs = File.Create(Path.Combine(dir, "fab-moods.png"))) enc.Save(fs);
+                    _window.DebugFabMood(0, 26, true);
                 }
                 _window.DebugQuotaSample();
                 foreach (var tab in new[] { "media", "calendar", "weather", "quota", "stats", "clip", "quick" })
