@@ -48,6 +48,8 @@ namespace IslandBar
             RaiseDataChanged();
         }
 
+        public string DebugFabState => $"mode={_mode} bar={FabBar.Visibility} margin={FabBar.Margin} hide=({ChatFabHide.X:0},{ChatFabHide.Y:0}) islandHide=({HideTransform.X:0},{HideTransform.Y:0}) fab={ChatFab.Visibility} bat={BatteryBar.Visibility} items={BatteryItems.Children.Count} desired={FabBar.DesiredSize} hidden={_userHidden}/{_fullscreenHidden} island={Island.ActualWidth:0}x{Island.ActualHeight:0}";
+
         /// <summary>截圖測試用：放幾個假裝置</summary>
         public void DebugBatteries(string style)
         {
@@ -83,7 +85,7 @@ namespace IslandBar
                     _batteryNotified[d.Id] = 10;
                     NotifyBattery(d, $"{d.Name} 電量剩 {d.Percent}%，該充電了", urgent: true);
                 }
-                else if (d.Percent <= 50 && level < 50)
+                else if (d.Percent <= 50 && level == 0)
                 {
                     _batteryNotified[d.Id] = 50;
                     NotifyBattery(d, $"{d.Name} 電量剩 {d.Percent}%", urgent: false);

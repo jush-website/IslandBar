@@ -124,6 +124,7 @@ namespace IslandBar
                     _window.DebugBatteries(style);
                     await Task.Delay(700);
                     Save(_window.RootVisual, Path.Combine(dir, "island-battery-" + style + ".png"));
+                    File.AppendAllText(Path.Combine(dir, "battery-state.txt"), style + ": " + _window.DebugFabState + "\n");
                 }
                 _settings.DeviceBatteryStyle = "ring";
                 _window.DebugQuotaSample();
