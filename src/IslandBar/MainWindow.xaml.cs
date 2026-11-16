@@ -1397,7 +1397,6 @@ namespace IslandBar
 
         /// <summary>左邊額度欄佔的寬度（欄寬 164 ＋ 間距 12）</summary>
         private const double QuotaSideWidth = 176;
-        private double _stripExtra;   // 以前額度列放在下面時用的高度，現在固定 0
         private string _stripSignature = "";
         private bool _quotaSideOn;
 

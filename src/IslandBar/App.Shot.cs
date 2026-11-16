@@ -95,6 +95,7 @@ namespace IslandBar
                     File.WriteAllText(Path.Combine(dir, "voice-rules.txt"), string.Join("\n", RuleSamples()));
                 }
 
+                _window.DebugQuotaSample();
                 foreach (var tab in new[] { "media", "calendar", "weather", "quota", "stats", "clip", "quick" })
                 {
                     _window.DebugExpand(tab);

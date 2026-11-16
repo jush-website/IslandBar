@@ -151,6 +151,22 @@ namespace IslandBar
             UpdateChatFab();
         }
 
+        /// <summary>截圖測試用：放幾個假的 AI 額度，看左邊額度欄的樣子</summary>
+        public void DebugQuotaSample()
+        {
+            var now = DateTimeOffset.Now;
+            _allItems = new System.Collections.Generic.List<Services.QuotaItem>(_allItems)
+            {
+                new Services.QuotaItem { Group = "claude", Label = "Claude 5小時", Percent = 42, Text = "42%", ResetsAt = now.AddHours(2.2) },
+                new Services.QuotaItem { Group = "claude", Label = "Claude 每週", Percent = 76, Text = "76%", ResetsAt = now.AddDays(3.3) },
+                new Services.QuotaItem { Group = "codex", Label = "Codex 5小時", Percent = 12, Text = "12%", ResetsAt = now.AddMinutes(48) },
+                new Services.QuotaItem { Group = "codex", Label = "Codex 每週", Percent = 93, Text = "93%", ResetsAt = now.AddDays(5) },
+                new Services.QuotaItem { Group = "antigravity", Label = "AG Gemini 5h", Percent = 5, Text = "5%" },
+                new Services.QuotaItem { Group = "antigravity", Label = "AG Claude/GPT 週", Percent = 58, Text = "58%", ResetsAt = now.AddDays(1.5) }
+            };
+            UpdateQuotaStrip();
+        }
+
         /// <summary>截圖測試用：假裝前景是全螢幕程式</summary>
         private bool _forceFullscreen;
         public void DebugFullscreen(bool on)
