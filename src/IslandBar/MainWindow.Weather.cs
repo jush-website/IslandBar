@@ -31,7 +31,7 @@ namespace IslandBar
         {
             if (Math.Abs(extra - _pageExtra) < 0.5) return;
             _pageExtra = extra;
-            ExpandedView.Height = 226 + _stripExtra + _pageExtra;
+            SetExpandedHeight();
             if (_mode == IslandMode.Expanded) ApplyMode(true);
             if (IsSide) PositionWindow();
         }

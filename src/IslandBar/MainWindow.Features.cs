@@ -52,6 +52,9 @@ namespace IslandBar
                 case "quick": TabQuick.IsChecked = true; break;
                 case "media": TabMedia.IsChecked = true; break;
                 case "quota": TabQuota.IsChecked = true; break;
+                case "calendar": TabCalendar.IsChecked = true; break;
+                case "weather": TabWeather.IsChecked = true; break;
+                case "clip": TabClip.IsChecked = true; break;
                 default: TabStats.IsChecked = true; break;
             }
             SetMode(IslandMode.Expanded);

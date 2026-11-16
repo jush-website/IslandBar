@@ -451,8 +451,27 @@
                 </Grid>
 
                 <!-- ================= 展開狀態 ================= -->
-                <Grid x:Name="ExpandedView" Width="448" Height="226" Margin="0,12,0,0"
-                      HorizontalAlignment="Center" VerticalAlignment="Top" Visibility="Collapsed">
+                <!-- ================= 展開時左邊的 AI 額度欄 ================= -->
+                <Border x:Name="QuotaSide" Width="164" Height="226" Margin="14,12,0,0" Padding="10,9,6,9"
+                        HorizontalAlignment="Left" VerticalAlignment="Top" CornerRadius="16"
+                        Background="{StaticResource TileBg}" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <DockPanel Margin="1,0,4,0">
+                            <TextBlock x:Name="QuotaSideTime" DockPanel.Dock="Right" FontSize="10" Foreground="{StaticResource Tertiary}" VerticalAlignment="Center" />
+                            <TextBlock Text="AI 額度" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Secondary}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <ScrollViewer Grid.Row="1" Margin="0,7,0,0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="QuotaStrip" Margin="0,0,4,0" />
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <Grid x:Name="ExpandedView" Width="448" Height="226" Margin="0,12,16,0"
+                      HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="30" />
                         <RowDefinition Height="*" />
@@ -500,7 +519,7 @@
                     </StackPanel>
 
                     <!-- 固定顯示的 AI 額度列（可在系統匣關閉） -->
-                    <WrapPanel x:Name="QuotaStrip" Grid.Row="2" Margin="0,6,0,0" Visibility="Collapsed" />
+
 
                     <!-- == 音樂 == -->
                     <Grid x:Name="PageMedia" Grid.Row="1" Margin="0,10,0,0">

@@ -229,7 +229,7 @@ namespace IslandBar
 
         public const double MinScale = 0.7;
         public const double MaxScale = 1.6;
-        private const double BaseWindowWidth = 560;
+        private const double BaseWindowWidth = 840;   // 置中時展開面板往左長出額度欄（480＋176×2），透明的地方滑鼠會穿透
         private const double BaseWindowHeight = 460; // 展開＋固定額度列時最高約 340
 
         /// <summary>設定變更時（例如 Ctrl+滾輪縮放）通知系統匣選單同步</summary>
@@ -261,7 +261,7 @@ namespace IslandBar
                 along = Math.Clamp(along, 0, 1);
                 if (IsSide)
                 {
-                    double half = (128 + (_stripExtra + _pageExtra) / 2) * sc; // 展開面板高度的一半，避免超出螢幕
+                    double half = (128 + _pageExtra / 2) * sc; // 展開面板高度的一半，避免超出螢幕
                     double cy = Math.Clamp(along * sh, half, sh - half);
                     Top = cy - Height / 2;
                     bool left = _settings.Position == IslandPosition.Left;
@@ -273,7 +273,7 @@ namespace IslandBar
                 }
                 else
                 {
-                    double half = 245 * sc; // 展開面板寬度的一半
+                    double half = (245 + QuotaSideWidth) * sc; // 展開面板（含左邊額度欄）不要超出螢幕
                     double cx = Math.Clamp(along * sw, half, sw - half);
                     Left = cx - Width / 2;
                     Top = off;
@@ -430,7 +430,7 @@ namespace IslandBar
             switch (_mode)
             {
                 case IslandMode.Expanded:
-                    return new Size(480, 256 + _stripExtra + _pageExtra);
+                    return new Size(480 + (_quotaSideOn ? QuotaSideWidth : 0), 256 + _pageExtra);
                 case IslandMode.Hud:
                     if (IsSide && !_hudIsMessage) return new Size(44, 180);
                     return new Size(_hudIsMessage ? 380 : 300, 40);
@@ -492,6 +492,8 @@ namespace IslandBar
             ShowView(HudView, _mode == IslandMode.Hud && (!side || _hudIsMessage), animate);
             ShowView(SideHudView, _mode == IslandMode.Hud && side && !_hudIsMessage, animate);
             ShowView(ExpandedView, _mode == IslandMode.Expanded, animate);
+            ShowView(QuotaSide, _mode == IslandMode.Expanded && _quotaSideOn, animate);
+            ShiftForQuotaSide(animate);
             ShowView(WheelView, _mode == IslandMode.Wheel, animate);
             ShowView(VoiceView, _mode == IslandMode.Voice, animate);
             Dispatcher.BeginInvoke(new Action(UpdateChatFab), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -1391,68 +1393,130 @@ namespace IslandBar
             }
         }
 
-        // ---------------- 展開面板底部固定的 AI 額度列 ----------------
+        // ---------------- 展開時左邊的 AI 額度欄 ----------------
 
-        private double _stripExtra;
+        /// <summary>左邊額度欄佔的寬度（欄寬 164 ＋ 間距 12）</summary>
+        private const double QuotaSideWidth = 176;
+        private double _stripExtra;   // 以前額度列放在下面時用的高度，現在固定 0
         private string _stripSignature = "";
+        private bool _quotaSideOn;
 
         private void UpdateQuotaStrip()
         {
             var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
-            var items = _settings.PinQuotaStrip && TabQuota.IsChecked != true
-                ? _allItems.Where(i => i.Group != "sys" && !hidden.Contains(i.Label)).ToList()
-                : new List<QuotaItem>();
-
-            var logins = _settings.PinQuotaStrip && TabQuota.IsChecked != true
-                ? _quotaSnap.Providers.Where(p => p.AttentionAction != null).ToList()
-                : new List<ProviderUsage>();
-            var pairChip = _settings.PinQuotaStrip && TabQuota.IsChecked != true ? PairStripInfo() : null;
+            bool want = _settings.PinQuotaStrip && TabQuota.IsChecked != true;
+            var items = want ? _allItems.Where(i => i.Group != "sys" && !hidden.Contains(i.Label)).ToList() : new List<QuotaItem>();
+            var logins = want ? _quotaSnap.Providers.Where(p => p.AttentionAction != null).ToList() : new List<ProviderUsage>();
+            var pairChip = want ? PairStripInfo() : null;
             string sig = string.Join("|", logins.Select(p => p.Attention)) + "||" + string.Join("|", items.Select(i => $"{i.Label}={i.Text}={i.Percent}={i.ResetIn}")) +
                          "||" + (pairChip?.text ?? "");
             if (sig != _stripSignature)
             {
                 _stripSignature = sig;
                 QuotaStrip.Children.Clear();
-                foreach (var p in logins) QuotaStrip.Children.Add(MakeLoginChip(p));
-                if (pairChip != null) QuotaStrip.Children.Add(MakePairChip(pairChip.Value.text, pairChip.Value.color, pairChip.Value.tip));
                 var secondary = (Brush)FindResource("Secondary");
+                var tertiary = (Brush)FindResource("Tertiary");
+                var track = (Brush)FindResource("TrackBg");
+
+                // 要重新登入：橘色、可以點
+                foreach (var p in logins)
+                {
+                    var b = new Border
+                    {
+                        CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xB4, 0x54)),
+                        Padding = new Thickness(7, 4, 7, 4), Margin = new Thickness(0, 0, 0, 6), Cursor = Cursors.Hand,
+                        ToolTip = (p.Message ?? p.Attention) + "\n點一下開啟登入",
+                        Child = new TextBlock { Text = "⚠ " + p.Attention + "　重新登入 ›", FontSize = 10.5, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB4, 0x54)) }
+                    };
+                    string action = p.AttentionAction;
+                    b.MouseLeftButtonUp += (s2, e2) => { e2.Handled = true; RunLoginAction(action); };
+                    QuotaStrip.Children.Add(b);
+                }
+                // PAIR 一行
+                if (pairChip != null)
+                {
+                    var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, 0, 0, 7), ToolTip = pairChip.Value.tip };
+                    row.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = new SolidColorBrush(pairChip.Value.color), VerticalAlignment = VerticalAlignment.Center });
+                    row.Children.Add(new TextBlock { Text = pairChip.Value.text, FontSize = 10.5, Foreground = new SolidColorBrush(pairChip.Value.color), Margin = new Thickness(5, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 128 });
+                    QuotaStrip.Children.Add(row);
+                }
+                // 每個額度：名稱＋百分比、細長條、多久後重置
                 foreach (var it in items)
                 {
                     var color = LevelColor(it.Percent);
-                    var chip = new Border
+                    var g = new Grid { Margin = new Thickness(1, 0, 0, 8), Background = Brushes.Transparent, ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "\n" + it.Tip };
+                    g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                    g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                    g.Children.Add(new TextBlock { Text = it.Label, FontSize = 10.5, Foreground = secondary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+                    var val = new TextBlock { Text = it.Text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color), Margin = new Thickness(6, 0, 0, 0) };
+                    Grid.SetColumn(val, 1);
+                    g.Children.Add(val);
+                    var bottom = new Grid { Margin = new Thickness(0, 3, 0, 0) };
+                    bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    var bar = new Grid { Height = 4, VerticalAlignment = VerticalAlignment.Center };
+                    bar.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = track });
+                    bar.Children.Add(new Border
                     {
-                        CornerRadius = new CornerRadius(8),
-                        Background = (Brush)FindResource("TileBg"),
-                        Padding = new Thickness(7, 2, 7, 2),
-                        Margin = new Thickness(0, 0, 4, 4),
-                        ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "\n" + it.Tip
-                    };
-                    var sp = new StackPanel { Orientation = Orientation.Horizontal };
-                    sp.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
-                    sp.Children.Add(new TextBlock { Text = it.Label, FontSize = 10, Foreground = secondary, Margin = new Thickness(5, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
-                    sp.Children.Add(new TextBlock { Text = it.Text, FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
-                    string resetIn = it.ResetIn;
-                    if (resetIn.Length > 0)
-                        sp.Children.Add(new TextBlock { Text = "↻" + resetIn, FontSize = 10, Foreground = (Brush)FindResource("Tertiary"), Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-                    chip.Child = sp;
-                    QuotaStrip.Children.Add(chip);
+                        CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(color), RenderTransformOrigin = new Point(0, 0.5),
+                        RenderTransform = new ScaleTransform(Math.Clamp((it.Percent ?? 0) / 100.0, 0, 1), 1)
+                    });
+                    bottom.Children.Add(bar);
+                    if (it.ResetIn.Length > 0)
+                    {
+                        var reset = new TextBlock { Text = "↻" + it.ResetIn, FontSize = 9.5, Foreground = tertiary, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+                        Grid.SetColumn(reset, 1);
+                        bottom.Children.Add(reset);
+                    }
+                    Grid.SetRow(bottom, 1);
+                    Grid.SetColumnSpan(bottom, 2);
+                    g.Children.Add(bottom);
+                    QuotaStrip.Children.Add(g);
                 }
             }
+            QuotaSideTime.Text = _quotaSnap != null ? _quotaSnap.UpdatedAt.ToString("HH:mm") : "";
 
-            bool anyStrip = items.Count > 0 || logins.Count > 0 || pairChip != null;
-            QuotaStrip.Visibility = anyStrip ? Visibility.Visible : Visibility.Collapsed;
-            double extra = 0;
-            if (anyStrip)
+            bool any = items.Count > 0 || logins.Count > 0 || pairChip != null;
+            if (any != _quotaSideOn)
             {
-                QuotaStrip.Measure(new Size(448, double.PositiveInfinity));
-                extra = Math.Ceiling(QuotaStrip.DesiredSize.Height); // 已含上方 6px 間距
-            }
-            if (Math.Abs(extra - _stripExtra) > 0.5)
-            {
-                _stripExtra = extra;
-                ExpandedView.Height = 226 + _stripExtra + _pageExtra;
+                _quotaSideOn = any;
                 if (_mode == IslandMode.Expanded) ApplyMode(true);
             }
+            SetExpandedHeight();
+        }
+
+        /// <summary>
+        /// 置中的動態島展開時，右邊（原本的面板）不動、往左長出額度欄：把整個島往左推半個額度欄的寬度。
+        /// 靠左上、右上、左右兩側時不用推（靠右的本來就往左長）。
+        /// </summary>
+        private void ShiftForQuotaSide(bool animate)
+        {
+            if (Island.HorizontalAlignment != HorizontalAlignment.Center || IsSide)
+            {
+                Island.BeginAnimation(MarginProperty, null);
+                return;
+            }
+            double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
+            double shift = _mode == IslandMode.Expanded && _quotaSideOn ? QuotaSideWidth * sc : 0;
+            var target = new Thickness(0, 0, shift, 0);
+            if (animate)
+                Island.BeginAnimation(MarginProperty, new ThicknessAnimation(target, TimeSpan.FromMilliseconds(_mode == IslandMode.Expanded ? 420 : 340))
+                { EasingFunction = new BackEase { Amplitude = 0.25, EasingMode = EasingMode.EaseOut } });
+            else
+            {
+                Island.BeginAnimation(MarginProperty, null);
+                Island.Margin = target;
+            }
+        }
+
+        /// <summary>展開面板的高度（天氣分頁會長高）；左邊額度欄跟著一樣高</summary>
+        private void SetExpandedHeight()
+        {
+            double h = 226 + _pageExtra;
+            ExpandedView.Height = h;
+            QuotaSide.Height = h;
         }
 
         /// <summary>系統匣「顯示項目」改了之後重新整理</summary>

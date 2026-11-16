@@ -95,7 +95,7 @@ namespace IslandBar
                     File.WriteAllText(Path.Combine(dir, "voice-rules.txt"), string.Join("\n", RuleSamples()));
                 }
 
-                foreach (var tab in new[] { "media", "quota" })
+                foreach (var tab in new[] { "media", "calendar", "weather", "quota", "stats", "clip", "quick" })
                 {
                     _window.DebugExpand(tab);
                     await Task.Delay(1500);
