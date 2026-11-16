@@ -152,8 +152,10 @@ namespace IslandBar
         }
 
         /// <summary>截圖測試用：假裝前景是全螢幕程式</summary>
+        private bool _forceFullscreen;
         public void DebugFullscreen(bool on)
         {
+            _forceFullscreen = on;
             _fullscreenHidden = on;
             UpdateVisibility();
         }

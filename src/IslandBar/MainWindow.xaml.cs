@@ -1022,7 +1022,7 @@ namespace IslandBar
 
         private void WatchTick()
         {
-            bool fs = _settings.HideOnFullscreen && IsForegroundFullscreen();
+            bool fs = _forceFullscreen || (_settings.HideOnFullscreen && IsForegroundFullscreen());
             if (fs != _fullscreenHidden)
             {
                 _fullscreenHidden = fs;

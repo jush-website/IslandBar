@@ -73,7 +73,6 @@ namespace IslandBar
                     }
                     Save(_window.RootVisual, Path.Combine(dir, "island-chat-open.png"));
                     // 全螢幕：動態島、笑臉按鈕、對話小窗都要收起來
-                    _settings.HideOnFullscreen = false;   // 不讓偵測計時器把狀態改回去
                     _window.DebugFullscreen(true);
                     await Task.Delay(800);
                     Save(_window.RootVisual, Path.Combine(dir, "island-fullscreen.png"));
