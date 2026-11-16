@@ -222,7 +222,7 @@ namespace IslandBar
             p.Children.Add(PageTitle("收合內容"));
             p.Children.Add(Check("顯示 AI 額度點點", S.ShowQuotaDots, v => { S.ShowQuotaDots = v; Changed(); }));
             p.Children.Add(Check("播放音樂時顯示歌名", S.ShowCompactTitle, v => { S.ShowCompactTitle = v; Changed(); }));
-            p.Children.Add(Check("展開時，每個分頁底部固定顯示 AI 額度", S.PinQuotaStrip, v => { S.PinQuotaStrip = v; Changed(); }));
+            p.Children.Add(Check("展開時，左邊固定顯示 AI 額度（面板往左延伸）", S.PinQuotaStrip, v => { S.PinQuotaStrip = v; Changed(); }));
 
             p.Children.Add(Heading("點點顯示的項目", 18));
             var labels = _h.Window?.AllItemLabels ?? new List<(string group, string label)>();

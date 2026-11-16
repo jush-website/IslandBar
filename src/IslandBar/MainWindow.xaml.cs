@@ -1404,7 +1404,7 @@ namespace IslandBar
         private void UpdateQuotaStrip()
         {
             var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
-            bool want = _settings.PinQuotaStrip && TabQuota.IsChecked != true;
+            bool want = _settings.PinQuotaStrip;   // AI 額度分頁也留著，切分頁時動態島寬度不會跳來跳去
             var items = want ? _allItems.Where(i => i.Group != "sys" && !hidden.Contains(i.Label)).ToList() : new List<QuotaItem>();
             var logins = want ? _quotaSnap.Providers.Where(p => p.AttentionAction != null).ToList() : new List<ProviderUsage>();
             var pairChip = want ? PairStripInfo() : null;
@@ -1444,7 +1444,7 @@ namespace IslandBar
                 foreach (var it in items)
                 {
                     var color = LevelColor(it.Percent);
-                    var g = new Grid { Margin = new Thickness(1, 0, 0, 8), Background = Brushes.Transparent, ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "\n" + it.Tip };
+                    var g = new Grid { Margin = new Thickness(1, 0, 0, 7), Background = Brushes.Transparent, ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "\n" + it.Tip };
                     g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                     g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1453,7 +1453,7 @@ namespace IslandBar
                     var val = new TextBlock { Text = it.Text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color), Margin = new Thickness(6, 0, 0, 0) };
                     Grid.SetColumn(val, 1);
                     g.Children.Add(val);
-                    var bottom = new Grid { Margin = new Thickness(0, 3, 0, 0) };
+                    var bottom = new Grid { Margin = new Thickness(0, 2, 0, 0) };
                     bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                     var bar = new Grid { Height = 4, VerticalAlignment = VerticalAlignment.Center };
@@ -1509,6 +1509,20 @@ namespace IslandBar
                 Island.BeginAnimation(MarginProperty, null);
                 Island.Margin = target;
             }
+        }
+
+        /// <summary>額度太多放不下時，底部淡出提示還可以往下捲；捲到底就不淡出</summary>
+        private void QuotaSideScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            var sv = QuotaSideScroll;
+            bool more = sv.ScrollableHeight > 1 && sv.VerticalOffset < sv.ScrollableHeight - 1;
+            if (!more) { sv.OpacityMask = null; return; }
+            if (sv.OpacityMask != null) return;
+            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+            mask.GradientStops.Add(new GradientStop(Colors.Black, 0));
+            mask.GradientStops.Add(new GradientStop(Colors.Black, 0.82));
+            mask.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
+            sv.OpacityMask = mask;
         }
 
         /// <summary>展開面板的高度（天氣分頁會長高）；左邊額度欄跟著一樣高</summary>
