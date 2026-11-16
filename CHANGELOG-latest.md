@@ -10,6 +10,13 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.4 AI 額度改放左邊
+
+- **AI 額度不再塞在展開面板下面**：展開動態島時，面板往左邊延伸出一欄「AI 額度」，每個額度一行：名稱、百分比、細長條、多久後重置；要重新登入、PAIR 狀態也在這一欄。原本的面板位置不動，只是左邊多一欄；額度太多時底部會淡出，可以用滾輪往下捲。
+- 「AI 額度」分頁不再重複列出額度，只放 PAIR 和系統資源（CPU、GPU、顯存、RAM）。
+- 面板高度不會再因為額度多寡變高變矮，切換分頁時寬度也固定。
+- 不想要左邊這欄：設定 → 收合內容 → 取消「展開時，左邊固定顯示 AI 額度」。
+
 ## v1.16.3
 
 - **「用 Claude Code 狀態列取得 Claude 額度」可以跟自己的狀態列共存**：之前已經有自訂狀態列（例如 claude-codex-usage-dashboard 的 statusline-usage.js）時會跳「設定失敗」。現在會接在你原本的狀態列前面：IslandBar 先記下 5 小時／每週額度，再執行你原本的狀態列，Claude Code 底下顯示的還是你原本的內容。取消勾選就把原本的設定原封不動還原。

@@ -1483,6 +1483,7 @@ namespace IslandBar
             {
                 _quotaSideOn = any;
                 if (_mode == IslandMode.Expanded) ApplyMode(true);
+                if (TabQuota.IsChecked == true) BuildQuotaList();
             }
             SetExpandedHeight();
         }
@@ -1547,7 +1548,8 @@ namespace IslandBar
             QuotaList.Children.Clear();
             if (scroller != null) Dispatcher.BeginInvoke(new Action(() => scroller.ScrollToVerticalOffset(offset)), DispatcherPriority.Loaded);
             var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
-            var items = _allItems.Where(i => !hidden.Contains(i.Label)).ToList();
+            // 左邊已經有 AI 額度欄：這一頁只放 PAIR 和系統資源，不要重複
+            var items = _allItems.Where(i => !hidden.Contains(i.Label) && (!_quotaSideOn || i.Group == "sys")).ToList();
             bool showPair = _settings.PairMonitor;
             QuotaEmpty.Visibility = items.Count == 0 && !showPair ? Visibility.Visible : Visibility.Collapsed;
             if (items.Count == 0 && !showPair) return;
