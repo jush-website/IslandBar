@@ -1459,7 +1459,7 @@ namespace IslandBar
                         string shortName = ShortQuotaLabel(it.Label, gname);
                         var color = LevelColor(it.Percent);
                         var row = new Grid { Height = 15, Background = Brushes.Transparent, ToolTip = it.Label + (string.IsNullOrEmpty(it.ResetIn) ? "" : "　↻" + it.ResetIn) + (string.IsNullOrEmpty(it.Tip) ? "" : "\n" + it.Tip) };
-                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
                         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
                         row.Children.Add(new TextBlock { Text = shortName, FontSize = 10, Foreground = tertiary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });

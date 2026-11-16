@@ -62,7 +62,7 @@ namespace IslandBar
         {
             Color C(byte r, byte g, byte b) => Color.FromRgb(r, g, b);
             if (code >= 95) return ("shock", C(0xFF, 0xD5, 0x4A), "雷雨");
-            if (code is 71 or 73 or 75 or 77 or 85 or 86) return ("cold", C(0x9F, 0xD8, 0xFF), "下雪");
+            if (code is 71 or 73 or 75 or 77 or 85 or 86) return ("snow", C(0x9F, 0xD8, 0xFF), "下雪");
             if (code is 65 or 82) return ("cry", C(0x7C, 0xC4, 0xFF), "大雨");
             if (code is >= 51 and <= 67 or >= 80 and <= 82) return ("sad", C(0x7C, 0xC4, 0xFF), WeatherService.Describe(code));
             if (code is 45 or 48) return ("fog", C(0xB8, 0xB8, 0xC0), "有霧");
@@ -121,6 +121,15 @@ namespace IslandBar
                     Dot(7.2, 8.2, 1.6); Dot(12.8, 8.2, 1.6);
                     var o = new System.Windows.Shapes.Ellipse { Width = 3.4, Height = 4, Fill = dark };
                     Canvas.SetLeft(o, 8.3); Canvas.SetTop(o, 11.4); Add(o);
+                    break;
+                case "snow":   // 下雪：發抖＋雪花
+                    Dot(7.2, 8.4, 1.15); Dot(12.8, 8.4, 1.15);
+                    Add(P("M5.8,13.4 L7.5,12.3 L9.2,13.4 L10.8,12.3 L12.5,13.4 L14.2,12.3", dark, null, 1.3));
+                    foreach (var (fx, fy) in new[] { (16.8, 2.4), (18.6, 6.0), (3.0, 2.2) })
+                    {
+                        var fl = new System.Windows.Shapes.Ellipse { Width = 2.2, Height = 2.2, Fill = Brushes.White };
+                        Canvas.SetLeft(fl, fx - 1.1); Canvas.SetTop(fl, fy - 1.1); Add(fl);
+                    }
                     break;
                 case "cold":   // 冷：發抖的嘴
                     Dot(7.2, 8.4, 1.15); Dot(12.8, 8.4, 1.15);
