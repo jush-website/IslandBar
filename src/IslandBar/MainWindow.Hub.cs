@@ -209,7 +209,9 @@ namespace IslandBar
             if (leftOfIsland) { FabBar.Children.Add(BatteryBar); FabBar.Children.Add(ChatFab); }
             else { FabBar.Children.Add(ChatFab); FabBar.Children.Add(BatteryBar); }
             FabBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double bw = FabBar.DesiredSize.Width, bh = FabBar.DesiredSize.Height;
+            // DesiredSize 含外距（上一次定位用的 Margin），要扣掉
+            double bw = Math.Max(0, FabBar.DesiredSize.Width - FabBar.Margin.Left - FabBar.Margin.Right);
+            double bh = Math.Max(0, FabBar.DesiredSize.Height - FabBar.Margin.Top - FabBar.Margin.Bottom);
 
             // 動態島（不含收進邊緣的位移）在視窗裡的位置
             Point p;
