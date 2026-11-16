@@ -48,6 +48,8 @@ namespace IslandBar
         public event Action AddRequested;
         /// <summary>使用者要把每個區塊拆成各自一個小工具</summary>
         public event Action<DesktopWidget> SplitRequested;
+        /// <summary>按區塊右上角的齒輪：要開的設定頁、要捲到的標題</summary>
+        public event Action<string, string> SettingsRequested;
 
         public WidgetConfig Config => _cfg;
 
@@ -228,13 +230,13 @@ namespace IslandBar
             {
                 switch (id)
                 {
-                    case "clock": Gap(); BuildClock(); break;
-                    case "weather": Gap(); BuildWeather(); break;
-                    case "perf": Gap(); BuildPerf(); break;
-                    case "events": Gap(); BuildEvents(); break;
-                    case "quota": if (_main.QuotaItems.Count > 0) { Gap(); BuildQuota(); } break;
-                    case "pair": Gap(); BuildPair(); break;
-                    case "boost": Gap(); BuildBoost(); break;
+                    case "clock": Gap(); Section("appearance", "行為", BuildClock); break;
+                    case "weather": Gap(); Section("weather", "天氣地區", BuildWeather); break;
+                    case "perf": Gap(); Section("gpu", null, BuildPerf); break;
+                    case "events": Gap(); Section("weather", "行程", BuildEvents); break;
+                    case "quota": if (_main.QuotaItems.Count > 0) { Gap(); Section("compact", "點點顯示的項目", BuildQuota); } break;
+                    case "pair": Gap(); Section("gpu", "NVIDIA PAIR", BuildPair); break;
+                    case "boost": Gap(); Section("boost", null, BuildBoost); break;
                 }
             }
             if (first)
@@ -243,6 +245,40 @@ namespace IslandBar
             UpdateClock();
             _clockTimer.Start();
             if (_perfRows.Count > 0 || _boostRam != null) { UpdatePerf(); _perfTimer.Start(); } else _perfTimer.Stop();
+        }
+
+        /// <summary>
+        /// 建一個區塊，右上角放一個齒輪（滑鼠移到區塊上才出現），按了跳到那一項設定。
+        /// </summary>
+        private void Section(string page, string anchor, Action build)
+        {
+            int start = _stack.Children.Count;
+            build();
+            var items = _stack.Children.Cast<UIElement>().Skip(start).ToList();
+            foreach (var it in items) _stack.Children.Remove(it);
+            var inner = new StackPanel();
+            foreach (var it in items) inner.Children.Add(it);
+            var host = new Grid { Background = Brushes.Transparent };
+            host.Children.Add(inner);
+            var glyph = new TextBlock
+            {
+                Text = "\uE713", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 12, Foreground = Secondary,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            };
+            var gear = new Border
+            {
+                Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Background = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)),
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Cursor = Cursors.Hand,
+                Child = glyph, Opacity = 0, ToolTip = "這一項的設定"
+            };
+            gear.MouseEnter += (s, e) => glyph.Foreground = Brushes.White;
+            gear.MouseLeave += (s, e) => glyph.Foreground = Secondary;
+            gear.MouseLeftButtonDown += (s, e) => e.Handled = true;   // 不要開始拖曳小工具
+            gear.MouseLeftButtonUp += (s, e) => { e.Handled = true; SettingsRequested?.Invoke(page, anchor); };
+            host.MouseEnter += (s, e) => gear.Opacity = 1;
+            host.MouseLeave += (s, e) => gear.Opacity = 0;
+            host.Children.Add(gear);
+            _stack.Children.Add(host);
         }
 
         private void BuildClock()

@@ -267,7 +267,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Border x:Name="Island"
                 HorizontalAlignment="Center" VerticalAlignment="Top"
                 Width="150" Height="34"
@@ -480,8 +480,23 @@
                                      ToolTip="剪貼簿歷史" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabShelf" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE7B8;"
                                      ToolTip="暫存的檔案" Checked="Tab_Checked" Visibility="Collapsed" />
-                        <RadioButton x:Name="TabQuick" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE713;"
+                        <RadioButton x:Name="TabQuick" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9E9;"
                                      ToolTip="快速設定" Checked="Tab_Checked" />
+                        <Border Width="1" Height="14" Background="{StaticResource TrackBg}" Margin="4,0,4,0" VerticalAlignment="Center" />
+                        <Border x:Name="PageSettingsBtn" Width="26" Height="26" CornerRadius="13" Cursor="Hand"
+                                ToolTip="這一頁的設定" MouseLeftButtonUp="PageSettings_Click">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#26FFFFFF" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE713;" FontSize="13" Foreground="{StaticResource Secondary}" />
+                        </Border>
                     </StackPanel>
 
                     <!-- 固定顯示的 AI 額度列（可在系統匣關閉） -->
@@ -940,6 +955,18 @@
                         </LinearGradientBrush>
                     </Border.BorderBrush>
                 </Border>
+            </Grid>
+        </Border>
+        <!-- 動態島旁邊的對話按鈕：按一下打開對話小窗，再按一下收起 -->
+        <Border x:Name="ChatFab" Width="28" Height="28" CornerRadius="14" Background="#F50D0D0F"
+                HorizontalAlignment="Left" VerticalAlignment="Top" Cursor="Hand" ToolTip="對話（再按一次收起）"
+                Visibility="Collapsed" MouseLeftButtonUp="ChatFab_Click" MouseEnter="ChatFab_MouseEnter" MouseLeave="ChatFab_MouseLeave">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="ChatFabHide" X="0" Y="0" />
+            </Border.RenderTransform>
+            <Grid>
+                <Ellipse x:Name="ChatFabRing" Stroke="{StaticResource Accent}" StrokeThickness="1.5" Opacity="0" />
+                <TextBlock x:Name="ChatFabGlyph" Style="{StaticResource Glyph}" Text="&#xE76E;" FontSize="14" />
             </Grid>
         </Border>
     </Grid>

@@ -22,7 +22,7 @@ namespace IslandBar
         /// <summary>點動態島上的回覆＝打開對話視窗</summary>
         public event Action AssistantWindowRequested;
         /// <summary>要開設定的某一頁</summary>
-        public event Action<string> SettingsPageRequested;
+        public event Action<string, string> SettingsPageRequested;
 
         private const int VoiceBarCount = 30;
         private readonly Rectangle[] _voiceBars = new Rectangle[VoiceBarCount];
@@ -72,18 +72,20 @@ namespace IslandBar
                     ShowVoice(VoiceState.Reply, GChat, "提醒", "", text, TimeSpan.FromSeconds(8));
                 };
                 Assistant.ApplySettings();
+                StartChatFab();
             }
             catch (Exception ex) { Log.Error("StartVoice", ex); }
         }
 
         private void StopVoice()
         {
+            CloseChatDock();
             try { Assistant?.Dispose(); } catch { }
         }
 
         private void ApplyVoiceSettings()
         {
-            try { Assistant?.ApplySettings(); } catch (Exception ex) { Log.Error("ApplyVoiceSettings", ex); }
+            try { Assistant?.ApplySettings(); UpdateChatFab(); if (!_settings.ShowChatButton) CloseChatDock(); } catch (Exception ex) { Log.Error("ApplyVoiceSettings", ex); }
         }
 
         // ================================================================
@@ -204,7 +206,7 @@ namespace IslandBar
             string action = _voiceErrorAction;
             _voiceHide.Stop();
             if (!VoiceBusy) { _voiceState = VoiceState.Idle; SetMode(IslandMode.Compact); }
-            if (action != null) SettingsPageRequested?.Invoke(action);
+            if (action != null) SettingsPageRequested?.Invoke(action, null);
             else AssistantWindowRequested?.Invoke();
         }
 

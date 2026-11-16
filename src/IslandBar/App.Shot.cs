@@ -21,16 +21,31 @@ namespace IslandBar
             {
                 Directory.CreateDirectory(dir);
                 await Task.Delay(8000);   // 等額度、GPU、遠端資料讀進來
-                OpenSettings();
-                await Task.Delay(800);
                 Services.Voice.Commands.DryRun = true;
+                // 合併視窗：對話模式 → 按齒輪展開設定 → 每一頁
+                OpenAssistant();
+                await Task.Delay(1200);
+                Save(_hub.CurrentContent, Path.Combine(dir, "hub-chat-start.png"));
+                OpenSettings();
+                await Task.Delay(900);
                 foreach (var page in new[] { "appearance", "voice", "compact", "notify", "boost", "gpu", "weather", "widgets", "general" })
                 {
-                    _settingsWindow.ShowPage(page);
-                    await Task.Delay(1200);
-                    Save(_settingsWindow.Content as Visual, Path.Combine(dir, "settings-" + page + ".png"));
+                    _hub.ShowSettings(page);
+                    await Task.Delay(1100);
+                    Save(_hub.CurrentContent, Path.Combine(dir, "settings-" + page + ".png"));
                 }
-                _settingsWindow.Close();
+                // 從動態島的齒輪跳進來：直接捲到「行程」
+                OpenSettings("weather", "行程");
+                await Task.Delay(1200);
+                Save(_hub.CurrentContent, Path.Combine(dir, "settings-jump-weather-calendar.png"));
+                OpenSettings("compact", "點點顯示的項目");
+                await Task.Delay(1200);
+                Save(_hub.CurrentContent, Path.Combine(dir, "settings-jump-quota.png"));
+                File.WriteAllText(Path.Combine(dir, "hub-size.txt"), $"settings {_hub.ActualWidth}x{_hub.ActualHeight}");
+                _hub.ShowChat();
+                await Task.Delay(800);
+                File.AppendAllText(Path.Combine(dir, "hub-size.txt"), $"\nchat {_hub.ActualWidth}x{_hub.ActualHeight}");
+                _hub.Close();
 
                 // 語音助理：動態島的聆聽／思考／回覆、對話視窗
                 foreach (var v in new[] { "listen", "think", "reply" })
@@ -45,25 +60,39 @@ namespace IslandBar
                     asst.ClearHistory();
                     foreach (var say in new[] { "打開記事本", "音量調到三十", "十分鐘後提醒我關火", "台灣最高的山是哪一座", "現在幾點" })
                         await asst.HandleAsync(say, speak: false);
-                    await Task.Delay(500);
-                    Save(_window.IslandVisual, Path.Combine(dir, "island-voice-last.png"));
+                    await Task.Delay(8000);   // 等動態島上的回覆收起來
+                    Save(_window.RootVisual, Path.Combine(dir, "island-with-chat-button.png"));
+                    // 動態島旁的對話小窗
+                    _window.ToggleChatDock();
+                    await Task.Delay(1500);
+                    var dock = Windows.OfType<ChatDock>().FirstOrDefault();
+                    if (dock != null)
+                    {
+                        Save(dock.Content as Visual, Path.Combine(dir, "chat-dock.png"));
+                        File.WriteAllText(Path.Combine(dir, "chat-dock-pos.txt"), $"dock {dock.Left:0},{dock.Top:0} {dock.ActualWidth:0}x{dock.ActualHeight:0}; island window {_window.Left:0},{_window.Top:0} {_window.ActualWidth:0}x{_window.ActualHeight:0}");
+                    }
+                    Save(_window.RootVisual, Path.Combine(dir, "island-chat-open.png"));
+                    _window.ToggleChatDock();
                     OpenAssistant();
                     await Task.Delay(1500);
-                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-chat.png"));
-                    _assistantWindow.ShowPage("reminders");
+                    Save(_hub.CurrentContent, Path.Combine(dir, "hub-chat.png"));
+                    _hub.ShowPage("reminders");
                     await Task.Delay(800);
-                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-reminders.png"));
-                    _assistantWindow.ShowPage("help");
+                    Save(_hub.CurrentContent, Path.Combine(dir, "hub-reminders.png"));
+                    _hub.ShowPage("help");
                     await Task.Delay(800);
-                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-help.png"));
+                    Save(_hub.CurrentContent, Path.Combine(dir, "hub-help.png"));
+                    _hub.Close();
                     asst.ClearHistory();
-                    _assistantWindow.ShowPage("chat");
-                    await Task.Delay(800);
-                    Save(_assistantWindow.Content as Visual, Path.Combine(dir, "assistant-empty.png"));
-                    _assistantWindow.Close();
                     File.WriteAllText(Path.Combine(dir, "voice-rules.txt"), string.Join("\n", RuleSamples()));
                 }
 
+                foreach (var tab in new[] { "media", "quota" })
+                {
+                    _window.DebugExpand(tab);
+                    await Task.Delay(1500);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-root-" + tab + ".png"));
+                }
                 foreach (var tab in new[] { "shelf", "stats", "quick" })
                 {
                     _window.DebugExpand(tab);

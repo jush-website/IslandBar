@@ -247,6 +247,7 @@ namespace IslandBar
 
         private void PositionWindow()
         {
+            Dispatcher.BeginInvoke(new Action(UpdateChatFab), System.Windows.Threading.DispatcherPriority.Loaded);
             ApplyScale();
             double sw = SystemParameters.PrimaryScreenWidth;
             double sh = SystemParameters.PrimaryScreenHeight;
@@ -392,6 +393,7 @@ namespace IslandBar
                 var ease = new CubicEase { EasingMode = hide ? EasingMode.EaseIn : EasingMode.EaseOut };
                 HideTransform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, dur) { EasingFunction = ease });
                 HideTransform.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, dur) { EasingFunction = ease });
+                AnimateChatFabHide(x, y, dur, ease);
             }
             else
             {
@@ -399,6 +401,7 @@ namespace IslandBar
                 HideTransform.BeginAnimation(TranslateTransform.YProperty, null);
                 HideTransform.X = x;
                 HideTransform.Y = y;
+                AnimateChatFabHide(x, y, TimeSpan.Zero, null);
             }
         }
 
@@ -491,6 +494,7 @@ namespace IslandBar
             ShowView(ExpandedView, _mode == IslandMode.Expanded, animate);
             ShowView(WheelView, _mode == IslandMode.Wheel, animate);
             ShowView(VoiceView, _mode == IslandMode.Voice, animate);
+            Dispatcher.BeginInvoke(new Action(UpdateChatFab), System.Windows.Threading.DispatcherPriority.Loaded);
             HudView.Width = _hudIsMessage ? 380 : 300;
 
             // 自動隱藏：非收合狀態一律露出；收合狀態排程收回

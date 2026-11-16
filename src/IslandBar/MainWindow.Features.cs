@@ -41,6 +41,7 @@ namespace IslandBar
 
         // ---- 截圖測試用（--shot） ----
         public FrameworkElement IslandVisual => Island;
+        public FrameworkElement RootVisual => RootGrid;
 
         public void DebugExpand(string tab)
         {
@@ -49,6 +50,8 @@ namespace IslandBar
             {
                 case "shelf": TabShelf.Visibility = Visibility.Visible; TabShelf.IsChecked = true; break;
                 case "quick": TabQuick.IsChecked = true; break;
+                case "media": TabMedia.IsChecked = true; break;
+                case "quota": TabQuota.IsChecked = true; break;
                 default: TabStats.IsChecked = true; break;
             }
             SetMode(IslandMode.Expanded);

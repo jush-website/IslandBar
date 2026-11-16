@@ -93,6 +93,9 @@ namespace IslandBar
         public bool AutoTrimMemory { get; set; } = false;
         public int AutoTrimThreshold { get; set; } = 90;
 
+        /// <summary>動態島旁邊顯示對話按鈕（表情圖示）</summary>
+        public bool ShowChatButton { get; set; } = true;
+
         /// <summary>語音助理：按住說話鍵說話，放開就執行</summary>
         public bool AssistantEnabled { get; set; } = true;
         /// <summary>說話鍵（Windows 虛擬鍵碼；0xA3＝右 Ctrl，5／6＝滑鼠側鍵）</summary>

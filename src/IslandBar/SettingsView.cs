@@ -32,86 +32,115 @@ namespace IslandBar
     }
 
     /// <summary>
-    /// IslandBar 設定：左邊分類、右邊設定內容。改了就立刻生效（不用按儲存）。
+    /// IslandBar 設定（放在合併視窗裡）：左邊分類、右邊設定內容。改了就立刻生效（不用按儲存）。
     /// </summary>
-    public sealed class SettingsWindow : Window
+    public sealed class SettingsView : Grid
     {
         private readonly SettingsHost _h;
         private AppSettings S => _h.Settings;
-        private readonly StackPanel _nav = new StackPanel { Margin = new Thickness(10, 14, 10, 10) };
-        private readonly ScrollViewer _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(26, 18, 26, 24) };
+        private readonly StackPanel _nav = new StackPanel { Margin = new Thickness(12, 16, 12, 10) };
+        private readonly ScrollViewer _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(30, 22, 30, 28) };
         private readonly DispatcherTimer _applyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         private string _page = "appearance";
 
-        private static readonly Brush Bg = Frozen(Color.FromRgb(0x1C, 0x1C, 0x1E));
-        private static readonly Brush Side = Frozen(Color.FromRgb(0x16, 0x16, 0x18));
-        private static readonly Brush Card = Frozen(Color.FromRgb(0x2C, 0x2C, 0x2E));
-        private static readonly Brush CardHover = Frozen(Color.FromRgb(0x3A, 0x3A, 0x3C));
-        private static readonly Brush Dim = Frozen(Color.FromRgb(0x98, 0x98, 0x9F));
-        private static readonly Brush Accent = Frozen(Color.FromRgb(0x0A, 0x84, 0xFF));
+        /// <summary>按「← 對話」</summary>
+        public event Action BackRequested;
+        public string CurrentPage => _page;
+
+        private static readonly Brush Bg = Frozen(Color.FromRgb(0x0E, 0x0E, 0x10));
+        private static readonly Brush Side = Frozen(Color.FromRgb(0x15, 0x15, 0x18));
+        private static readonly Brush Card = Frozen(Color.FromRgb(0x1E, 0x1E, 0x22));
+        private static readonly Brush CardHover = Frozen(Color.FromRgb(0x2A, 0x2A, 0x2F));
+        private static readonly Brush Dim = Frozen(Color.FromRgb(0x8E, 0x8E, 0x96));
+        private static readonly Brush Accent = Frozen(Color.FromRgb(0x34, 0xD3, 0xC0));
+        private static readonly Brush OnAccent = Frozen(Color.FromRgb(0x0E, 0x0E, 0x10));
         private static readonly Brush Good = Frozen(Color.FromRgb(0x30, 0xD1, 0x58));
         private static readonly Brush Bad = Frozen(Color.FromRgb(0xFF, 0x6B, 0x6B));
 
-        private static readonly (string id, string glyph, string title)[] Pages =
+        public static readonly (string id, string glyph, string title)[] Pages =
         {
-            ("appearance", "", "外觀"),
+            ("appearance", "\uE790", "外觀"),
             ("voice", "\uE720", "語音助理"),
-            ("compact", "", "收合內容"),
-            ("notify", "", "通知與提示"),
+            ("compact", "\uE8A1", "收合內容"),
+            ("notify", "\uEA8F", "通知與提示"),
             ("boost", "\uEC4A", "一鍵加速"),
-            ("gpu", "", "GPU 與 PAIR"),
-            ("weather", "", "天氣與行程"),
-            ("widgets", "", "桌面小工具"),
-            ("general", "", "一般")
+            ("gpu", "\uE7F4", "GPU 與 PAIR"),
+            ("weather", "\uE9CA", "天氣與行程"),
+            ("widgets", "\uE8A9", "桌面小工具"),
+            ("general", "\uE713", "一般")
         };
 
-        public SettingsWindow(SettingsHost host)
+        public SettingsView(SettingsHost host)
         {
             _h = host;
-            Title = "IslandBar 設定";
-            Width = 780;
-            Height = 600;
-            MinWidth = 640;
-            MinHeight = 440;
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Bg;
-            Foreground = Brushes.White;
-            FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft JhengHei UI");
-            FontSize = 13;
-            KeyDown += (s, e) => { if (e.Key == Key.Escape) Close(); };
             _applyTimer.Tick += (s, e) => { _applyTimer.Stop(); _h.Apply(); };
-            Closed += (s, e) =>
-            {
-                if (_applyTimer.IsEnabled) { _applyTimer.Stop(); _h.Apply(); }
-                Services.Voice.VoiceDownloads.Changed -= OnVoiceDownload;
-                _h.Window?.Assistant?.StopKeyCapture();
-            };
             Services.Voice.VoiceDownloads.Changed += OnVoiceDownload;
 
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var side = new Border { Background = Side, Child = _nav };
-            grid.Children.Add(side);
+            ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
+            ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var side = new Border { Background = Side, Child = new ScrollViewer { Content = _nav, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+            Children.Add(side);
             Grid.SetColumn(_scroll, 1);
-            grid.Children.Add(_scroll);
-            Content = grid;
+            Children.Add(_scroll);
             ShowSection(_page);
         }
 
-        /// <summary>開啟到指定分頁</summary>
-        public void ShowPage(string id) => ShowSection(id);
+        /// <summary>離開設定（回到對話或關掉視窗）：還沒套用的改動立刻套用</summary>
+        public void Detach()
+        {
+            if (_applyTimer.IsEnabled) { _applyTimer.Stop(); _h.Apply(); }
+            Services.Voice.VoiceDownloads.Changed -= OnVoiceDownload;
+            _h.Window?.Assistant?.StopKeyCapture();
+        }
+
+        /// <summary>開啟到指定分頁；anchor＝捲到那一頁裡標題是這個字的地方</summary>
+        public void ShowPage(string id, string anchor = null)
+        {
+            ShowSection(id ?? _page);
+            if (!string.IsNullOrEmpty(anchor)) ScrollToAnchor(anchor);
+        }
+
+        private void ScrollToAnchor(string anchor)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_scroll.Content is not Panel page) return;
+                foreach (UIElement el in page.Children)
+                {
+                    if (el is TextBlock tb && tb.Text.StartsWith(anchor, StringComparison.Ordinal) && tb.FontSize >= 14)
+                    {
+                        var pt = tb.TranslatePoint(new Point(0, 0), page);
+                        _scroll.ScrollToVerticalOffset(Math.Max(0, pt.Y - 12));
+                        // 標題閃一下，讓人知道跳到哪
+                        var anim = new System.Windows.Media.Animation.ColorAnimation(Color.FromRgb(0x34, 0xD3, 0xC0), Colors.White, TimeSpan.FromMilliseconds(1600));
+                        var br = new SolidColorBrush(Colors.White);
+                        tb.Foreground = br;
+                        br.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+                        return;
+                    }
+                }
+            }), DispatcherPriority.Loaded);
+        }
 
         private void ShowSection(string id)
         {
             _page = id;
             _nav.Children.Clear();
-            var brand = new TextBlock { Text = "IslandBar", FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10, 0, 0, 2) };
-            _nav.Children.Add(brand);
-            _nav.Children.Add(new TextBlock { Text = "v" + UpdateService.CurrentVersion.ToString(3), Foreground = Dim, FontSize = 11, Margin = new Thickness(10, 0, 0, 14) });
+            var back = new Border { Padding = new Thickness(10, 8, 10, 8), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 0, 12), Cursor = Cursors.Hand, Background = Brushes.Transparent };
+            var bsp = new StackPanel { Orientation = Orientation.Horizontal };
+            bsp.Children.Add(new TextBlock { Text = "\uE72B", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 13, Width = 26, VerticalAlignment = VerticalAlignment.Center, Foreground = Accent });
+            bsp.Children.Add(new TextBlock { Text = "回到對話", VerticalAlignment = VerticalAlignment.Center, Foreground = Accent });
+            back.Child = bsp;
+            back.MouseEnter += (s, e) => back.Background = Card;
+            back.MouseLeave += (s, e) => back.Background = Brushes.Transparent;
+            back.MouseLeftButtonUp += (s, e) => BackRequested?.Invoke();
+            _nav.Children.Add(back);
+            _nav.Children.Add(new TextBlock { Text = "設定", FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10, 0, 0, 2) });
+            _nav.Children.Add(new TextBlock { Text = "IslandBar v" + UpdateService.CurrentVersion.ToString(3), Foreground = Dim, FontSize = 11, Margin = new Thickness(10, 0, 0, 14) });
             foreach (var (pid, glyph, title) in Pages) _nav.Children.Add(NavItem(pid, glyph, title));
 
-            var page = new StackPanel();
+            var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
             switch (id)
             {
                 case "compact": BuildCompact(page); break;
@@ -122,7 +151,7 @@ namespace IslandBar
                 case "weather": BuildWeather(page); break;
                 case "widgets": BuildWidgets(page); break;
                 case "general": BuildGeneral(page); break;
-                default: BuildAppearance(page); break;
+                default: _page = "appearance"; BuildAppearance(page); break;
             }
             _scroll.Content = page;
             _scroll.ScrollToTop();
@@ -132,14 +161,14 @@ namespace IslandBar
         {
             bool active = id == _page;
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
-            sp.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Width = 26 });
+            sp.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Width = 28, Foreground = active ? Accent : Brushes.White });
             sp.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
             var b = new Border
             {
-                Child = sp, Padding = new Thickness(10, 8, 10, 8), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 1, 0, 1),
+                Child = sp, Padding = new Thickness(12, 9, 12, 9), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 1, 0, 1),
                 Background = active ? Card : Brushes.Transparent, Cursor = Cursors.Hand
             };
-            b.MouseEnter += (s, e) => { if (id != _page) b.Background = Frozen(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)); };
+            b.MouseEnter += (s, e) => { if (id != _page) b.Background = Frozen(Color.FromRgb(0x1B, 0x1B, 0x1F)); };
             b.MouseLeave += (s, e) => { if (id != _page) b.Background = Brushes.Transparent; };
             b.MouseLeftButtonUp += (s, e) => ShowSection(id);
             return b;
@@ -181,6 +210,7 @@ namespace IslandBar
             p.Children.Add(Check("自動隱藏到螢幕邊緣（滑鼠碰到才滑出來）", S.AutoHide, v => { S.AutoHide = v; Changed(); }));
             p.Children.Add(Check("全螢幕（遊戲、影片）時自動隱藏", S.HideOnFullscreen, v => { S.HideOnFullscreen = v; Changed(); }));
             p.Children.Add(Check("24 小時制", S.Use24Hour, v => { S.Use24Hour = v; Changed(); }));
+            p.Children.Add(Check("動態島旁邊顯示對話按鈕（按一下打開對話小窗，再按一次收起）", S.ShowChatButton, v => { S.ShowChatButton = v; Changed(); }));
         }
 
         // ================================================================
@@ -433,8 +463,9 @@ namespace IslandBar
             p.Children.Add(PageTitle("語音助理"));
             p.Children.Add(Note("按住說話鍵說話，放開就執行：開程式、放音樂、調音量、計時提醒、查天氣和 AI 額度…。語音辨識在你的電腦上跑（只用 CPU），聽不懂的說法交給 PAIR 叢集或本機小模型，不需要任何雲端帳號。麥克風只有按住時才會打開。"));
             p.Children.Add(Check("啟用語音助理", S.AssistantEnabled, v => { S.AssistantEnabled = v; Changed(); }));
-            var open = MakeButton("開啟對話視窗", false);
-            open.Click += (s, e) => _h.OpenAssistant?.Invoke();
+            p.Children.Add(Check("動態島旁邊顯示對話按鈕（表情圖示）", S.ShowChatButton, v => { S.ShowChatButton = v; Changed(); }));
+            var open = MakeButton("回到對話", false);
+            open.Click += (s, e) => BackRequested?.Invoke();
             p.Children.Add(open);
 
             // ---- 說話鍵 ----
@@ -643,7 +674,7 @@ namespace IslandBar
                 catch (Exception ex)
                 {
                     Log.Error("SettingsHook", ex);
-                    MessageBox.Show(this, "設定失敗：" + ex.Message, "IslandBar", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(Window.GetWindow(this), "設定失敗：" + ex.Message, "IslandBar", MessageBoxButton.OK, MessageBoxImage.Warning);
                     try { cb.IsChecked = installed(); } catch { }
                 }
             };
@@ -670,7 +701,7 @@ namespace IslandBar
             pick.Click += (s, e) =>
             {
                 var dlg = new Microsoft.Win32.OpenFileDialog { Title = "選擇訓練輸出的 log 檔", Filter = "Log / 文字檔|*.log;*.txt;*.out|所有檔案|*.*" };
-                if (dlg.ShowDialog(this) != true) return;
+                if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
                 S.TrainingLogPath = dlg.FileName;
                 S.Save();
                 path.Text = dlg.FileName;
@@ -812,6 +843,7 @@ namespace IslandBar
                 {
                     bool on = sel.HasValue && EqualityComparer<T>.Default.Equals(v, sel.Value);
                     b.Background = on ? Accent : Card;
+                    if (b.Child is TextBlock tb) tb.Foreground = on ? OnAccent : Brushes.White;
                 }
             }
             foreach (var (text, value) in options)
@@ -836,7 +868,7 @@ namespace IslandBar
             var b = new Button
             {
                 Content = text, Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 8, 8, 0),
-                Background = primary ? Accent : Card, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand,
+                Background = primary ? Accent : Card, Foreground = primary ? OnAccent : Brushes.White, FontWeight = primary ? FontWeights.SemiBold : FontWeights.Normal, BorderThickness = new Thickness(0), Cursor = Cursors.Hand,
                 HorizontalAlignment = HorizontalAlignment.Left
             };
             // 預設按鈕樣式的滑鼠移上去會變白底，換成簡單的圓角樣式

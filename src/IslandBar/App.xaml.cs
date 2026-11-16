@@ -94,7 +94,7 @@ namespace IslandBar
             _window.OpenRadarRequested += OpenWindy;
             _window.SettingsRequested += () => OpenSettings();
             _window.AssistantWindowRequested += OpenAssistant;
-            _window.SettingsPageRequested += page => OpenSettings(page);
+            _window.SettingsPageRequested += (page, anchor) => OpenSettings(page, anchor);
             _window.RestartRequested += RestartViaExplorer;
             _window.RecoverRequested += () => { foreach (var w in _widgets.ToList()) w.Recover(); };
             _window.Show();
@@ -202,7 +202,7 @@ namespace IslandBar
                 _settings.MigrateWidgets();
                 if (_settings.WidgetEnabled) ShowWidgets();
                 if (_windy != null) { _windy.Close(); OpenWindy(); }
-                if (_settingsWindow != null) { _settingsWindow.Close(); _settingsWindow = null; }
+                if (_hub != null) { _hub.Close(); _hub = null; }
             };
 
             var checkUpdate = new Forms.ToolStripMenuItem("檢查更新");
@@ -250,7 +250,7 @@ namespace IslandBar
                 Visible = true
             };
             // 點一下系統匣圖示＝開設定；雙擊＝隱藏 / 顯示動態島
-            _tray.MouseClick += (s, e) => { if (e.Button == Forms.MouseButtons.Left) OpenSettings(); };
+            _tray.MouseClick += (s, e) => { if (e.Button == Forms.MouseButtons.Left) OpenAssistant(); };
             _tray.DoubleClick += (s, e) => _window?.ToggleUserHidden();
             _tray.BalloonTipClicked += async (s, e) =>
             {
@@ -275,33 +275,16 @@ namespace IslandBar
         //  設定畫面
         // ================================================================
 
-        private SettingsWindow _settingsWindow;
-        private AssistantWindow _assistantWindow;
+        private HubWindow _hub;
 
-        /// <summary>語音助理的對話視窗</summary>
-        public void OpenAssistant()
+        /// <summary>主視窗（對話＋設定合併）：沒開就開，開了就拿到前面</summary>
+        private HubWindow EnsureHub()
         {
-            if (_window?.Assistant == null) return;
-            if (_assistantWindow != null)
+            if (_hub != null)
             {
-                if (_assistantWindow.WindowState == WindowState.Minimized) _assistantWindow.WindowState = WindowState.Normal;
-                _assistantWindow.Activate();
-                return;
-            }
-            _assistantWindow = new AssistantWindow(_window.Assistant, _settings, page => OpenSettings(page));
-            _assistantWindow.Closed += (s, e) => _assistantWindow = null;
-            _assistantWindow.Show();
-            _assistantWindow.Activate();
-        }
-
-        public void OpenSettings(string page = null)
-        {
-            if (_settingsWindow != null)
-            {
-                if (page != null) _settingsWindow.ShowPage(page);
-                if (_settingsWindow.WindowState == WindowState.Minimized) _settingsWindow.WindowState = WindowState.Normal;
-                _settingsWindow.Activate();
-                return;
+                if (_hub.WindowState == WindowState.Minimized) _hub.WindowState = WindowState.Normal;
+                _hub.Activate();
+                return _hub;
             }
             var host = new SettingsHost
             {
@@ -338,11 +321,31 @@ namespace IslandBar
                 Notify = text => Balloon("IslandBar", text, Forms.ToolTipIcon.Info),
                 OpenAssistant = OpenAssistant
             };
-            _settingsWindow = new SettingsWindow(host);
-            _settingsWindow.Closed += (s, e) => _settingsWindow = null;
-            if (page != null) _settingsWindow.ShowPage(page);
-            _settingsWindow.Show();
-            _settingsWindow.Activate();
+            _hub = new HubWindow(host, _window?.Assistant);
+            _hub.Closed += (s, e) => { if (_hub == s) _hub = null; };
+            return _hub;
+        }
+
+        private void ShowHub(HubWindow h)
+        {
+            if (!h.IsVisible) h.Show();
+            h.Activate();
+        }
+
+        /// <summary>打開對話（合併視窗的對話頁）</summary>
+        public void OpenAssistant()
+        {
+            var h = EnsureHub();
+            h.ShowChat("chat");
+            ShowHub(h);
+        }
+
+        /// <summary>直接打開大的設定畫面；page／anchor＝跳到哪一頁、捲到哪個標題</summary>
+        public void OpenSettings(string page = null, string anchor = null)
+        {
+            var h = EnsureHub();
+            h.ShowSettings(page, anchor);
+            ShowHub(h);
         }
 
         private void SyncMenu() { }
@@ -365,6 +368,7 @@ namespace IslandBar
             w.AddRequested += AddWidget;
             w.RemoveRequested += RemoveWidget;
             w.SplitRequested += SplitWidget;
+            w.SettingsRequested += (page, anchor) => OpenSettings(page, anchor);
             w.Closed += (s, e) => _widgets.Remove(w);
             _widgets.Add(w);
             w.Show();

@@ -31,6 +31,7 @@ namespace IslandBar.Services.Voice
         public event Action<ChatTurn> TurnAdded;
         public event Action RemindersChanged;
         public event Action<string> ReminderFired;
+        public event Action HistoryCleared;
 
         public VoiceState State { get; private set; } = VoiceState.Idle;
         public List<ChatTurn> History { get; } = new List<ChatTurn>();
@@ -245,6 +246,7 @@ namespace IslandBar.Services.Voice
         {
             History.Clear();
             SaveHistory();
+            HistoryCleared?.Invoke();
         }
 
         private void LoadHistory()
