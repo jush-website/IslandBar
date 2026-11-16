@@ -1039,6 +1039,7 @@ namespace IslandBar
         private void UpdateVisibility()
         {
             Island.Visibility = (_userHidden || _fullscreenHidden) ? Visibility.Hidden : Visibility.Visible;
+            UpdateChatFab();   // 全螢幕、隱藏動態島時，旁邊的笑臉按鈕也一起收起來（對話小窗也會先藏起來）
         }
 
         private bool IsForegroundFullscreen()

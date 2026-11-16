@@ -54,7 +54,7 @@ namespace IslandBar
         private void UpdateChatFab()
         {
             if (ChatFab == null) return;
-            bool show = _settings.ShowChatButton && Assistant != null && _mode != IslandMode.Wheel && IsLoaded;
+            bool show = _settings.ShowChatButton && Assistant != null && _mode != IslandMode.Wheel && IsLoaded && !_userHidden && !_fullscreenHidden;
             double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
             ChatFab.LayoutTransform = Math.Abs(sc - 1) < 0.001 ? Transform.Identity : new ScaleTransform(sc, sc);
             ChatFab.Background = Island.Background;
@@ -150,6 +150,15 @@ namespace IslandBar
             try { d?.Close(); } catch { }
             UpdateChatFab();
         }
+
+        /// <summary>截圖測試用：假裝前景是全螢幕程式</summary>
+        public void DebugFullscreen(bool on)
+        {
+            _fullscreenHidden = on;
+            UpdateVisibility();
+        }
+
+        public bool DebugChatDockVisible => _chatDock?.IsVisible == true;
 
         /// <summary>對話按鈕在螢幕上的位置（DIP）；動態島看不到時傳回 null</summary>
         private Rect? ChatFabScreenRect()

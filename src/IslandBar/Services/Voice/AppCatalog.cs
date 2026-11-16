@@ -181,10 +181,14 @@ namespace IslandBar.Services.Voice
             else if (BuiltInNicknames.TryGetValue(q, out var b)) candidates.Insert(0, Norm(b));
 
             var apps = All();
-            foreach (var c in candidates)
+            bool nicknamed = candidates.Count > 1;
+            for (int ci = 0; ci < candidates.Count; ci++)
             {
+                var c = candidates[ci];
+                // 叫法指定的程式名要幾乎一樣才算（沒裝 LINE 時，「賴」不要開到名字裡剛好有 line 的程式）
+                int min = nicknamed && ci == 0 ? 85 : 55;
                 var best = apps.Select(a => (a, score: Score(a, c)))
-                               .Where(x => x.score >= 55)
+                               .Where(x => x.score >= min)
                                .OrderByDescending(x => x.score)
                                .ThenBy(x => x.a.Source == "apps" ? 0 : 1)
                                .ThenBy(x => x.a.Norm.Length)
@@ -196,14 +200,20 @@ namespace IslandBar.Services.Voice
 
         private static int Score(AppEntry a, string q)
         {
-            string n = a.Norm;
-            if (n == q) return 100;
+            if (a.Norm == q) return 100;
+            // 括號裡的說明（例如「Perl (command line)」的 command line）不拿來比對
+            string main = Regex.Replace(a.Name, @"[（(].*?[)）]", " ");
+            string n = Norm(main);
+            if (n.Length == 0) n = a.Norm;
+            if (n == q) return 98;
             if (n.StartsWith(q, StringComparison.Ordinal)) return 90 - Math.Min(15, n.Length - q.Length);
             // 某個英文單字開頭符合，例如「studio code」→「Visual Studio Code」
-            var words = Regex.Split(a.Name.ToLowerInvariant(), @"[\s\-_.]+").Where(w => w.Length > 0).ToList();
+            var words = Regex.Split(main.ToLowerInvariant(), @"[\s\-_.]+").Select(Norm).Where(w => w.Length > 0).ToList();
             for (int i = 1; i < words.Count; i++)
                 if (string.Concat(words.Skip(i)).StartsWith(q, StringComparison.Ordinal)) return 82;
-            if (q.Length >= 2 && n.Contains(q, StringComparison.Ordinal)) return 72 - Math.Min(12, (n.Length - q.Length) / 2);
+            bool cjk = Regex.IsMatch(q, @"\p{IsCJKUnifiedIdeographs}");
+            // 包含：中文 2 個字以上；英文太短（例如 line）容易誤中，要 5 個字母以上
+            if ((cjk ? q.Length >= 2 : q.Length >= 5) && n.Contains(q, StringComparison.Ordinal)) return 72 - Math.Min(12, (n.Length - q.Length) / 2);
             if (q.Length >= 4 && q.StartsWith(n, StringComparison.Ordinal) && n.Length >= 3) return 66;
             // 很像：英文用編輯距離，中文看共同字元
             if (q.Length >= 3)

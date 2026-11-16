@@ -238,7 +238,7 @@ namespace IslandBar.Services.Voice
             (new[] { "wifi", "wifi設定", "網路設定" }, "ms-settings:network-wifi", "Wi-Fi 設定"),
             (new[] { "工作管理員", "taskmanager", "任務管理器" }, "taskmgr.exe", "工作管理員"),
             (new[] { "命令提示字元", "cmd" }, "cmd.exe", "命令提示字元"),
-            (new[] { "終端機", "terminal", "powershell" }, "wt.exe|powershell.exe", "終端機"),
+            (new[] { "終端機", "terminal", "windowsterminal" }, "wt.exe|powershell.exe", "終端機"),
             (new[] { "控制台", "控制面板", "controlpanel" }, "control.exe", "控制台"),
             (new[] { "剪取工具", "截圖工具", "截圖", "snippingtool" }, "ms-screenclip:", "截圖"),
             (new[] { "相機", "camera" }, "microsoft.windows.camera:", "相機"),

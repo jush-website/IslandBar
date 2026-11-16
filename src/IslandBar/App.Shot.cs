@@ -72,6 +72,15 @@ namespace IslandBar
                         File.WriteAllText(Path.Combine(dir, "chat-dock-pos.txt"), $"dock {dock.Left:0},{dock.Top:0} {dock.ActualWidth:0}x{dock.ActualHeight:0}; island window {_window.Left:0},{_window.Top:0} {_window.ActualWidth:0}x{_window.ActualHeight:0}");
                     }
                     Save(_window.RootVisual, Path.Combine(dir, "island-chat-open.png"));
+                    // 全螢幕：動態島、笑臉按鈕、對話小窗都要收起來
+                    _settings.HideOnFullscreen = false;   // 不讓偵測計時器把狀態改回去
+                    _window.DebugFullscreen(true);
+                    await Task.Delay(800);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-fullscreen.png"));
+                    File.AppendAllText(Path.Combine(dir, "chat-dock-pos.txt"), $"\nfullscreen: dock visible={_window.DebugChatDockVisible}");
+                    _window.DebugFullscreen(false);
+                    await Task.Delay(800);
+                    File.AppendAllText(Path.Combine(dir, "chat-dock-pos.txt"), $"\nafter fullscreen: dock visible={_window.DebugChatDockVisible}");
                     _window.ToggleChatDock();
                     OpenAssistant();
                     await Task.Delay(1500);
