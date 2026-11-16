@@ -322,6 +322,8 @@ namespace IslandBar
             {
                 case "time":
                     return $"現在 {DateTime.Now.ToString("tt h:mm", ZhTwCulture)}，{DateTime.Now.ToString("M月d日 dddd", ZhTwCulture)}";
+                case "battery":
+                    return BatteryStatus();
                 case "date":
                     return $"今天是 {DateTime.Now.ToString("yyyy年M月d日 dddd", ZhTwCulture)}";
                 case "weather":

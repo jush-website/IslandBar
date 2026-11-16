@@ -97,6 +97,7 @@ namespace IslandBar
                 StartAppNotify();
                 StartAutoTrim();
                 StartVoice();
+                StartDeviceBattery();
             }
             catch (Exception ex) { Log.Error("StartFeatures", ex); }
             ApplyFeatureSettings();
@@ -108,6 +109,7 @@ namespace IslandBar
             try { _downloads?.Stop(); } catch { }
             StopAppNotify();
             StopVoice();
+            StopDeviceBattery();
         }
 
         /// <summary>設定改變時呼叫</summary>
@@ -120,6 +122,8 @@ namespace IslandBar
             if (!_settings.RgbNotify) StopRgb();
             else ApplyRgbStyle();
             ApplyVoiceSettings();
+            BuildBatteryBar();
+            UpdateChatFab();
         }
 
         // ================================================================

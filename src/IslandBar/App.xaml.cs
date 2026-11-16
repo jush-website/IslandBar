@@ -102,6 +102,7 @@ namespace IslandBar
                 Balloon("IslandBar · AI 額度", text + "。點這裡重新登入。", Forms.ToolTipIcon.Warning);
                 _balloonLoginAction = action;
             };
+            _window.DeviceBatteryLow += text => Balloon("IslandBar · 電量", text, Forms.ToolTipIcon.Warning);
             _window.TrainingFinished += text =>
                 Balloon("IslandBar · GPU", text, Forms.ToolTipIcon.Info);
             _window.OpenRadarRequested += OpenWindy;

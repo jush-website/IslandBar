@@ -118,6 +118,14 @@ namespace IslandBar
                     using (var fs = File.Create(Path.Combine(dir, "fab-moods.png"))) enc.Save(fs);
                     _window.DebugFabMood(0, 26, true);
                 }
+                // 無線裝置電量：圓環、數字
+                foreach (var style in new[] { "ring", "number" })
+                {
+                    _window.DebugBatteries(style);
+                    await Task.Delay(700);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-battery-" + style + ".png"));
+                }
+                _settings.DeviceBatteryStyle = "ring";
                 _window.DebugQuotaSample();
                 foreach (var tab in new[] { "media", "calendar", "weather", "quota", "stats", "clip", "quick" })
                 {

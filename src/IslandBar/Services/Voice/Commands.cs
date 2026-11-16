@@ -95,6 +95,7 @@ namespace IslandBar.Services.Voice
             // ---- 時間、狀態 ----
             if (Regex.IsMatch(t, @"(現在)?幾點(了|鐘)?$|現在時間|what(')?stime")) return Done(_host.Status("time"));
             if (Regex.IsMatch(t, @"(今天)(是)?(幾號|幾月幾號|星期幾|禮拜幾|日期)")) return Done(_host.Status("date"));
+            if (Regex.IsMatch(t, @"電量|還有多少電|剩多少電|沒電了|電池")) return Done(_host.Status("battery"));
             if (Regex.IsMatch(t, @"天氣|下雨|下雪|颱風|氣溫|幾度|要帶傘|冷不冷|熱不熱")) return Done(_host.Status("weather"));
             if (Regex.IsMatch(t, @"加速|清理(記憶體|電腦|一下)?$|電腦(好|很|有點)?(卡|慢|lag)|boost")) return Done(await _host.BoostAsync());
             if (Regex.IsMatch(t, @"額度|用量|quota|token")) return Done(_host.Status("quota"));

@@ -182,12 +182,34 @@ namespace IslandBar
         /// <summary>把對話按鈕放在動態島旁邊：上方時放右邊（右上時放左邊），左右兩側時放下面</summary>
         private void UpdateChatFab()
         {
-            if (ChatFab == null) return;
-            bool show = _settings.ShowChatButton && Assistant != null && _mode != IslandMode.Wheel && IsLoaded && !_userHidden && !_fullscreenHidden;
+            if (FabBar == null) return;
+            bool hidden = _mode == IslandMode.Wheel || !IsLoaded || _userHidden || _fullscreenHidden;
+            bool showFab = _settings.ShowChatButton && Assistant != null;
+            bool showBat = BatteryBarWanted;
             double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
-            ChatFab.LayoutTransform = Math.Abs(sc - 1) < 0.001 ? Transform.Identity : new ScaleTransform(sc, sc);
+            if (hidden || (!showFab && !showBat)) { FabBar.Visibility = Visibility.Collapsed; return; }
+
+            FabBar.LayoutTransform = Math.Abs(sc - 1) < 0.001 ? Transform.Identity : new ScaleTransform(sc, sc);
             ChatFab.Background = Island.Background;
-            if (!show) { ChatFab.Visibility = Visibility.Collapsed; return; }
+            BatteryBar.Background = Island.Background;
+            ChatFab.Visibility = showFab ? Visibility.Visible : Visibility.Collapsed;
+            BatteryBar.Visibility = showBat ? Visibility.Visible : Visibility.Collapsed;
+
+            // 排列：上方時橫的（右上時電量放左邊，笑臉貼著動態島），左右兩側時直的
+            bool side = IsSide;
+            bool leftOfIsland = !side && _settings.Position == IslandPosition.TopRight && _settings.AlongEdge == null;
+            FabBar.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
+            if (BatteryItems.Orientation != (side ? Orientation.Vertical : Orientation.Horizontal)) BuildBatteryBar();
+            BatteryBar.Height = side ? double.NaN : 28;
+            BatteryBar.Width = side ? 28 : double.NaN;
+            BatteryBar.Padding = side ? new Thickness(0, 5, 0, 5) : new Thickness(5, 0, 5, 0);
+            double gapIn = showFab ? 6 : 0;
+            BatteryBar.Margin = side ? new Thickness(0, gapIn, 0, 0) : leftOfIsland ? new Thickness(0, 0, gapIn, 0) : new Thickness(gapIn, 0, 0, 0);
+            FabBar.Children.Clear();
+            if (leftOfIsland) { FabBar.Children.Add(BatteryBar); FabBar.Children.Add(ChatFab); }
+            else { FabBar.Children.Add(ChatFab); FabBar.Children.Add(BatteryBar); }
+            FabBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double bw = FabBar.DesiredSize.Width, bh = FabBar.DesiredSize.Height;
 
             // 動態島（不含收進邊緣的位移）在視窗裡的位置
             Point p;
@@ -200,22 +222,22 @@ namespace IslandBar
             double winW = RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : Width;
             double winH = RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : Height;
             double x, y;
-            if (IsSide)
+            if (side)
             {
                 x = p.X + (iw - fab) / 2;
                 y = p.Y + ih + gap;
-                if (y + fab > winH) { ChatFab.Visibility = Visibility.Collapsed; return; }   // 展開時放不下
+                if (y + bh > winH) { FabBar.Visibility = Visibility.Collapsed; return; }   // 展開時放不下
             }
             else
             {
                 double compactH = CompactThickness * sc;
                 y = p.Y + Math.Max(0, (compactH - fab) / 2);
                 x = p.X + iw + gap;
-                if (_settings.Position == IslandPosition.TopRight && _settings.AlongEdge == null || x + fab > winW) x = p.X - gap - fab;
-                if (x < 0) { ChatFab.Visibility = Visibility.Collapsed; return; }
+                if (leftOfIsland || x + bw > winW) x = p.X - gap - bw;
+                if (x < 0) { FabBar.Visibility = Visibility.Collapsed; return; }
             }
-            ChatFab.Margin = new Thickness(x, y, 0, 0);
-            ChatFab.Visibility = Visibility.Visible;
+            FabBar.Margin = new Thickness(x, y, 0, 0);
+            FabBar.Visibility = Visibility.Visible;
             ChatFabRing.Opacity = _chatDock != null ? 1 : 0;
             ChatFabGlyph.Foreground = _chatDock != null ? (Brush)FindResource("Accent") : Brushes.White;
         }
@@ -318,12 +340,14 @@ namespace IslandBar
             double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
             double size = 28 * sc;
             // 按鈕沒顯示（例如關掉了）：就用動態島右下角
-            if (ChatFab.Visibility != Visibility.Visible)
+            if (FabBar.Visibility != Visibility.Visible || ChatFab.Visibility != Visibility.Visible)
             {
                 var ip = Island.TranslatePoint(new Point(0, 0), RootGrid);
                 return new Rect(Left + ip.X + Island.ActualWidth * sc - size, Top + ip.Y - HideTransform.Y * sc + CompactThickness * sc, size, size);
             }
-            return new Rect(Left + ChatFab.Margin.Left, Top + ChatFab.Margin.Top, size, size);
+            // 笑臉在列裡的位置（扣掉收進邊緣的位移）
+            var fp = ChatFab.TranslatePoint(new Point(0, 0), RootGrid);
+            return new Rect(Left + fp.X - ChatFabHide.X, Top + fp.Y - ChatFabHide.Y, size, size);
         }
     }
 }

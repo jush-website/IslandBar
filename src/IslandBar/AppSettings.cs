@@ -93,6 +93,13 @@ namespace IslandBar
         public bool AutoTrimMemory { get; set; } = false;
         public int AutoTrimThreshold { get; set; } = 90;
 
+        /// <summary>動態島旁邊顯示無線裝置（藍牙耳機、滑鼠、鍵盤、手把）的電量</summary>
+        public bool DeviceBatteryShow { get; set; } = true;
+        /// <summary>電量顯示方式：ring（圓環）或 number（數字）</summary>
+        public string DeviceBatteryStyle { get; set; } = "ring";
+        /// <summary>剩 50%、10% 時通知</summary>
+        public bool DeviceBatteryNotify { get; set; } = true;
+
         /// <summary>動態島旁邊顯示對話按鈕（表情圖示）</summary>
         public bool ShowChatButton { get; set; } = true;
 
