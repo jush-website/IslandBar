@@ -3,6 +3,11 @@ name: Windows smoke test
 # 手動執行：在 Windows runner 上跑 IslandBar --shot，把設定畫面與動態島截圖推到 ci-smoke 分支（只用來檢查畫面）
 on:
   workflow_dispatch:
+    inputs:
+      assistant:
+        description: '也跑語音助理自我測試（會下載模型，比較久）'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -41,6 +46,7 @@ jobs:
           Get-ChildItem shots | Format-Table Name, Length
 
       - name: Assistant self-test
+        if: ${{ inputs.assistant }}
         shell: pwsh
         timeout-minutes: 25
         run: |
