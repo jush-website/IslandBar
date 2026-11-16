@@ -10,6 +10,10 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.3
+
+- **「用 Claude Code 狀態列取得 Claude 額度」可以跟自己的狀態列共存**：之前已經有自訂狀態列（例如 claude-codex-usage-dashboard 的 statusline-usage.js）時會跳「設定失敗」。現在會接在你原本的狀態列前面：IslandBar 先記下 5 小時／每週額度，再執行你原本的狀態列，Claude Code 底下顯示的還是你原本的內容。取消勾選就把原本的設定原封不動還原。
+
 ## v1.16.2
 
 - **可以打開電腦上所有的應用程式**：說「打開＋程式名」，跟開始功能表「所有應用程式」同一份清單（Microsoft Store 的 App 也可以），名字只說一部分或差一兩個字也找得到。
