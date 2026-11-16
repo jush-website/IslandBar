@@ -152,10 +152,11 @@ namespace IslandBar
         }
 
         /// <summary>截圖測試用：放幾個假的 AI 額度，看左邊額度欄的樣子</summary>
+        private System.Collections.Generic.List<Services.QuotaItem> _debugItems;
         public void DebugQuotaSample()
         {
             var now = DateTimeOffset.Now;
-            _allItems = new System.Collections.Generic.List<Services.QuotaItem>(_allItems)
+            _debugItems = new System.Collections.Generic.List<Services.QuotaItem>
             {
                 new Services.QuotaItem { Group = "claude", Label = "Claude 5小時", Percent = 42, Text = "42%", ResetsAt = now.AddHours(2.2) },
                 new Services.QuotaItem { Group = "claude", Label = "Claude 每週", Percent = 76, Text = "76%", ResetsAt = now.AddDays(3.3) },
@@ -164,6 +165,7 @@ namespace IslandBar
                 new Services.QuotaItem { Group = "antigravity", Label = "AG Gemini 5h", Percent = 5, Text = "5%" },
                 new Services.QuotaItem { Group = "antigravity", Label = "AG Claude/GPT 週", Percent = 58, Text = "58%", ResetsAt = now.AddDays(1.5) }
             };
+            RefreshItems();
             UpdateQuotaStrip();
         }
 

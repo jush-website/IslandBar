@@ -1319,6 +1319,7 @@ namespace IslandBar
         private void RefreshItems()
         {
             _allItems = QuotaService.BuildItems(_quotaSnap);
+            if (_debugItems != null) _allItems.InsertRange(0, _debugItems);
             _allItems.AddRange(SystemItems());
             var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
             _shownItems = _settings.ShowQuotaDots ? _allItems.Where(i => !hidden.Contains(i.Label)).ToList() : new List<QuotaItem>();
