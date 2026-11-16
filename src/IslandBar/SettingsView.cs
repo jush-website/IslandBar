@@ -287,7 +287,7 @@ namespace IslandBar
             p.Children.Add(HookCheck("Codex 完成時通知我", HookBridge.IsCodexInstalled, () => HookBridge.InstallCodex(), HookBridge.UninstallCodex));
 
             p.Children.Add(Heading("Claude 額度的備用來源", 20));
-            p.Children.Add(Note("讓 Claude Code 的狀態列把 5 小時／每週額度交給 IslandBar：不需要讀 Claude 的登入憑證，每次用 Claude Code 時更新。Claude Code 底下會多一行「模型 | 5h % | 7d %」。已經有自訂狀態列的話不會覆蓋。"));
+            p.Children.Add(Note("讓 Claude Code 的狀態列把 5 小時／每週額度交給 IslandBar：不需要讀 Claude 的登入憑證，每次用 Claude Code 時更新。Claude Code 底下會多一行「模型 | 5h % | 7d %」。已經有自己的狀態列的話，會照樣顯示你原本的狀態列（IslandBar 只是在它前面順便記下額度），取消勾選就還原。"));
             p.Children.Add(HookCheck("用 Claude Code 狀態列取得 Claude 額度", HookBridge.IsClaudeStatusLineInstalled, () => HookBridge.InstallClaudeStatusLine(), HookBridge.UninstallClaudeStatusLine));
         }
 

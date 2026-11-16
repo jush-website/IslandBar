@@ -96,13 +96,80 @@ namespace IslandBar.Services
                 if (parts.Count > 0) line = string.Join(" | ", parts);
             }
             catch { }
+            byte[] output = null;
+            // 使用者原本就有自己的狀態列：照樣執行它、顯示它的內容（IslandBar 只是順便把額度記下來）
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "--chain") >= 0) output = RunChained(json);
             try
             {
                 using var stdout = Console.OpenStandardOutput();
-                var bytes = Encoding.UTF8.GetBytes(line + "\n");
+                var bytes = output ?? Encoding.UTF8.GetBytes(line + "\n");
                 stdout.Write(bytes, 0, bytes.Length);
             }
             catch { }
+        }
+
+        /// <summary>接手前的狀態列設定（整段 statusLine），解除時還原</summary>
+        private static string ChainFile => Path.Combine(Path.GetDirectoryName(QuotaService.StatusLineFile) ?? "", "statusline-chain.json");
+
+        private static byte[] RunChained(string json)
+        {
+            try
+            {
+                if (!File.Exists(ChainFile)) return null;
+                var node = JsonNode.Parse(File.ReadAllText(ChainFile));
+                string cmd = node?["command"]?.ToString();
+                if (string.IsNullOrWhiteSpace(cmd)) return null;
+                var outp = RunShell("cmd.exe", new[] { "/d", "/s", "/c", "\"" + cmd + "\"" }, json, raw: true);
+                if (outp == null || outp.Length == 0)
+                {
+                    // Claude Code 在 Windows 上可能是用 Git Bash 跑狀態列：bash 語法的指令改用 bash 再試
+                    string bash = FindGitBash();
+                    if (bash != null) outp = RunShell(bash, new[] { "-c", cmd }, json, raw: false);
+                }
+                return outp != null && outp.Length > 0 ? outp : null;
+            }
+            catch { return null; }
+        }
+
+        private static byte[] RunShell(string exe, string[] args, string stdin, bool raw)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo(exe)
+                {
+                    UseShellExecute = false, CreateNoWindow = true,
+                    RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
+                };
+                if (raw) psi.Arguments = string.Join(" ", args);   // cmd 的 /s /c "…" 要原封不動
+                else foreach (var a in args) psi.ArgumentList.Add(a);
+                using var p = System.Diagnostics.Process.Start(psi);
+                if (p == null) return null;
+                var bytes = Encoding.UTF8.GetBytes(stdin ?? "");
+                try { p.StandardInput.BaseStream.Write(bytes, 0, bytes.Length); p.StandardInput.Close(); } catch { }
+                var ms = new MemoryStream();
+                var copy = p.StandardOutput.BaseStream.CopyToAsync(ms);
+                _ = p.StandardError.ReadToEndAsync();
+                if (!p.WaitForExit(8000)) { try { p.Kill(true); } catch { } return null; }
+                copy.Wait(2000);
+                return ms.ToArray();
+            }
+            catch { return null; }
+        }
+
+        private static string FindGitBash()
+        {
+            foreach (var dir in new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")
+            })
+            {
+                if (string.IsNullOrEmpty(dir)) continue;
+                string b = Path.Combine(dir, "Git", "bin", "bash.exe");
+                if (File.Exists(b)) return b;
+            }
+            return null;
         }
 
         private static string StatusLineCommand =>
@@ -128,9 +195,22 @@ namespace IslandBar.Services
             else root = new JsonObject();
             string existing = root["statusLine"]?["command"]?.ToString();
             if (!string.IsNullOrEmpty(existing) && !existing.Contains("--statusline"))
-                throw new InvalidOperationException("Claude Code 已經有自訂的狀態列（" + existing + "），為了不覆蓋它就沒有加。");
-            root["statusLine"] = new JsonObject { ["type"] = "command", ["command"] = StatusLineCommand, ["padding"] = 0 };
-            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            {
+                // 已經有自己的狀態列：記下原本的設定，改成「IslandBar 先記額度，再執行原本的狀態列」，畫面跟原本一樣
+                var original = JsonNode.Parse(root["statusLine"].ToJsonString()) as JsonObject;
+                Directory.CreateDirectory(Path.GetDirectoryName(ChainFile));
+                File.WriteAllText(ChainFile, original.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+                var wrapped = JsonNode.Parse(original.ToJsonString()) as JsonObject;
+                wrapped["type"] = "command";
+                wrapped["command"] = StatusLineCommand + " --chain";
+                root["statusLine"] = wrapped;
+                Log.Write("StatusLine: 接在原本的狀態列前面（原本的設定存在 " + ChainFile + "）");
+            }
+            else
+            {
+                root["statusLine"] = new JsonObject { ["type"] = "command", ["command"] = StatusLineCommand, ["padding"] = 0 };
+            }
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
             return path;
         }
 
@@ -140,8 +220,17 @@ namespace IslandBar.Services
             if (!File.Exists(path)) return;
             var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
             if (root == null) return;
-            if ((root["statusLine"]?["command"]?.ToString() ?? "").Contains("--statusline")) root.Remove("statusLine");
-            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            if ((root["statusLine"]?["command"]?.ToString() ?? "").Contains("--statusline"))
+            {
+                root.Remove("statusLine");
+                // 還原使用者原本的狀態列
+                if (File.Exists(ChainFile))
+                {
+                    try { root["statusLine"] = JsonNode.Parse(File.ReadAllText(ChainFile)); } catch { }
+                    try { File.Delete(ChainFile); } catch { }
+                }
+            }
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
         }
 
         private static string ReadStdin(TimeSpan timeout)
@@ -278,7 +367,7 @@ namespace IslandBar.Services
                     }
                 });
             }
-            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
             return path;
         }
 
@@ -297,7 +386,7 @@ namespace IslandBar.Services
                 }
             }
             if (hooks.Count == 0) root.Remove("hooks");
-            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
         }
 
         private static void RemoveOurs(JsonArray arr)

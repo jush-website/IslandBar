@@ -45,6 +45,35 @@ jobs:
           Copy-Item (Join-Path $dir 'log.txt') shots\log.txt -ErrorAction SilentlyContinue
           Get-ChildItem shots | Format-Table Name, Length
 
+      - name: Status line chaining test
+        shell: pwsh
+        run: |
+          $claude = Join-Path $env:USERPROFILE '.claude'
+          New-Item -ItemType Directory -Force $claude | Out-Null
+          $node = (Get-Command node).Source
+          $js = Join-Path $env:RUNNER_TEMP '額度 測試\statusline.js'
+          New-Item -ItemType Directory -Force (Split-Path $js) | Out-Null
+          [IO.File]::WriteAllText($js, "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const j=JSON.parse(d);console.log('CUSTOM 額度 '+j.model.display_name)})")
+          $cfg = @{ statusLine = @{ type = 'command'; command = "`"$node`" `"$js`""; padding = 1 } } | ConvertTo-Json -Depth 5
+          [IO.File]::WriteAllText((Join-Path $claude 'settings.json'), $cfg, [Text.UTF8Encoding]::new($false))
+          Start-Process publish\IslandBar.exe -ArgumentList '--statusline-install' -Wait
+          $out = @("== 加上之後", (Get-Content (Join-Path $claude 'settings.json') -Raw -Encoding utf8))
+          $psi = [Diagnostics.ProcessStartInfo]::new((Resolve-Path publish\IslandBar.exe).Path, '--statusline --chain')
+          $psi.UseShellExecute = $false; $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true
+          $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+          $p = [Diagnostics.Process]::Start($psi)
+          $p.StandardInput.Write('{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":42,"resets_at":1999999999},"seven_day":{"used_percentage":7}}}')
+          $p.StandardInput.Close()
+          $text = $p.StandardOutput.ReadToEnd(); $p.WaitForExit(15000) | Out-Null
+          $out += "== 狀態列輸出：$text"
+          $sl = Join-Path $env:APPDATA 'IslandBar\claude-statusline.json'
+          $out += "== 額度檔：" + $(if (Test-Path $sl) { Get-Content $sl -Raw } else { '（沒有）' })
+          Start-Process publish\IslandBar.exe -ArgumentList '--statusline-uninstall' -Wait
+          $out += "== 拿掉之後", (Get-Content (Join-Path $claude 'settings.json') -Raw -Encoding utf8)
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $out | Out-File -Encoding utf8 shots\statusline-test.txt
+          $out
+
       - name: Assistant self-test
         if: ${{ inputs.assistant }}
         shell: pwsh

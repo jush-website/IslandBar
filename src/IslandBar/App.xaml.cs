@@ -48,6 +48,19 @@ namespace IslandBar
                 return;
             }
 
+            // 測試／指令列用：加上或拿掉「用狀態列取得 Claude 額度」
+            if (e.Args.Length >= 1 && (e.Args[0] == "--statusline-install" || e.Args[0] == "--statusline-uninstall"))
+            {
+                try
+                {
+                    if (e.Args[0] == "--statusline-install") HookBridge.InstallClaudeStatusLine();
+                    else HookBridge.UninstallClaudeStatusLine();
+                }
+                catch (Exception ex) { Log.Error("StatusLineCli", ex); }
+                Shutdown();
+                return;
+            }
+
             if (e.Args.Length >= 1 && e.Args[0] == "--hook")
             {
                 try { HookBridge.RunClient(e.Args); } catch { }
