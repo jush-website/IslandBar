@@ -460,11 +460,8 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <DockPanel Margin="1,0,4,0">
-                            <TextBlock x:Name="QuotaSideTime" DockPanel.Dock="Right" FontSize="10" Foreground="{StaticResource Tertiary}" VerticalAlignment="Center" />
-                            <TextBlock Text="AI 額度" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Secondary}" VerticalAlignment="Center" />
-                        </DockPanel>
-                        <ScrollViewer x:Name="QuotaSideScroll" Grid.Row="1" Margin="0,7,0,0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"
+                        <TextBlock x:Name="QuotaSideTime" Visibility="Collapsed" />
+                        <ScrollViewer x:Name="QuotaSideScroll" Grid.Row="1" Margin="0,0,0,0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"
                                       ScrollChanged="QuotaSideScroll_ScrollChanged">
                             <StackPanel x:Name="QuotaStrip" Margin="0,0,4,0" />
                         </ScrollViewer>
@@ -987,6 +984,8 @@
             <Grid>
                 <Ellipse x:Name="ChatFabRing" Stroke="{StaticResource Accent}" StrokeThickness="1.5" Opacity="0" />
                 <TextBlock x:Name="ChatFabGlyph" Style="{StaticResource Glyph}" Text="&#xE76E;" FontSize="14" />
+                <TextBlock x:Name="ChatFabBadge" FontFamily="Segoe UI Emoji" FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Margin="0,0,-3,-3" IsHitTestVisible="False" Visibility="Collapsed" />
             </Grid>
         </Border>
     </Grid>

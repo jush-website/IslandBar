@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using IslandBar.Services;
 
 namespace IslandBar
 {
@@ -48,6 +49,59 @@ namespace IslandBar
         {
             Island.SizeChanged += (s, e) => UpdateChatFab();
             UpdateChatFab();
+            UpdateChatFabMood();
+        }
+
+        // ================================================================
+        //  笑臉跟著天氣換表情
+        // ================================================================
+
+        private static readonly FontFamily EmojiFont = new FontFamily("Segoe UI Emoji");
+
+        /// <summary>依現在的天氣挑表情（臉、角落的小圖示、顏色、說明）</summary>
+        public static (string face, string badge, Color tint, string mood) WeatherMood(int code, double temp, bool isDay)
+        {
+            Color C(byte r, byte g, byte b) => Color.FromRgb(r, g, b);
+            if (code >= 95) return ("😱", "⚡", C(0xFF, 0xD5, 0x4A), "雷雨");
+            if (code is 71 or 73 or 75 or 77 or 85 or 86) return ("🥶", "❄", C(0x9F, 0xD8, 0xFF), "下雪");
+            if (code is >= 51 and <= 67 or >= 80 and <= 82) return (code is 65 or 82 ? "😭" : "😢", "☔", C(0x7C, 0xC4, 0xFF), WeatherService.Describe(code));
+            if (code is 45 or 48) return ("😶", "🌫", C(0xB8, 0xB8, 0xC0), "有霧");
+            if (temp >= 32) return ("🥵", isDay ? "☀" : null, C(0xFF, 0x8A, 0x50), "好熱");
+            if (temp <= 12) return ("🥶", null, C(0x9F, 0xD8, 0xFF), "好冷");
+            if (code is 0 or 1) return isDay ? ("😎", null, C(0xFF, 0xD5, 0x4A), "晴天") : ("😴", "🌙", C(0xC9, 0xB8, 0xFF), "晴朗的夜晚");
+            if (code == 2) return ("🙂", "⛅", Colors.White, "局部多雲");
+            return ("😐", "☁", C(0xC8, 0xC8, 0xD0), "陰天");
+        }
+
+        /// <summary>動態島旁的笑臉跟著當地天氣換表情；還沒拿到天氣時用原本的笑臉圖示</summary>
+        public FrameworkElement ChatFabVisual => ChatFab;
+
+        /// <summary>截圖測試用：套用某種天氣的表情</summary>
+        public void DebugFabMood(int code, double temp, bool isDay) => UpdateChatFabMood(new Forecast { Code = code, Temp = temp, IsDay = isDay });
+
+        private void UpdateChatFabMood() => UpdateChatFabMood(_forecast);
+
+        private void UpdateChatFabMood(Forecast f)
+        {
+            if (ChatFabGlyph == null) return;
+            if (f == null)
+            {
+                ChatFabGlyph.FontFamily = (FontFamily)FindResource("IconFont");
+                ChatFabGlyph.Text = "\uE76E";
+                ChatFabGlyph.Tag = null;
+                ChatFabBadge.Visibility = Visibility.Collapsed;
+                ChatFab.ToolTip = "對話（再按一次收起）";
+                return;
+            }
+            var (face, badge, tint, mood) = WeatherMood(f.Code, f.Temp, f.IsDay);
+            ChatFabGlyph.FontFamily = EmojiFont;
+            ChatFabGlyph.Text = face;
+            ChatFabGlyph.Tag = tint;   // 記下天氣的顏色，打開對話時還是用它
+            ChatFabGlyph.Foreground = new SolidColorBrush(tint);
+            ChatFabBadge.Text = badge ?? "";
+            ChatFabBadge.Visibility = string.IsNullOrEmpty(badge) ? Visibility.Collapsed : Visibility.Visible;
+            ChatFabBadge.Foreground = new SolidColorBrush(tint);
+            ChatFab.ToolTip = $"對話（{_settings.City} {f.Temp:0}° {mood}）";
         }
 
         /// <summary>把對話按鈕放在動態島旁邊：上方時放右邊（右上時放左邊），左右兩側時放下面</summary>
@@ -88,7 +142,7 @@ namespace IslandBar
             ChatFab.Margin = new Thickness(x, y, 0, 0);
             ChatFab.Visibility = Visibility.Visible;
             ChatFabRing.Opacity = _chatDock != null ? 1 : 0;
-            ChatFabGlyph.Foreground = _chatDock != null ? (Brush)FindResource("Accent") : Brushes.White;
+            ChatFabGlyph.Foreground = ChatFabGlyph.Tag is Color tint ? new SolidColorBrush(tint) : _chatDock != null ? (Brush)FindResource("Accent") : Brushes.White;
         }
 
         /// <summary>收進邊緣的動畫：對話按鈕跟著一起動</summary>

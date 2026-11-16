@@ -95,6 +95,14 @@ namespace IslandBar
                     File.WriteAllText(Path.Combine(dir, "voice-rules.txt"), string.Join("\n", RuleSamples()));
                 }
 
+                // 笑臉跟著天氣換表情
+                int mi = 0;
+                foreach (var (code, temp, day) in new[] { (0, 26.0, true), (0, 22.0, false), (2, 24.0, true), (3, 20.0, true), (61, 18.0, true), (82, 18.0, true), (95, 25.0, true), (73, -2.0, true), (45, 15.0, true), (1, 35.0, true), (3, 8.0, true) })
+                {
+                    _window.DebugFabMood(code, temp, day);
+                    await Task.Delay(250);
+                    Save(_window.ChatFabVisual, Path.Combine(dir, $"fab-mood-{mi++:00}-{code}-{temp:0}{(day ? "d" : "n")}.png"));
+                }
                 _window.DebugQuotaSample();
                 foreach (var tab in new[] { "media", "calendar", "weather", "quota", "stats", "clip", "quick" })
                 {

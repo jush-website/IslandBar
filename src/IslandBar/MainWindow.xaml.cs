@@ -1015,6 +1015,7 @@ namespace IslandBar
                 return;
             }
             _forecast = f;
+            UpdateChatFabMood();
             ApplyForecast(f);
         }
 
@@ -1440,43 +1441,53 @@ namespace IslandBar
                     row.Children.Add(new TextBlock { Text = pairChip.Value.text, FontSize = 10.5, Foreground = new SolidColorBrush(pairChip.Value.color), Margin = new Thickness(5, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 128 });
                     QuotaStrip.Children.Add(row);
                 }
-                // 每個額度：名稱＋百分比、細長條、多久後重置
-                foreach (var it in items)
+                // 每家一組：標題、每個額度一行（短名稱、細長條、百分比）、最下面一小行重置時間
+                var groupNames = new Dictionary<string, string> { ["claude"] = "Claude", ["codex"] = "Codex", ["antigravity"] = "Antigravity" };
+                foreach (var grp in items.GroupBy(i => i.Group))
                 {
-                    var color = LevelColor(it.Percent);
-                    var g = new Grid { Margin = new Thickness(1, 0, 0, 7), Background = Brushes.Transparent, ToolTip = string.IsNullOrEmpty(it.Tip) ? it.Label : it.Label + "\n" + it.Tip };
-                    g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                    g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                    g.Children.Add(new TextBlock { Text = it.Label, FontSize = 10.5, Foreground = secondary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
-                    var val = new TextBlock { Text = it.Text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color), Margin = new Thickness(6, 0, 0, 0) };
-                    Grid.SetColumn(val, 1);
-                    g.Children.Add(val);
-                    var bottom = new Grid { Margin = new Thickness(0, 2, 0, 0) };
-                    bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    var bar = new Grid { Height = 4, VerticalAlignment = VerticalAlignment.Center };
-                    bar.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = track });
-                    bar.Children.Add(new Border
+                    string gname = groupNames.TryGetValue(grp.Key, out var gn) ? gn : grp.Key;
+                    var prov = _quotaSnap.Providers.FirstOrDefault(p => p.Id == grp.Key);
+                    var box = new StackPanel { Margin = new Thickness(1, 0, 0, 6) };
+                    box.Children.Add(new TextBlock
                     {
-                        CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(color), RenderTransformOrigin = new Point(0, 0.5),
-                        RenderTransform = new ScaleTransform(Math.Clamp((it.Percent ?? 0) / 100.0, 0, 1), 1)
+                        Text = gname + (prov != null && prov.Stale ? "（舊資料）" : ""), FontSize = 10.5, FontWeight = FontWeights.SemiBold,
+                        Foreground = secondary, Margin = new Thickness(0, 0, 0, 1), ToolTip = prov?.Message
                     });
-                    bottom.Children.Add(bar);
-                    if (it.ResetIn.Length > 0)
+                    var resets = new List<string>();
+                    foreach (var it in grp)
                     {
-                        var reset = new TextBlock { Text = "↻" + it.ResetIn, FontSize = 9.5, Foreground = tertiary, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-                        Grid.SetColumn(reset, 1);
-                        bottom.Children.Add(reset);
+                        string shortName = ShortQuotaLabel(it.Label, gname);
+                        var color = LevelColor(it.Percent);
+                        var row = new Grid { Height = 15, Background = Brushes.Transparent, ToolTip = it.Label + (string.IsNullOrEmpty(it.ResetIn) ? "" : "　↻" + it.ResetIn) + (string.IsNullOrEmpty(it.Tip) ? "" : "\n" + it.Tip) };
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
+                        row.Children.Add(new TextBlock { Text = shortName, FontSize = 10, Foreground = tertiary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+                        var bar = new Grid { Height = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 4, 0) };
+                        bar.Children.Add(new Border { CornerRadius = new CornerRadius(2), Background = track });
+                        bar.Children.Add(new Border
+                        {
+                            CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(color), RenderTransformOrigin = new Point(0, 0.5),
+                            RenderTransform = new ScaleTransform(Math.Clamp((it.Percent ?? 0) / 100.0, 0, 1), 1)
+                        });
+                        Grid.SetColumn(bar, 1);
+                        row.Children.Add(bar);
+                        var val = new TextBlock { Text = it.Text, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(color), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                        Grid.SetColumn(val, 2);
+                        row.Children.Add(val);
+                        box.Children.Add(row);
+                        if (it.ResetIn.Length > 0) resets.Add(it.ResetIn);
                     }
-                    Grid.SetRow(bottom, 1);
-                    Grid.SetColumnSpan(bottom, 2);
-                    g.Children.Add(bottom);
-                    QuotaStrip.Children.Add(g);
+                    if (resets.Count > 0)
+                        box.Children.Add(new TextBlock
+                        {
+                            Text = "↻ " + string.Join(" / ", resets.Distinct()), FontSize = 9.5, Foreground = tertiary,
+                            TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 0, 0)
+                        });
+                    QuotaStrip.Children.Add(box);
                 }
             }
-            QuotaSideTime.Text = _quotaSnap != null ? _quotaSnap.UpdatedAt.ToString("HH:mm") : "";
+            QuotaSide.ToolTip = _quotaSnap != null ? $"AI 額度（{_quotaSnap.UpdatedAt:HH:mm} 更新）" : "AI 額度";
 
             bool any = items.Count > 0 || logins.Count > 0 || pairChip != null;
             if (any != _quotaSideOn)
@@ -1510,6 +1521,15 @@ namespace IslandBar
                 Island.BeginAnimation(MarginProperty, null);
                 Island.Margin = target;
             }
+        }
+
+        /// <summary>「Claude 5小時」→「5小時」、「AG Gemini 5h」→「Gemini 5h」：同一組裡不用再寫一次是誰</summary>
+        private static string ShortQuotaLabel(string label, string group)
+        {
+            string t = (label ?? "").Trim();
+            foreach (var prefix in new[] { group + " ", "AG ", "Antigravity " })
+                if (t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) { t = t.Substring(prefix.Length).Trim(); break; }
+            return t.Length > 0 ? t : label;
         }
 
         /// <summary>額度太多放不下時，底部淡出提示還可以往下捲；捲到底就不淡出</summary>
