@@ -59,6 +59,8 @@ namespace IslandBar.Services.Voice
             _getS = settings;
             _ui = ui;
             _cmd = new Commands(host, AddReminder, CancelReminders);
+            _cmd.Nicknames = () => _s.AssistantAppAliases;
+            AppCatalog.Preload();
             Brain = new Brain(_cmd, LocalLlm)
             {
                 Mode = () => _s.AssistantBrain,

@@ -322,7 +322,7 @@ namespace IslandBar.Services.Voice
 
         private static JsonArray Tools() => new JsonArray
         {
-            Fn("open_app", "打開電腦上的程式、資料夾或 Windows 設定頁，例如 記事本、Spotify、LINE、Chrome、檔案總管、藍牙設定",
+            Fn("open_app", "打開電腦上的任何應用程式、資料夾或 Windows 設定頁，例如 記事本、Spotify、LINE（使用者常叫它「賴」）、Chrome、檔案總管、藍牙設定。名稱照使用者說的傳就好",
                 new JsonObject { ["name"] = P("string", "程式名稱") }, "name"),
             Fn("open_website", "用瀏覽器打開網站", new JsonObject { ["url"] = P("string", "網址或網站名稱，例如 youtube.com、巴哈姆特") }, "url"),
             Fn("web_search", "上網搜尋", new JsonObject { ["query"] = P("string", "要搜尋的內容"), ["site"] = P("string", "在哪裡搜尋", "google", "youtube") }, "query"),

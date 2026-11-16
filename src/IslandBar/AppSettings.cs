@@ -113,6 +113,8 @@ namespace IslandBar
         public bool AssistantSpeak { get; set; } = true;
         public string AssistantVoice { get; set; } = "";
         public double AssistantRate { get; set; } = 1.1;
+        /// <summary>程式的自訂叫法（說「打開賴」就開 LINE）：「叫法=程式名」，逗號或換行分開</summary>
+        public string AssistantAppAliases { get; set; } = "賴=LINE";
         /// <summary>開始／結束說話的提示音</summary>
         public bool AssistantSounds { get; set; } = true;
         /// <summary>辨識模型一直留在記憶體（反應快一點，多用約 300 MB）</summary>

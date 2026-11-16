@@ -29,7 +29,7 @@ namespace IslandBar
 
         private static readonly string[] RulePhrases =
         {
-            "打開記事本", "幫我開 Spotify", "開啟下載資料夾", "打開藍牙設定", "打開 youtube", "打開 github.com", "開啟小算盤",
+            "打開記事本", "幫我開 Spotify", "打開賴", "打開 PowerShell", "開一下 edge", "開啟下載資料夾", "打開藍牙設定", "打開 youtube", "打開 github.com", "開啟小算盤",
             "下一首", "暫停", "繼續播放", "播放周杰倫", "我想聽 AC/DC 的歌", "這首歌叫什麼",
             "音量調到三十", "音量 50", "大聲一點", "小聲一點", "靜音", "取消靜音",
             "計時五分鐘", "倒數一個半小時", "10分鐘後提醒我關火", "提醒我三十秒後喝水", "等一下二十分鐘後要提醒我去收衣服", "取消提醒",
@@ -53,6 +53,19 @@ namespace IslandBar
                     (r.Actions.Count > 0 ? $"  <{string.Join(",", r.Actions)}>" : "") + (Commands.LastLaunched != null && r.Reply.StartsWith("已開啟") ? "  ⇒ " + Commands.LastLaunched : ""));
             }
             Commands.DryRun = dry;
+            // 電腦上所有的程式
+            try
+            {
+                var apps = AppCatalog.All(refresh: true);
+                lines.Add($"\n== 應用程式清單：{apps.Count} 個（apps={apps.Count(a => a.Source == "apps")}，捷徑={apps.Count(a => a.Source == "shortcut")}）");
+                lines.Add("  " + string.Join("、", apps.Take(60).Select(a => a.Name)));
+                foreach (var q in new[] { "賴", "powershell", "power shell ise", "edge", "task scheduler", "calculator", "計算機", "paint", "notepad", "cmd", "settings", "地圖", "註冊表編輯器", "regedit", "remote desktop", "遠端桌面", "snipping", "store", "visual studio", "不存在的程式abc" })
+                {
+                    var hit = AppCatalog.Find(q, "賴=LINE, 繪圖=Paint");
+                    lines.Add($"  找「{q}」→ {(hit == null ? "（找不到）" : hit.Name + "  ⇒ " + hit.Launch)}");
+                }
+            }
+            catch (Exception ex) { lines.Add("應用程式清單失敗：" + ex.Message); }
             return lines;
         }
 

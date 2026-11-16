@@ -254,15 +254,8 @@ namespace IslandBar.Services.Voice
             (new[] { "資源回收筒", "回收桶", "recyclebin" }, "shell:RecycleBinFolder", "資源回收筒"),
         };
 
-        /// <summary>常見的英文程式名（開始功能表捷徑的名字）</summary>
-        private static readonly Dictionary<string, string> Aliases = new Dictionary<string, string>
-        {
-            ["vscode"] = "visualstudiocode", ["vs code"] = "visualstudiocode", ["code"] = "visualstudiocode",
-            ["word"] = "word", ["excel"] = "excel", ["ppt"] = "powerpoint", ["簡報"] = "powerpoint",
-            ["chrome"] = "googlechrome", ["谷歌瀏覽器"] = "googlechrome", ["line"] = "line", ["賴"] = "line",
-            ["discord"] = "discord", ["teams"] = "microsoftteams", ["obs"] = "obsstudio", ["vlc"] = "vlcmediaplayer",
-            ["ps"] = "photoshop", ["pr"] = "premierepro", ["ae"] = "aftereffects", ["telegram"] = "telegram",
-        };
+        /// <summary>使用者自訂的叫法（「賴=LINE, 小黑=Steam」）</summary>
+        public Func<string> Nicknames { get; set; } = () => "";
 
         public CommandResult Open(string what)
         {
@@ -282,6 +275,10 @@ namespace IslandBar.Services.Voice
                 return r;
             }
 
+            // 自訂叫法指到的是內建清單裡的東西（例如「瀏覽器」）
+            var nick = AppCatalog.ParseNicknames(Nicknames?.Invoke());
+            if (nick.TryGetValue(n, out var target0)) { raw = target0; n = Norm(target0); }
+
             // 2. 內建清單
             foreach (var (names, target, label) in Known)
             {
@@ -295,62 +292,19 @@ namespace IslandBar.Services.Voice
                 }
             }
 
-            // 3. 開始功能表／桌面捷徑
-            string key = Aliases.TryGetValue(n, out var a) ? a : n;
-            var lnk = FindShortcut(key);
-            if (lnk != null)
+            // 3. 電腦上所有的應用程式（含 Microsoft Store App），名字可以只說一部分、說錯一點
+            var app = AppCatalog.Find(raw, Nicknames?.Invoke());
+            if (app != null)
             {
-                bool ok = TryLaunch(lnk.Value.path);
+                bool ok = TryLaunch(app.Launch);
                 r.Ok = ok;
-                r.Reply = ok ? "已開啟 " + lnk.Value.name : "打不開 " + lnk.Value.name;
-                if (ok) r.Actions.Add("開啟 " + lnk.Value.name);
+                r.Reply = ok ? "已開啟 " + app.Name : "打不開 " + app.Name;
+                if (ok) r.Actions.Add("開啟 " + app.Name);
                 return r;
             }
             r.Ok = false;
-            r.Reply = $"找不到「{raw}」這個程式";
+            r.Reply = $"找不到「{raw}」這個程式（可以在設定 → 語音助理 → 自訂叫法加上去）";
             return r;
-        }
-
-        private static List<(string name, string norm, string path)> _shortcuts;
-        private static DateTime _shortcutsAt;
-
-        private static (string name, string path)? FindShortcut(string key)
-        {
-            if (_shortcuts == null || DateTime.UtcNow - _shortcutsAt > TimeSpan.FromMinutes(5))
-            {
-                var list = new List<(string, string, string)>();
-                foreach (var dir in new[]
-                {
-                    Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu),
-                    Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
-                    Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)
-                })
-                {
-                    try
-                    {
-                        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
-                        foreach (var f in Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories))
-                        {
-                            string ext = Path.GetExtension(f).ToLowerInvariant();
-                            if (ext != ".lnk" && ext != ".url" && ext != ".appref-ms") continue;
-                            string name = Path.GetFileNameWithoutExtension(f);
-                            string nn = Norm(name);
-                            if (nn.Contains("uninstall") || nn.Contains("解除安裝") || nn.Contains("移除")) continue;
-                            list.Add((name, nn, f));
-                        }
-                    }
-                    catch { }
-                }
-                _shortcuts = list;
-                _shortcutsAt = DateTime.UtcNow;
-            }
-            var best = _shortcuts
-                .Select(s => (s, score: s.norm == key ? 3 : s.norm.StartsWith(key) ? 2 : (key.Length >= 2 && s.norm.Contains(key)) ? 1 : 0))
-                .Where(x => x.score > 0)
-                .OrderByDescending(x => x.score).ThenBy(x => x.s.norm.Length)
-                .FirstOrDefault();
-            return best.score > 0 ? (best.s.name, best.s.path) : null;
         }
 
         // ---------------- 小工具 ----------------

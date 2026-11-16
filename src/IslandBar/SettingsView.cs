@@ -497,6 +497,42 @@ namespace IslandBar
             p.Children.Add(keyRow);
             p.Children.Add(Note("建議用右 Ctrl、右 Alt、Caps Lock、F13 以上，或滑鼠側鍵。按住一下下（約 0.2 秒）才開始聽；中間按了別的鍵（例如 Ctrl+C）就當成快捷鍵、不會開麥克風。說到一半按 Esc 取消。"));
 
+            // ---- 打開程式 ----
+            p.Children.Add(Heading("打開程式", 16));
+            p.Children.Add(Note("說「打開＋程式名」可以開電腦上所有的應用程式（跟開始功能表「所有應用程式」同一份，Microsoft Store 的 App 也可以），名字說一部分或差一兩個字也找得到。有些程式有自己的叫法，或語音辨識老是聽成別的字，可以在下面加：「叫法=程式名」，用逗號或換行分開。"));
+            var nick = new TextBox { Text = S.AssistantAppAliases ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 56, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 360, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 6, 0, 0) };
+            nick.LostFocus += (s, e) => { S.AssistantAppAliases = nick.Text.Trim(); S.Save(); };
+            p.Children.Add(Labeled("自訂叫法（例如：賴=LINE, 小黑=Steam, 繪圖=小畫家）", nick));
+            var appsText = new TextBlock { Foreground = Dim, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), MaxWidth = 700, HorizontalAlignment = HorizontalAlignment.Left };
+            var listApps = MakeButton("看看找得到哪些程式", false);
+            listApps.Click += async (s, e) =>
+            {
+                listApps.IsEnabled = false;
+                appsText.Text = "讀取中…";
+                var apps = await Task.Run(() => Services.Voice.AppCatalog.All(refresh: true));
+                appsText.Text = $"共 {apps.Count} 個：" + string.Join("、", apps.Select(a => a.Name).OrderBy(x => x, StringComparer.CurrentCulture));
+                listApps.IsEnabled = true;
+            };
+            var tryRow = new WrapPanel();
+            var tryBox = new TextBox { MinWidth = 200, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 8, 8, 0), VerticalContentAlignment = VerticalAlignment.Center };
+            var tryBtn = MakeButton("試試這個名字會開哪個", false);
+            var tryResult = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 0, 0), Foreground = Dim };
+            tryBtn.Click += async (s, e) =>
+            {
+                S.AssistantAppAliases = nick.Text.Trim(); S.Save();
+                string q = tryBox.Text.Trim();
+                if (q.Length == 0) return;
+                var hit = await Task.Run(() => Services.Voice.AppCatalog.Find(q, S.AssistantAppAliases));
+                tryResult.Foreground = hit != null ? Good : Bad;
+                tryResult.Text = hit != null ? $"→ {hit.Name}" : "→ 找不到";
+            };
+            tryRow.Children.Add(tryBox);
+            tryRow.Children.Add(tryBtn);
+            tryRow.Children.Add(tryResult);
+            p.Children.Add(tryRow);
+            p.Children.Add(listApps);
+            p.Children.Add(appsText);
+
             // ---- 麥克風 ----
             p.Children.Add(Heading("麥克風", 16));
             var mics = Services.Voice.MicRecorder.Devices();
