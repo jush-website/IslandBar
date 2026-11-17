@@ -482,7 +482,8 @@
                         <TextBlock x:Name="HeaderDate" Text="10月22日 星期四" FontSize="12" Foreground="{StaticResource Secondary}"
                                    Margin="10,1,0,0" VerticalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- 右邊 -6：齒輪圖示的右緣跟下面內容的右緣對齊（按鈕本身有留白） -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-6,0">
                         <RadioButton x:Name="TabMedia" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE8D6;"
                                      ToolTip="音樂" IsChecked="True" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabCalendar" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE787;"

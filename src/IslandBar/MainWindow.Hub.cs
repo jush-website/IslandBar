@@ -232,8 +232,14 @@ namespace IslandBar
             }
             else
             {
-                double compactH = CompactThickness * sc;
-                y = p.Y + Math.Max(0, (compactH - fab) / 2);
+                // 跟動態島「第一列」的中線對齊：收合＝整條、展開＝時間與分頁那一列、提示／語音＝40 高的那一列
+                double rowCenter = _mode switch
+                {
+                    IslandMode.Expanded => 12 + 15,
+                    IslandMode.Hud or IslandMode.Voice => 20,
+                    _ => CompactThickness / 2
+                } * sc;
+                y = p.Y + Math.Max(0, rowCenter - fab / 2);
                 x = p.X + iw + gap;
                 if (leftOfIsland || x + bw > winW) x = p.X - gap - bw;
                 if (x < 0) { FabBar.Visibility = Visibility.Collapsed; return; }
