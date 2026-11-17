@@ -1397,8 +1397,8 @@ namespace IslandBar
 
         // ---------------- 展開時左邊的 AI 額度欄 ----------------
 
-        /// <summary>左邊額度欄佔的寬度（欄寬 164 ＋ 間距 12）</summary>
-        private const double QuotaSideWidth = 176;
+        /// <summary>左邊額度欄佔的寬度（欄寬 164 ＋ 間距 8，跟右邊卡片之間的間距一樣）</summary>
+        private const double QuotaSideWidth = 172;
         private string _stripSignature = "";
         private bool _quotaSideOn;
 
@@ -1436,7 +1436,7 @@ namespace IslandBar
                 // PAIR 一行
                 if (pairChip != null)
                 {
-                    var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, 0, 0, 7), ToolTip = pairChip.Value.tip };
+                    var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 7), ToolTip = pairChip.Value.tip };
                     row.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = new SolidColorBrush(pairChip.Value.color), VerticalAlignment = VerticalAlignment.Center });
                     row.Children.Add(new TextBlock { Text = pairChip.Value.text, FontSize = 10.5, Foreground = new SolidColorBrush(pairChip.Value.color), Margin = new Thickness(5, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 128 });
                     QuotaStrip.Children.Add(row);
@@ -1447,7 +1447,7 @@ namespace IslandBar
                 {
                     string gname = groupNames.TryGetValue(grp.Key, out var gn) ? gn : grp.Key;
                     var prov = _quotaSnap.Providers.FirstOrDefault(p => p.Id == grp.Key);
-                    var box = new StackPanel { Margin = new Thickness(1, 0, 0, 6) };
+                    var box = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
                     box.Children.Add(new TextBlock
                     {
                         Text = gname + (prov != null && prov.Stale ? "（舊資料）" : ""), FontSize = 10.5, FontWeight = FontWeights.SemiBold,

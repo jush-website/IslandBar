@@ -452,7 +452,7 @@
 
                 <!-- ================= 展開狀態 ================= -->
                 <!-- ================= 展開時左邊的 AI 額度欄 ================= -->
-                <Border x:Name="QuotaSide" Width="164" Height="226" Margin="16,12,0,0" Padding="10,9,6,8"
+                <Border x:Name="QuotaSide" Width="164" Height="226" Margin="16,12,0,0" Padding="11,9,11,8"
                         HorizontalAlignment="Left" VerticalAlignment="Top" CornerRadius="16"
                         Background="{StaticResource TileBg}" Visibility="Collapsed">
                     <Grid>
@@ -463,7 +463,7 @@
                         <TextBlock x:Name="QuotaSideTime" Visibility="Collapsed" />
                         <ScrollViewer x:Name="QuotaSideScroll" Grid.Row="1" Margin="0,0,0,0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"
                                       ScrollChanged="QuotaSideScroll_ScrollChanged">
-                            <StackPanel x:Name="QuotaStrip" Margin="0,0,4,0" />
+                            <StackPanel x:Name="QuotaStrip" />
                         </ScrollViewer>
                     </Grid>
                 </Border>
