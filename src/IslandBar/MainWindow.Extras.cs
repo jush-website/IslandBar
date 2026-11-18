@@ -488,42 +488,78 @@ namespace IslandBar
         private readonly List<ClipEntry> _clips = new List<ClipEntry>();
         private bool _ignoreClip;
 
+        private int _clipBusy;
+        private DateTime _clipBusySince;
+
+        /// <summary>
+        /// 剪貼簿變了：在背景執行緒讀（遠端桌面的剪貼簿要等對方電腦傳過來，在畫面執行緒讀會卡住幾十秒）。
+        /// </summary>
         private void OnClipboardChanged()
         {
             if (!_settings.ClipboardHistory) return;
             if (_ignoreClip) { _ignoreClip = false; return; }
-            for (int attempt = 0; attempt < 3; attempt++)
+            // 上一次還沒讀完：超過 10 秒就放棄它（那個執行緒自己會結束），不然這次先跳過
+            if (Interlocked.CompareExchange(ref _clipBusy, 1, 0) == 1)
             {
-                try
-                {
-                    var data = Clipboard.GetDataObject();
-                    if (data == null) return;
-                    // 密碼管理器等會標記「不要被剪貼簿工具記錄」
-                    if (data.GetDataPresent("ExcludeClipboardContentFromMonitorProcessing") || data.GetDataPresent("Clipboard Viewer Ignore")) return;
-
-                    if (data.GetDataPresent(DataFormats.UnicodeText))
-                    {
-                        string t = data.GetData(DataFormats.UnicodeText) as string;
-                        if (string.IsNullOrWhiteSpace(t)) return;
-                        if (t.Length > 20000) t = t.Substring(0, 20000);
-                        _clips.RemoveAll(c => c.Text == t);
-                        _clips.Insert(0, new ClipEntry { Text = t, Time = DateTime.Now });
-                    }
-                    else if (Clipboard.ContainsImage())
-                    {
-                        var img = Clipboard.GetImage();
-                        if (img == null) return;
-                        if (img.CanFreeze) img.Freeze();
-                        _clips.Insert(0, new ClipEntry { Image = img, Time = DateTime.Now });
-                    }
-                    else return;
-
-                    while (_clips.Count > 15) _clips.RemoveAt(_clips.Count - 1);
-                    if (_mode == IslandMode.Expanded && TabClip.IsChecked == true) BuildClipList();
-                    return;
-                }
-                catch { Thread.Sleep(50); }
+                if ((DateTime.UtcNow - _clipBusySince).TotalSeconds < 10) return;
+                Log.Write("Clipboard: 上一次讀剪貼簿超過 10 秒還沒好，放棄");
             }
+            _clipBusySince = DateTime.UtcNow;
+            var t = new Thread(() =>
+            {
+                ClipEntry entry = null;
+                for (int attempt = 0; attempt < 3 && entry == null; attempt++)
+                {
+                    try { entry = ReadClipboard(out bool skip); if (skip) break; }
+                    catch { Thread.Sleep(80); }
+                }
+                double secs = (DateTime.UtcNow - _clipBusySince).TotalSeconds;
+                if (secs > 3) Log.Write($"Clipboard: 讀剪貼簿花了 {secs:0} 秒");
+                Interlocked.Exchange(ref _clipBusy, 0);
+                if (entry != null) Dispatcher.BeginInvoke(new Action(() => AddClip(entry)));
+            }) { IsBackground = true, Name = "Clipboard" };
+            t.SetApartmentState(ApartmentState.STA);
+            t.Start();
+        }
+
+        /// <summary>（背景執行緒）讀一次剪貼簿；skip＝不該記錄的內容</summary>
+        private static ClipEntry ReadClipboard(out bool skip)
+        {
+            skip = false;
+            var data = Clipboard.GetDataObject();
+            if (data == null) { skip = true; return null; }
+            // 密碼管理器等會標記「不要被剪貼簿工具記錄」
+            if (data.GetDataPresent("ExcludeClipboardContentFromMonitorProcessing") || data.GetDataPresent("Clipboard Viewer Ignore")) { skip = true; return null; }
+            if (data.GetDataPresent(DataFormats.UnicodeText))
+            {
+                string t = data.GetData(DataFormats.UnicodeText) as string;
+                if (string.IsNullOrWhiteSpace(t)) { skip = true; return null; }
+                if (t.Length > 20000) t = t.Substring(0, 20000);
+                return new ClipEntry { Text = t, Time = DateTime.Now };
+            }
+            if (Clipboard.ContainsImage())
+            {
+                var img = Clipboard.GetImage();
+                if (img == null) { skip = true; return null; }
+                // 背景執行緒做的圖要凍結（或複製一份）才能交給畫面用
+                BitmapSource frozen = img;
+                if (!frozen.IsFrozen)
+                {
+                    if (frozen.CanFreeze) frozen.Freeze();
+                    else { var copy = new WriteableBitmap(img); copy.Freeze(); frozen = copy; }
+                }
+                return new ClipEntry { Image = frozen, Time = DateTime.Now };
+            }
+            skip = true;
+            return null;
+        }
+
+        private void AddClip(ClipEntry e)
+        {
+            if (e.Text != null) _clips.RemoveAll(c => c.Text == e.Text);
+            _clips.Insert(0, e);
+            while (_clips.Count > 15) _clips.RemoveAt(_clips.Count - 1);
+            if (_mode == IslandMode.Expanded && TabClip.IsChecked == true) BuildClipList();
         }
 
         private void BuildClipList()

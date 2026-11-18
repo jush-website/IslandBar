@@ -27,6 +27,16 @@ namespace IslandBar
         [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr FindWindow(string cls, string name);
         [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr h, int idx, IntPtr v);
         [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+        private const uint SWP_ASYNCWINDOWPOS = 0x4000, SMTO_ABORTIFHUNG = 0x0002;
+
+        /// <summary>桌面（檔案總管）有沒有在回應：遠端桌面剛連上、解鎖時它常常忙著，這時去動它會讓我們也跟著卡住</summary>
+        public static bool DesktopResponsive()
+        {
+            IntPtr desktop = FindWindow("Progman", null);
+            if (desktop == IntPtr.Zero) return false;
+            return SendMessageTimeout(desktop, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 500, out _) != IntPtr.Zero;
+        }
 
         private static readonly HwndSourceHook Hook = (IntPtr hwnd, int msg, IntPtr w, IntPtr l, ref bool handled) =>
         {
@@ -45,11 +55,12 @@ namespace IslandBar
             var hwnd = new WindowInteropHelper(w).Handle;
             if (hwnd == IntPtr.Zero) return;
             IntPtr desktop = FindWindow("Progman", null);
+            if (desktop != IntPtr.Zero && !DesktopResponsive()) { Log.Write("DesktopPin: 桌面沒有回應，先不重新釘"); return; }
             if (desktop != IntPtr.Zero) SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, desktop);
             var src = HwndSource.FromHwnd(hwnd);
             src?.RemoveHook(Hook);
             src?.AddHook(Hook);
-            SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
         }
 
         public static void Unpin(Window w)

@@ -238,7 +238,8 @@ namespace IslandBar.Services
                             path = Marshal.PtrToStringUni(buf + 4);
                         }
                         finally { Marshal.FreeHGlobal(buf); }
-                        if (string.IsNullOrEmpty(path) || path.IndexOf("vid_046d", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        // USB 接收器的路徑是 vid_046d；藍牙（BLE）直連的是 vid&02046d，兩種都要
+                        if (string.IsNullOrEmpty(path) || path.IndexOf("046d", StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                         using var h = CreateFile(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);   // 只問屬性，不需要讀寫權限
                         if (h.IsInvalid) continue;

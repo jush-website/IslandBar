@@ -111,21 +111,58 @@ namespace IslandBar
         }
 
         /// <summary>螢幕 / 工作階段變動後把動態島救回來：重新定位、重新置頂、強制重繪</summary>
+        private DispatcherTimer _recoverTimer;
+        private string _recoverReasons = "";
+
+        /// <summary>
+        /// 遠端桌面連上、解鎖、換螢幕、睡眠喚醒後整理畫面。這些事件常常一次來好幾個、而且當下系統還很忙，
+        /// 所以等 2 秒、合併成一次再做。
+        /// </summary>
         public void RecoverWindow(string reason)
         {
-            try
+            _recoverReasons += (_recoverReasons.Length > 0 ? "、" : "") + reason;
+            if (_recoverTimer == null)
             {
-                Log.Write("Recover window: " + reason);
-                PositionWindow();
-                Topmost = false;
-                Topmost = true;
+                _recoverTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                _recoverTimer.Tick += (s, e) => { _recoverTimer.Stop(); DoRecoverWindow(); };
+            }
+            _recoverTimer.Stop();
+            _recoverTimer.Start();
+        }
+
+        private void DoRecoverWindow()
+        {
+            string reasons = _recoverReasons;
+            _recoverReasons = "";
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var slow = new List<string>();
+            void Step(string name, Action a)
+            {
+                long t0 = sw.ElapsedMilliseconds;
+                try { a(); } catch (Exception ex) { Log.Error("RecoverWindow." + name, ex); }
+                long dt = sw.ElapsedMilliseconds - t0;
+                if (dt > 500) slow.Add($"{name} {dt} ms");
+            }
+            Log.Write("Recover window: " + reasons);
+            Step("position", PositionWindow);
+            Step("topmost", () =>
+            {
+                // 用不等待的 SetWindowPos 重新置頂，不會因為別的程式沒回應而卡住
+                if (_hwnd != IntPtr.Zero)
+                {
+                    NativeMethods.SetWindowPos(_hwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+                        NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | 0x4000 /* ASYNCWINDOWPOS */);
+                }
+            });
+            Step("layout", () =>
+            {
                 ApplyMode(animate: false);
                 InvalidateVisual();
                 Island.InvalidateVisual();
                 UpdateIslandClip();
-                RecoverRequested?.Invoke();
-            }
-            catch (Exception ex) { Log.Error("RecoverWindow", ex); }
+            });
+            Step("widgets", () => RecoverRequested?.Invoke());
+            if (slow.Count > 0) Log.Write("Recover window 很慢：" + string.Join("、", slow));
         }
 
         /// <summary>給 App：桌面小工具也一起救回來</summary>
