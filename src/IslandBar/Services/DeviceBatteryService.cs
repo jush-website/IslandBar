@@ -18,11 +18,12 @@ namespace IslandBar.Services
         public WirelessKind Kind { get; set; }
         /// <summary>只有大概的等級（Xbox 手把只回報 空／低／中／滿）</summary>
         public bool Coarse { get; set; }
+        public bool Charging { get; set; }
     }
 
     /// <summary>
     /// 無線裝置電量：Windows 在「藍牙與裝置」裡顯示的電量（藍牙耳機、滑鼠、鍵盤、手把…，裝置有回報才有），
-    /// 加上 Xbox 無線手把（XInput）。每分鐘更新一次，裝置連上／中斷時也會馬上更新。
+    /// 加上 Logitech 接收器上的滑鼠鍵盤（HID++）、Xbox 無線手把（XInput）。每分鐘更新一次，裝置連上／中斷時也會馬上更新。
     /// </summary>
     public sealed class DeviceBatteryService : IDisposable
     {
@@ -31,6 +32,8 @@ namespace IslandBar.Services
         private const string BleProtocol = "{bb7bb05e-5972-42b5-94fc-76eaa7084d49}";
 
         public event Action<List<DeviceBattery>> Updated;
+        /// <summary>也讀 Logitech 接收器上的裝置</summary>
+        public bool Logitech { get; set; } = true;
         public List<DeviceBattery> Current { get; private set; } = new List<DeviceBattery>();
 
         private Timer _timer;
@@ -76,8 +79,18 @@ namespace IslandBar.Services
                     if (!btXbox) list.AddRange(XInputPads());
                 }
                 catch { }
+                // Logitech 接收器（Unifying／Bolt／Lightspeed）上的滑鼠、鍵盤
+                if (Logitech)
+                {
+                    try
+                    {
+                        foreach (var d in await LogitechBattery.ReadAllAsync(CancellationToken.None))
+                            if (!list.Any(x => string.Equals(x.Name, d.Name, StringComparison.OrdinalIgnoreCase))) list.Add(d);
+                    }
+                    catch (Exception ex) { Log.Write("DeviceBattery: Logitech 失敗：" + ex.Message); }
+                }
                 list = list.OrderBy(d => d.Kind).ThenBy(d => d.Name).ToList();
-                bool changed = list.Count != Current.Count || list.Zip(Current).Any(z => z.First.Id != z.Second.Id || z.First.Percent != z.Second.Percent);
+                bool changed = list.Count != Current.Count || list.Zip(Current).Any(z => z.First.Id != z.Second.Id || z.First.Percent != z.Second.Percent || z.First.Charging != z.Second.Charging);
                 Current = list;
                 if (changed) Updated?.Invoke(list);
             }

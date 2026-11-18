@@ -118,6 +118,7 @@ namespace IslandBar
                     using (var fs = File.Create(Path.Combine(dir, "fab-moods.png"))) enc.Save(fs);
                     _window.DebugFabMood(0, 26, true);
                 }
+                File.WriteAllText(Path.Combine(dir, "logitech-sim.txt"), string.Join("\n", await LogitechSimulation()));
                 // 無線裝置電量：圓環、數字
                 foreach (var style in new[] { "ring", "number" })
                 {

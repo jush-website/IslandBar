@@ -282,11 +282,12 @@ namespace IslandBar
             p.Children.Add(Check("剪貼簿歷史（只存在記憶體）", S.ClipboardHistory, v => { S.ClipboardHistory = v; Changed(); }));
 
             p.Children.Add(Heading("無線裝置電量", 20));
-            p.Children.Add(Note("藍牙耳機、滑鼠、鍵盤、手把等的剩餘電量，顯示在動態島旁的笑臉旁邊（收合時也看得到）；沒有連線的無線裝置就不顯示。電量是 Windows「藍牙與裝置」裡看得到的那個（裝置有回報才有），Xbox 無線手把只有大概的等級。"));
+            p.Children.Add(Note("藍牙耳機、滑鼠、鍵盤、手把等的剩餘電量，顯示在動態島旁的笑臉旁邊（收合時也看得到）；沒有連線的無線裝置就不顯示。藍牙裝置用的是 Windows「藍牙與裝置」裡看得到的電量（裝置有回報才有）；Logitech 接收器上的滑鼠鍵盤直接問接收器；Xbox 無線手把只有大概的等級。"));
             p.Children.Add(Check("顯示無線裝置電量", S.DeviceBatteryShow, v => { S.DeviceBatteryShow = v; Changed(); }));
             p.Children.Add(Segmented(new[] { ("圓環", "ring"), ("數字", "number") }.Select(x => (x.Item1, x.Item2 == "ring" ? 0 : 1)),
                 S.DeviceBatteryStyle == "number" ? 1 : 0, v => { S.DeviceBatteryStyle = v == 1 ? "number" : "ring"; Changed(); }));
             p.Children.Add(Check("剩 50% 時通知一次、剩 10% 再通知一次（充電後重新計算）", S.DeviceBatteryNotify, v => { S.DeviceBatteryNotify = v; Changed(); }));
+            p.Children.Add(Check("也讀 Logitech 接收器（Unifying、Bolt、Lightspeed）上的滑鼠鍵盤電量（不用開 G HUB／Options+）", S.DeviceBatteryLogitech, v => { S.DeviceBatteryLogitech = v; Changed(); }));
             var batNow = new TextBlock { Foreground = Dim, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
             var bats = _h.Window?.DeviceBatteries;
             batNow.Text = bats == null || bats.Count == 0 ? "現在沒有偵測到會回報電量的無線裝置。" : "現在：" + string.Join("、", bats.Select(b => $"{b.Name} {b.Percent}%"));

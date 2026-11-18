@@ -97,6 +97,8 @@ namespace IslandBar
         public bool DeviceBatteryShow { get; set; } = true;
         /// <summary>電量顯示方式：ring（圓環）或 number（數字）</summary>
         public string DeviceBatteryStyle { get; set; } = "ring";
+        /// <summary>也讀 Logitech 接收器（Unifying／Bolt／Lightspeed）上的滑鼠鍵盤電量</summary>
+        public bool DeviceBatteryLogitech { get; set; } = true;
         /// <summary>剩 50%、10% 時通知</summary>
         public bool DeviceBatteryNotify { get; set; } = true;
 

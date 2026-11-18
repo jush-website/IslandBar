@@ -28,6 +28,7 @@ namespace IslandBar
             {
                 _batterySvc.Updated += list => Dispatcher.BeginInvoke(new Action(() => OnBatteries(list)));
                 Island.SizeChanged += (s, e) => UpdateChatFab();
+                _batterySvc.Logitech = _settings.DeviceBatteryLogitech;
                 _batterySvc.Start();
             }
             catch (Exception ex) { Log.Error("StartDeviceBattery", ex); }
@@ -57,6 +58,7 @@ namespace IslandBar
             {
                 new DeviceBattery { Id = "a", Name = "WH-1000XM5", Percent = 82, Kind = WirelessKind.Headphones },
                 new DeviceBattery { Id = "b", Name = "MX Master 3S", Percent = 34, Kind = WirelessKind.Mouse },
+                new DeviceBattery { Id = "d", Name = "MX Keys S", Percent = 71, Kind = WirelessKind.Keyboard, Charging = true },
                 new DeviceBattery { Id = "c", Name = "Xbox 手把 1", Percent = 5, Kind = WirelessKind.Gamepad, Coarse = true }
             };
             _settings.DeviceBatteryStyle = style;
@@ -71,6 +73,7 @@ namespace IslandBar
         {
             foreach (var d in _batteries)
             {
+                if (d.Charging) { if (d.Percent > 60) _batteryNotified[d.Id] = 0; continue; }   // 充電中不提醒
                 bool first = !_batteryNotified.TryGetValue(d.Id, out int level);
                 if (d.Percent > 60) { _batteryNotified[d.Id] = 0; continue; }          // 充過電了
                 if (d.Percent > 20 && level == 10) { _batteryNotified[d.Id] = 50; continue; }
@@ -141,7 +144,7 @@ namespace IslandBar
             for (int i = 0; i < _batteries.Count; i++)
             {
                 var d = _batteries[i];
-                var color = new SolidColorBrush(BatteryColor(d.Percent));
+                var color = new SolidColorBrush(d.Charging ? Color.FromRgb(0x34, 0xD3, 0xC0) : BatteryColor(d.Percent));
                 FrameworkElement item;
                 if (ring)
                 {
@@ -152,7 +155,7 @@ namespace IslandBar
                         Data = RingArc(11, 11, 9.6, d.Percent / 100.0), Stroke = color, StrokeThickness = 2.4,
                         StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
                     });
-                    g.Children.Add(new TextBlock { Text = KindGlyph(d.Kind), FontFamily = icon, FontSize = 9.5, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+                    g.Children.Add(new TextBlock { Text = d.Charging ? "\uE945" : KindGlyph(d.Kind), FontFamily = icon, FontSize = 9.5, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
                     item = g;
                 }
                 else
@@ -166,7 +169,7 @@ namespace IslandBar
                     });
                     item = sp;
                 }
-                item.ToolTip = $"{d.Name}　{d.Percent}%" + (d.Coarse ? "（大約）" : "");
+                item.ToolTip = $"{d.Name}　{d.Percent}%" + (d.Coarse ? "（大約）" : "") + (d.Charging ? "　充電中" : "");
                 item.Margin = i == 0 ? new Thickness(0) : vertical ? new Thickness(0, 5, 0, 0) : new Thickness(ring ? 4 : 8, 0, 0, 0);
                 BatteryItems.Children.Add(item);
             }
@@ -191,7 +194,7 @@ namespace IslandBar
         /// <summary>給語音助理：「耳機還有多少電」</summary>
         public string BatteryStatus()
         {
-            var parts = _batteries.Select(d => $"{d.Name} {d.Percent}%" + (d.Coarse ? "（大約）" : "")).ToList();
+            var parts = _batteries.Select(d => $"{d.Name} {d.Percent}%" + (d.Coarse ? "（大約）" : "") + (d.Charging ? "（充電中）" : "")).ToList();
             if (_stats.HasBattery) parts.Add($"這台電腦 {_stats.BatteryPercent:0}%" + (_stats.IsCharging ? "（充電中）" : ""));
             return parts.Count == 0 ? "沒有看到會回報電量的無線裝置" : "電量：" + string.Join("、", parts);
         }
