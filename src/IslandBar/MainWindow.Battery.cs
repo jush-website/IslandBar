@@ -73,6 +73,7 @@ namespace IslandBar
         {
             foreach (var d in _batteries)
             {
+                if (d.Stale) continue;   // 上次的電量：不重複提醒
                 if (d.Charging) { if (d.Percent > 60) _batteryNotified[d.Id] = 0; continue; }   // 充電中不提醒
                 bool first = !_batteryNotified.TryGetValue(d.Id, out int level);
                 if (d.Percent > 60) { _batteryNotified[d.Id] = 0; continue; }          // 充過電了
@@ -169,7 +170,9 @@ namespace IslandBar
                     });
                     item = sp;
                 }
-                item.ToolTip = $"{d.Name}　{d.Percent}%" + (d.Coarse ? "（大約）" : "") + (d.Charging ? "　充電中" : "");
+                item.ToolTip = $"{d.Name}　{d.Percent}%" + (d.Coarse ? "（大約）" : "") + (d.Charging ? "　充電中" : "") +
+                               (d.Stale ? $"\n{Math.Max(1, (int)(DateTime.Now - d.SeenAt).TotalMinutes)} 分鐘前的電量（裝置可能睡著了）" : "");
+                if (d.Stale) item.Opacity = 0.45;
                 item.Margin = i == 0 ? new Thickness(0) : vertical ? new Thickness(0, 5, 0, 0) : new Thickness(ring ? 4 : 8, 0, 0, 0);
                 BatteryItems.Children.Add(item);
             }

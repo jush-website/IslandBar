@@ -19,6 +19,9 @@ namespace IslandBar.Services
         /// <summary>只有大概的等級（Xbox 手把只回報 空／低／中／滿）</summary>
         public bool Coarse { get; set; }
         public bool Charging { get; set; }
+        /// <summary>這次沒讀到（藍牙滑鼠睡著、接收器一時沒回應），先顯示上次的電量</summary>
+        public bool Stale { get; set; }
+        public DateTime SeenAt { get; set; } = DateTime.Now;
     }
 
     /// <summary>
@@ -37,6 +40,8 @@ namespace IslandBar.Services
         public List<DeviceBattery> Current { get; private set; } = new List<DeviceBattery>();
 
         private Timer _timer;
+        private readonly Dictionary<string, DeviceBattery> _lastSeen = new Dictionary<string, DeviceBattery>(StringComparer.OrdinalIgnoreCase);
+        private string _lastLog;
         private int _busy;
         private DeviceWatcher _watcher;
 
@@ -89,8 +94,19 @@ namespace IslandBar.Services
                     }
                     catch (Exception ex) { Log.Write("DeviceBattery: Logitech 失敗：" + ex.Message); }
                 }
+                // 這次沒讀到、但 15 分鐘內看過的裝置：先留著（變淡），不要一下出現一下消失
+                var now = DateTime.Now;
+                foreach (var d in list) { d.SeenAt = now; _lastSeen[d.Name] = d; }
+                foreach (var old in _lastSeen.Values.ToList())
+                {
+                    if (list.Any(d => string.Equals(d.Name, old.Name, StringComparison.OrdinalIgnoreCase))) continue;
+                    if (now - old.SeenAt > TimeSpan.FromMinutes(15)) { _lastSeen.Remove(old.Name); continue; }
+                    list.Add(new DeviceBattery { Id = old.Id, Name = old.Name, Percent = old.Percent, Kind = old.Kind, Coarse = old.Coarse, Stale = true, SeenAt = old.SeenAt });
+                }
                 list = list.OrderBy(d => d.Kind).ThenBy(d => d.Name).ToList();
-                bool changed = list.Count != Current.Count || list.Zip(Current).Any(z => z.First.Id != z.Second.Id || z.First.Percent != z.Second.Percent || z.First.Charging != z.Second.Charging);
+                bool changed = list.Count != Current.Count || list.Zip(Current).Any(z => z.First.Id != z.Second.Id || z.First.Percent != z.Second.Percent || z.First.Charging != z.Second.Charging || z.First.Stale != z.Second.Stale);
+                string sig = string.Join("、", list.Select(d => $"{d.Name} {d.Percent}%{(d.Charging ? " 充電" : "")}{(d.Stale ? " (上次)" : "")}"));
+                if (sig != _lastLog) { _lastLog = sig; Log.Write("DeviceBattery: " + (sig.Length == 0 ? "沒有裝置" : sig)); }
                 Current = list;
                 if (changed) Updated?.Invoke(list);
             }
