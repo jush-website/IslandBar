@@ -10,6 +10,13 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.9
+
+- **修好兩種「卡住後自動重開」**（從記錄檔找到的）：
+  - 用遠端桌面時讀剪貼簿會卡住幾十秒（要等對方電腦把內容傳過來）：剪貼簿改在背景讀，畫面不會再等它。
+  - 遠端桌面連上／解鎖時重新整理畫面會卡住（桌面那時還很忙）：改成等 2 秒、合併成一次，而且不會再因為桌面沒回應而跟著卡住；真的很慢時記錄檔會寫是哪一步。
+- Logitech 藍牙直連的裝置（例如 M750、MX 系列用藍牙連線時）也能讀電量；之前只找得到接收器。
+
 ## v1.16.8 Logitech 滑鼠鍵盤電量
 
 - **讀得到 Logitech 接收器上的滑鼠、鍵盤電量**：Unifying、Bolt、Lightspeed 接收器（MX、G 系列無線等），直接問接收器，不用開 G HUB 或 Logi Options+（開著也沒關係）。跟藍牙裝置一起顯示在笑臉旁，一樣有 50%／10% 通知。
