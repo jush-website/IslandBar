@@ -10,6 +10,14 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.8 Logitech 滑鼠鍵盤電量
+
+- **讀得到 Logitech 接收器上的滑鼠、鍵盤電量**：Unifying、Bolt、Lightspeed 接收器（MX、G 系列無線等），直接問接收器，不用開 G HUB 或 Logi Options+（開著也沒關係）。跟藍牙裝置一起顯示在笑臉旁，一樣有 50%／10% 通知。
+  - 有的型號回報百分比；只回報「滿／好／低」或電壓的型號（部分 G 系列）顯示大約的電量。
+  - 充電中的裝置圓環變成青色、中間換成閃電，不會發低電量通知。
+  - 不想讀的話：設定 → 通知與提示 → 無線裝置電量，取消「也讀 Logitech 接收器…」。
+- 讀不到時，記錄檔會寫一行「Logitech: 介面 N 個 … → …」，方便找原因。
+
 ## v1.16.7
 
 - **展開面板重新對齊**：
