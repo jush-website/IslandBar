@@ -301,14 +301,33 @@ namespace IslandBar
             _chatDock.Closed += (s, e) => { if (_chatDock == s) { _chatDock = null; UpdateChatFab(); } };
             _chatDock.Show();
             _chatDock.Activate();
+            BounceChatFab();
             UpdateChatFab();
+        }
+
+        /// <summary>按笑臉時彈一下</summary>
+        private void BounceChatFab()
+        {
+            if (ChatFab == null) return;
+            if (ChatFab.RenderTransform is not ScaleTransform st || st.IsFrozen)
+            {
+                st = new ScaleTransform(1, 1);
+                ChatFab.RenderTransform = st;
+                ChatFab.RenderTransformOrigin = new Point(0.5, 0.5);
+            }
+            var a = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(360) };
+            a.KeyFrames.Add(new EasingDoubleKeyFrame(0.82, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(90))));
+            a.KeyFrames.Add(new EasingDoubleKeyFrame(1.0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(360)), new ElasticEase { Oscillations = 1, Springiness = 4, EasingMode = EasingMode.EaseOut }));
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, a);
+            st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
         }
 
         public void CloseChatDock()
         {
             var d = _chatDock;
             _chatDock = null;
-            try { d?.Close(); } catch { }
+            try { d?.CloseAnimated(); } catch { try { d?.Close(); } catch { } }
+            BounceChatFab();
             UpdateChatFab();
         }
 

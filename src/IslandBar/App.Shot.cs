@@ -64,7 +64,10 @@ namespace IslandBar
                     Save(_window.RootVisual, Path.Combine(dir, "island-with-chat-button.png"));
                     // 動態島旁的對話小窗
                     _window.ToggleChatDock();
-                    await Task.Delay(1500);
+                    await Task.Delay(120);
+                    var dockMid = Windows.OfType<ChatDock>().FirstOrDefault();
+                    if (dockMid != null) Save(dockMid.Content as Visual, Path.Combine(dir, "chat-dock-opening.png"));
+                    await Task.Delay(1400);
                     var dock = Windows.OfType<ChatDock>().FirstOrDefault();
                     if (dock != null)
                     {

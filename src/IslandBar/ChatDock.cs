@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using IslandBar.Services.Voice;
@@ -26,6 +27,9 @@ namespace IslandBar
         public event Action SettingsRequested;
 
         public const double DockWidth = 380, DockHeight = 500;
+        private Border _card;
+        private ScaleTransform _scale;
+        private bool _closing;
 
         /// <param name="anchor">表情按鈕在螢幕上的位置（DIP）；null＝動態島現在看不到</param>
         public ChatDock(AssistantService assistant, AppSettings settings, Func<Rect?> anchor)
@@ -76,11 +80,55 @@ namespace IslandBar
             g.Children.Add(_panel);
             card.Child = g;
             Content = card;
+            _card = card;
+            // 彈出動畫：從笑臉的位置放大出來
+            _scale = new ScaleTransform(0.4, 0.4);
+            card.RenderTransform = _scale;
+            card.RenderTransformOrigin = new Point(1, 0);
+            card.Opacity = 0;
 
             KeyDown += (s, e) => { if (e.Key == Key.Escape) CloseRequested?.Invoke(); };
             _follow.Tick += (s, e) => Follow(false);
-            Loaded += (s, e) => { Follow(true); _follow.Start(); _panel.FocusInput(); };
+            Loaded += (s, e) => { Follow(true); _follow.Start(); PlayOpen(); _panel.FocusInput(); };
             Closed += (s, e) => { _follow.Stop(); _panel.Detach(); };
+        }
+
+        /// <summary>動畫的中心點＝笑臉在小窗裡的位置（小窗可能在笑臉下方、左邊、上方）</summary>
+        private void AimAtAnchor()
+        {
+            var a = _anchor();
+            if (a == null || _card == null) return;
+            double w = ActualWidth > 0 ? ActualWidth : Width, h = ActualHeight > 0 ? ActualHeight : Height;
+            double cx = a.Value.Left + a.Value.Width / 2 - Left - 10, cy = a.Value.Top + a.Value.Height / 2 - Top - 10;   // 10＝卡片外面留給陰影的邊
+            double cw = Math.Max(1, w - 20), ch = Math.Max(1, h - 20);
+            _card.RenderTransformOrigin = new Point(Math.Clamp(cx / cw, 0, 1), Math.Clamp(cy / ch, 0, 1));
+        }
+
+        private void PlayOpen()
+        {
+            AimAtAnchor();
+            var dur = TimeSpan.FromMilliseconds(380);
+            var ease = new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut };
+            _scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.4, 1, dur) { EasingFunction = ease });
+            _scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.4, 1, dur) { EasingFunction = ease });
+            _card.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+        }
+
+        /// <summary>收起：縮回笑臉的位置再關掉</summary>
+        public void CloseAnimated()
+        {
+            if (_closing) return;
+            _closing = true;
+            _follow.Stop();
+            if (!IsVisible || _card == null) { Close(); return; }
+            AimAtAnchor();
+            var dur = TimeSpan.FromMilliseconds(200);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+            var sx = new DoubleAnimation(0.4, dur) { EasingFunction = ease };
+            sx.Completed += (s, e) => { try { Close(); } catch { } };
+            _scale.BeginAnimation(ScaleTransform.ScaleXProperty, sx);
+            _scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.4, dur) { EasingFunction = ease });
+            _card.BeginAnimation(OpacityProperty, new DoubleAnimation(0, dur));
         }
 
         /// <summary>跟著動態島走：動態島看不到時（隱藏、全螢幕）先藏起來</summary>
