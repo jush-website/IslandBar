@@ -1,0 +1,3 @@
+ring: [room=222 bw=170 level=0 p=(230,0) iw=380 winW=840] mode=Hud bar=Visible margin=618,6,0,0 hide=(0,0) islandHide=(0,0) fab=Visible bat=Visible items=5 desired=788,34 hidden=False/False island=380x40
+number: [room=222 bw=162 level=2 p=(230,0) iw=380 winW=840] mode=Hud bar=Visible margin=618,6,0,0 hide=(0,0) islandHide=(0,0) fab=Visible bat=Visible items=5 desired=780,34 hidden=False/False island=380x40
+number3: [room=222 bw=200 level=0 p=(230,0) iw=380 winW=840] mode=Hud bar=Visible margin=618,6,0,0 hide=(0,0) islandHide=(0,0) fab=Visible bat=Visible items=3 desired=818,34 hidden=False/False island=380x40

@@ -1,0 +1,3 @@
+dock 275,29 380x500; island window 92,0 840x460
+fullscreen: dock visible=False
+after fullscreen: dock visible=True
