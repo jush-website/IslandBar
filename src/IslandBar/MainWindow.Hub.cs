@@ -208,11 +208,6 @@ namespace IslandBar
             FabBar.Children.Clear();
             if (leftOfIsland) { FabBar.Children.Add(BatteryBar); FabBar.Children.Add(ChatFab); }
             else { FabBar.Children.Add(ChatFab); FabBar.Children.Add(BatteryBar); }
-            FabBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            // DesiredSize 含外距（上一次定位用的 Margin），要扣掉
-            double bw = Math.Max(0, FabBar.DesiredSize.Width - FabBar.Margin.Left - FabBar.Margin.Right);
-            double bh = Math.Max(0, FabBar.DesiredSize.Height - FabBar.Margin.Top - FabBar.Margin.Bottom);
-
             // 動態島（不含收進邊緣的位移）在視窗裡的位置
             Point p;
             try { p = Island.TranslatePoint(new Point(0, 0), RootGrid); }
@@ -223,6 +218,23 @@ namespace IslandBar
             double fab = 28 * sc, gap = 8 * sc;
             double winW = RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : Width;
             double winH = RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : Height;
+
+            // 裝置多、放不下時一步步縮：數字拿掉 %、間距變窄 → 改用圓環，不要整條不見
+            double room = side ? winH - (p.Y + ih + gap) : Math.Max(winW - (p.X + iw + gap), p.X - gap);
+            string fitKey = $"{room:0}|{side}|{showBat}|{_batteries.Count}|{_settings.DeviceBatteryStyle}|{string.Join(",", _batteries.Select(b => b.Percent))}";
+            int startLevel = fitKey == _batFitKey ? _batFitLevel : 0;
+            double bw = 0, bh = 0;
+            for (int level = startLevel; level <= 2; level++)
+            {
+                if (showBat && _batLevel != level) { _batLevel = level; BuildBatteryBar(); }
+                FabBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                // DesiredSize 含外距（上一次定位用的 Margin），要扣掉
+                bw = Math.Max(0, FabBar.DesiredSize.Width - FabBar.Margin.Left - FabBar.Margin.Right);
+                bh = Math.Max(0, FabBar.DesiredSize.Height - FabBar.Margin.Top - FabBar.Margin.Bottom);
+                if (!showBat || (side ? bh : bw) <= room) break;
+            }
+            _batFitKey = fitKey;
+            _batFitLevel = _batLevel;
             double x, y;
             if (side)
             {

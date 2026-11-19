@@ -17,6 +17,10 @@ namespace IslandBar
         private List<DeviceBattery> _debugBatteries;
         /// <summary>每個裝置已經通知到哪一級（0＝還沒、50、10）</summary>
         private readonly Dictionary<string, int> _batteryNotified = new Dictionary<string, int>();
+        /// <summary>放不下時的縮小程度：0＝照設定、1＝數字不加 %、間距變窄、2＝改用圓環</summary>
+        private int _batLevel;
+        private string _batFitKey;
+        private int _batFitLevel;
 
         /// <summary>電量低的時候（App 用來跳 Windows 通知）</summary>
         public event Action<string> DeviceBatteryLow;
@@ -140,7 +144,8 @@ namespace IslandBar
             if (BatteryItems == null) return;
             BatteryItems.Children.Clear();
             if (!BatteryBarWanted) return;
-            bool ring = _settings.DeviceBatteryStyle != "number";
+            bool ring = _settings.DeviceBatteryStyle != "number" || _batLevel >= 2;
+            bool tight = _batLevel >= 1;
             bool vertical = IsSide;
             BatteryItems.Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal;
             var icon = (FontFamily)FindResource("IconFont");
@@ -177,7 +182,7 @@ namespace IslandBar
                     var num = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = vertical ? new Thickness(0, 1, 0, 0) : new Thickness(4, 0, 0, 0) };
                     num.Children.Add(new TextBlock
                     {
-                        Text = d.Percent + (vertical ? "" : "%"), FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = color, VerticalAlignment = VerticalAlignment.Center
+                        Text = d.Percent + (vertical || tight ? "" : "%"), FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = color, VerticalAlignment = VerticalAlignment.Center
                     });
                     if (d.Charging)
                         num.Children.Add(new TextBlock { Text = d.Full ? "\uE73E" : "\uE945", FontFamily = icon, FontSize = 8.5, Foreground = color, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 0) });
@@ -188,7 +193,7 @@ namespace IslandBar
                                (string.IsNullOrEmpty(d.Source) ? "" : $"\n{d.Source}") +
                                (d.Stale ? $"\n{Math.Max(1, (int)(DateTime.Now - d.SeenAt).TotalMinutes)} 分鐘前的電量（裝置可能睡著了）" : "");
                 if (d.Stale) item.Opacity = 0.45;
-                item.Margin = i == 0 ? new Thickness(0) : vertical ? new Thickness(0, 5, 0, 0) : new Thickness(ring ? 4 : 8, 0, 0, 0);
+                item.Margin = i == 0 ? new Thickness(0) : vertical ? new Thickness(0, tight ? 3 : 5, 0, 0) : new Thickness(ring ? (tight ? 2 : 4) : (tight ? 5 : 8), 0, 0, 0);
                 BatteryItems.Children.Add(item);
             }
         }
