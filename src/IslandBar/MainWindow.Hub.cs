@@ -236,6 +236,7 @@ namespace IslandBar
             }
             _batFitKey = fitKey;
             _batFitLevel = _batLevel;
+            _fabDbg = $"room={room:0} bw={bw:0} level={_batLevel} p=({p.X:0},{p.Y:0}) iw={iw:0} winW={winW:0}";
             double x, y;
             if (side)
             {
@@ -255,7 +256,7 @@ namespace IslandBar
                 y = p.Y + Math.Max(0, rowCenter - fab / 2);
                 x = p.X + iw + gap;
                 if (leftOfIsland || x + bw > winW) x = p.X - gap - bw;
-                if (x < 0) { FabBar.Visibility = Visibility.Collapsed; return; }
+                if (x < 0) { FabBar.Visibility = Visibility.Collapsed; _fabDbg += " x<0"; return; }
             }
             FabBar.Margin = new Thickness(x, y, 0, 0);
             FabBar.Visibility = Visibility.Visible;
