@@ -228,6 +228,8 @@ namespace IslandBar
             for (int level = startLevel; level <= 2; level++)
             {
                 if (showBat && _batLevel != level) { _batLevel = level; BuildBatteryBar(); }
+                // 換了內容要整串重新量（不然 WPF 會直接給上一次量的大小）
+                BatteryItems.InvalidateMeasure(); BatteryBar.InvalidateMeasure(); FabBar.InvalidateMeasure();
                 FabBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                 // DesiredSize 含外距（上一次定位用的 Margin），要扣掉
                 bw = Math.Max(0, FabBar.DesiredSize.Width - FabBar.Margin.Left - FabBar.Margin.Right);
