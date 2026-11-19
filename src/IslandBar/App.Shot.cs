@@ -73,6 +73,17 @@ namespace IslandBar
                     {
                         Save(dock.Content as Visual, Path.Combine(dir, "chat-dock.png"));
                         File.WriteAllText(Path.Combine(dir, "chat-dock-pos.txt"), $"dock {dock.Left:0},{dock.Top:0} {dock.ActualWidth:0}x{dock.ActualHeight:0}; island window {_window.Left:0},{_window.Top:0} {_window.ActualWidth:0}x{_window.ActualHeight:0}");
+                        // 真正螢幕上的樣子（看文字清不清楚）
+                        try
+                        {
+                            var dpi = VisualTreeHelper.GetDpi(dock);
+                            int x = (int)Math.Round(dock.Left * dpi.DpiScaleX), y = (int)Math.Round(dock.Top * dpi.DpiScaleY);
+                            int w = (int)Math.Round(dock.ActualWidth * dpi.DpiScaleX), h = (int)Math.Round(dock.ActualHeight * dpi.DpiScaleY);
+                            using var bmp = new System.Drawing.Bitmap(w, h);
+                            using (var gfx = System.Drawing.Graphics.FromImage(bmp)) gfx.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(w, h));
+                            bmp.Save(Path.Combine(dir, "chat-dock-screen.png"), System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                        catch (Exception ex) { File.WriteAllText(Path.Combine(dir, "chat-dock-screen.txt"), ex.ToString()); }
                     }
                     Save(_window.RootVisual, Path.Combine(dir, "island-chat-open.png"));
                     // 全螢幕：動態島、笑臉按鈕、對話小窗都要收起來
