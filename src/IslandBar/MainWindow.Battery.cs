@@ -182,7 +182,7 @@ namespace IslandBar
                     ic.Children.Add(new TextBlock { Text = KindGlyph(d.Kind), FontFamily = icon, FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Margin = string.IsNullOrEmpty(caption) ? new Thickness(0) : new Thickness(0, 0, 5, 3) });
                     if (!string.IsNullOrEmpty(caption)) ic.Children.Add(CaptionBadge(caption));
                     sp.Children.Add(ic);
-                    var num = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = vertical ? new Thickness(0, 1, 0, 0) : new Thickness(4, 0, 0, 0) };
+                    var num = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = vertical ? new Thickness(0, 1, 0, 0) : new Thickness(string.IsNullOrEmpty(caption) ? 4 : 7, 0, 0, 0) };
                     num.Children.Add(new TextBlock
                     {
                         Text = d.Percent + (vertical || tight ? "" : "%"), FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = color, VerticalAlignment = VerticalAlignment.Center
