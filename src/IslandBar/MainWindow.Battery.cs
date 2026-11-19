@@ -58,7 +58,7 @@ namespace IslandBar
         public string DebugFabState => $"[{_fabDbg}] mode={_mode} bar={FabBar.Visibility} margin={FabBar.Margin} hide=({ChatFabHide.X:0},{ChatFabHide.Y:0}) islandHide=({HideTransform.X:0},{HideTransform.Y:0}) fab={ChatFab.Visibility} bat={BatteryBar.Visibility} items={BatteryItems.Children.Count} desired={FabBar.DesiredSize} hidden={_userHidden}/{_fullscreenHidden} island={Island.ActualWidth:0}x{Island.ActualHeight:0}";
 
         /// <summary>截圖測試用：放幾個假裝置</summary>
-        public void DebugBatteries(string style)
+        public void DebugBatteries(string style, int count = 99)
         {
             _debugBatteries = new List<DeviceBattery>
             {
@@ -68,6 +68,8 @@ namespace IslandBar
                 new DeviceBattery { Id = "e", Name = "POP Mouse", Percent = 100, Kind = WirelessKind.Mouse, Charging = true, Full = true },
                 new DeviceBattery { Id = "c", Name = "Xbox 手把 1", Percent = 5, Kind = WirelessKind.Gamepad, Coarse = true }
             };
+            _debugBatteries = _debugBatteries.Skip(1).Take(count).ToList();
+            if (count >= 99) _debugBatteries.Insert(0, new DeviceBattery { Id = "a", Name = "WH-1000XM5", Percent = 82, Kind = WirelessKind.Headphones });
             _settings.DeviceBatteryStyle = style;
             OnBatteries(_debugBatteries);
         }

@@ -134,9 +134,9 @@ namespace IslandBar
                 }
                 File.WriteAllText(Path.Combine(dir, "logitech-sim.txt"), string.Join("\n", await LogitechSimulation()));
                 // 無線裝置電量：圓環、數字
-                foreach (var style in new[] { "ring", "number" })
+                foreach (var style in new[] { "ring", "number", "number3" })
                 {
-                    _window.DebugBatteries(style);
+                    _window.DebugBatteries(style == "number3" ? "number" : style, style == "number3" ? 3 : 99);
                     await Task.Delay(700);
                     Save(_window.RootVisual, Path.Combine(dir, "island-battery-" + style + ".png"));
                     File.AppendAllText(Path.Combine(dir, "battery-state.txt"), style + ": " + _window.DebugFabState + "\n");
