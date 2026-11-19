@@ -99,6 +99,8 @@ namespace IslandBar
         public string DeviceBatteryStyle { get; set; } = "ring";
         /// <summary>也讀 Logitech 接收器（Unifying／Bolt／Lightspeed）上的滑鼠鍵盤電量</summary>
         public bool DeviceBatteryLogitech { get; set; } = true;
+        /// <summary>也讀其他 2.4G 裝置（有宣告 HID 標準電量欄位的）</summary>
+        public bool DeviceBatteryHid { get; set; } = true;
         /// <summary>剩 50%、10% 時通知</summary>
         public bool DeviceBatteryNotify { get; set; } = true;
 

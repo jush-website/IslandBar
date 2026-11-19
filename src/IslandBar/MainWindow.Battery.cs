@@ -29,6 +29,7 @@ namespace IslandBar
                 _batterySvc.Updated += list => Dispatcher.BeginInvoke(new Action(() => OnBatteries(list)));
                 Island.SizeChanged += (s, e) => UpdateChatFab();
                 _batterySvc.Logitech = _settings.DeviceBatteryLogitech;
+                _batterySvc.HidGeneric = _settings.DeviceBatteryHid;
                 _batterySvc.Start();
             }
             catch (Exception ex) { Log.Error("StartDeviceBattery", ex); }
@@ -59,6 +60,7 @@ namespace IslandBar
                 new DeviceBattery { Id = "a", Name = "WH-1000XM5", Percent = 82, Kind = WirelessKind.Headphones },
                 new DeviceBattery { Id = "b", Name = "MX Master 3S", Percent = 34, Kind = WirelessKind.Mouse },
                 new DeviceBattery { Id = "d", Name = "MX Keys S", Percent = 71, Kind = WirelessKind.Keyboard, Charging = true },
+                new DeviceBattery { Id = "e", Name = "POP Mouse", Percent = 100, Kind = WirelessKind.Mouse, Charging = true, Full = true },
                 new DeviceBattery { Id = "c", Name = "Xbox 手把 1", Percent = 5, Kind = WirelessKind.Gamepad, Coarse = true }
             };
             _settings.DeviceBatteryStyle = style;
@@ -142,10 +144,15 @@ namespace IslandBar
             bool vertical = IsSide;
             BatteryItems.Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal;
             var icon = (FontFamily)FindResource("IconFont");
+            var captions = BatteryCaptions(_batteries);
+            var full = Color.FromRgb(0x30, 0xD1, 0x58);
             for (int i = 0; i < _batteries.Count; i++)
             {
                 var d = _batteries[i];
-                var color = new SolidColorBrush(d.Charging ? Color.FromRgb(0x34, 0xD3, 0xC0) : BatteryColor(d.Percent));
+                var color = new SolidColorBrush(d.Full ? full : d.Charging ? Color.FromRgb(0x34, 0xD3, 0xC0) : BatteryColor(d.Percent));
+                // 中間的圖示：充飽打勾、充電中閃電、其他是裝置類型
+                string glyph = d.Full ? "\uE73E" : d.Charging ? "\uE945" : KindGlyph(d.Kind);
+                captions.TryGetValue(d.Id, out string caption);
                 FrameworkElement item;
                 if (ring)
                 {
@@ -156,26 +163,76 @@ namespace IslandBar
                         Data = RingArc(11, 11, 9.6, d.Percent / 100.0), Stroke = color, StrokeThickness = 2.4,
                         StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
                     });
-                    g.Children.Add(new TextBlock { Text = d.Charging ? "\uE945" : KindGlyph(d.Kind), FontFamily = icon, FontSize = 9.5, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+                    g.Children.Add(new TextBlock { Text = glyph, FontFamily = icon, FontSize = 9.5, Foreground = d.Full ? color : Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+                    if (!string.IsNullOrEmpty(caption)) g.Children.Add(CaptionBadge(caption));
                     item = g;
                 }
                 else
                 {
                     var sp = new StackPanel { Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
-                    sp.Children.Add(new TextBlock { Text = KindGlyph(d.Kind), FontFamily = icon, FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center });
-                    sp.Children.Add(new TextBlock
+                    var ic = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                    ic.Children.Add(new TextBlock { Text = KindGlyph(d.Kind), FontFamily = icon, FontSize = 11, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Margin = string.IsNullOrEmpty(caption) ? new Thickness(0) : new Thickness(0, 0, 5, 3) });
+                    if (!string.IsNullOrEmpty(caption)) ic.Children.Add(CaptionBadge(caption));
+                    sp.Children.Add(ic);
+                    var num = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = vertical ? new Thickness(0, 1, 0, 0) : new Thickness(4, 0, 0, 0) };
+                    num.Children.Add(new TextBlock
                     {
-                        Text = d.Percent + (vertical ? "" : "%"), FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = color,
-                        Margin = vertical ? new Thickness(0, 1, 0, 0) : new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center
+                        Text = d.Percent + (vertical ? "" : "%"), FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = color, VerticalAlignment = VerticalAlignment.Center
                     });
+                    if (d.Charging)
+                        num.Children.Add(new TextBlock { Text = d.Full ? "\uE73E" : "\uE945", FontFamily = icon, FontSize = 8.5, Foreground = color, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 0) });
+                    sp.Children.Add(num);
                     item = sp;
                 }
-                item.ToolTip = $"{d.Name}　{d.Percent}%" + (d.Coarse ? "（大約）" : "") + (d.Charging ? "　充電中" : "") +
+                item.ToolTip = $"{d.Name}　{d.Percent}%" + (d.Coarse ? "（大約）" : "") + (d.Full ? "　已充飽" : d.Charging ? "　充電中" : "") +
+                               (string.IsNullOrEmpty(d.Source) ? "" : $"\n{d.Source}") +
                                (d.Stale ? $"\n{Math.Max(1, (int)(DateTime.Now - d.SeenAt).TotalMinutes)} 分鐘前的電量（裝置可能睡著了）" : "");
                 if (d.Stale) item.Opacity = 0.45;
                 item.Margin = i == 0 ? new Thickness(0) : vertical ? new Thickness(0, 5, 0, 0) : new Thickness(ring ? 4 : 8, 0, 0, 0);
                 BatteryItems.Children.Add(item);
             }
+        }
+
+        /// <summary>右下角的小標籤（同類型有兩個以上時才有，例如兩隻滑鼠「MX」「POP」）</summary>
+        private static Border CaptionBadge(string text) => new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1E)), CornerRadius = new CornerRadius(3), Padding = new Thickness(1.5, 0, 1.5, 0),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -5, -3), IsHitTestVisible = false,
+            Child = new TextBlock { Text = text, FontSize = 6.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xD8, 0xDC)) }
+        };
+
+        private static readonly HashSet<string> CaptionStopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "logitech", "logi", "wireless", "bluetooth", "mouse", "keyboard", "gaming", "the", "for", "razer", "steelseries", "corsair",
+            "hyperx", "xbox", "controller", "headset", "headphones", "earbuds", "sony", "apple", "samsung", "galaxy", "le", "usb", "receiver"
+        };
+
+        /// <summary>
+        /// 同一類型有兩個以上（例如兩隻滑鼠）時，給每個一個 3 個字以內的小標籤：從名稱取第一個有意義的字（MX、POP），
+        /// 分不出來就用 1、2、3。只有一個的類型不加。
+        /// </summary>
+        public static Dictionary<string, string> BatteryCaptions(IList<DeviceBattery> list)
+        {
+            var res = new Dictionary<string, string>();
+            foreach (var g in list.GroupBy(d => d.Kind).Where(g => g.Count() > 1))
+            {
+                var items = g.ToList();
+                var caps = items.Select(d => NameCaption(d.Name)).ToList();
+                bool unique = caps.All(c => c.Length > 0) && caps.Distinct(StringComparer.OrdinalIgnoreCase).Count() == caps.Count;
+                for (int i = 0; i < items.Count; i++) res[items[i].Id] = unique ? caps[i] : (i + 1).ToString();
+            }
+            return res;
+        }
+
+        private static string NameCaption(string name)
+        {
+            foreach (var tok in System.Text.RegularExpressions.Regex.Split(name ?? "", "[^A-Za-z0-9]+"))
+            {
+                if (tok.Length == 0 || CaptionStopWords.Contains(tok)) continue;
+                var t = tok.ToUpperInvariant();
+                return t.Length > 3 ? t.Substring(0, 3) : t;
+            }
+            return "";
         }
 
         /// <summary>從 12 點鐘方向順時針畫到 fraction（0~1）的圓弧</summary>
@@ -192,6 +249,20 @@ namespace IslandBar
             var geo = new PathGeometry();
             geo.Figures.Add(fig);
             return geo;
+        }
+
+        /// <summary>重新偵測一次，把讀到什麼、從哪讀到、哪些裝置連著但沒有電量寫成文字檔打開（回報問題用）</summary>
+        public async System.Threading.Tasks.Task OpenBatteryReportAsync()
+        {
+            try
+            {
+                string text = await System.Threading.Tasks.Task.Run(() => _batterySvc.BuildReportAsync());
+                string path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IslandBar", "battery-report.txt");
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+                System.IO.File.WriteAllText(path, text, System.Text.Encoding.UTF8);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("notepad.exe", "\"" + path + "\"") { UseShellExecute = true });
+            }
+            catch (Exception ex) { Log.Error("OpenBatteryReport", ex); }
         }
 
         /// <summary>給語音助理：「耳機還有多少電」</summary>

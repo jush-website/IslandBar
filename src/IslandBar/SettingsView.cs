@@ -282,16 +282,27 @@ namespace IslandBar
             p.Children.Add(Check("剪貼簿歷史（只存在記憶體）", S.ClipboardHistory, v => { S.ClipboardHistory = v; Changed(); }));
 
             p.Children.Add(Heading("無線裝置電量", 20));
-            p.Children.Add(Note("藍牙耳機、滑鼠、鍵盤、手把等的剩餘電量，顯示在動態島旁的笑臉旁邊（收合時也看得到）；沒有連線的無線裝置就不顯示。藍牙裝置用的是 Windows「藍牙與裝置」裡看得到的電量（裝置有回報才有）；Logitech 接收器上的滑鼠鍵盤直接問接收器；Xbox 無線手把只有大概的等級。"));
+            p.Children.Add(Note("藍牙耳機、滑鼠、鍵盤、手把等的剩餘電量，顯示在動態島旁的笑臉旁邊（收合時也看得到）；沒有連線的無線裝置就不顯示。Logitech 的滑鼠鍵盤（接收器或藍牙）直接問裝置，最準；其他藍牙裝置用 Windows「藍牙與裝置」裡看得到的電量（裝置有回報才有）；Xbox 無線手把只有大概的等級。裝置睡著時先顯示上次的電量（變淡）；充飽了會打勾。"));
             p.Children.Add(Check("顯示無線裝置電量", S.DeviceBatteryShow, v => { S.DeviceBatteryShow = v; Changed(); }));
             p.Children.Add(Segmented(new[] { ("圓環", "ring"), ("數字", "number") }.Select(x => (x.Item1, x.Item2 == "ring" ? 0 : 1)),
                 S.DeviceBatteryStyle == "number" ? 1 : 0, v => { S.DeviceBatteryStyle = v == 1 ? "number" : "ring"; Changed(); }));
             p.Children.Add(Check("剩 50% 時通知一次、剩 10% 再通知一次（充電後重新計算）", S.DeviceBatteryNotify, v => { S.DeviceBatteryNotify = v; Changed(); }));
-            p.Children.Add(Check("也讀 Logitech 接收器（Unifying、Bolt、Lightspeed）上的滑鼠鍵盤電量（不用開 G HUB／Options+）", S.DeviceBatteryLogitech, v => { S.DeviceBatteryLogitech = v; Changed(); }));
+            p.Children.Add(Check("讀 Logitech 滑鼠鍵盤的電量：Unifying、Bolt、Lightspeed 接收器或藍牙直連（不用開 G HUB／Options+）", S.DeviceBatteryLogitech, v => { S.DeviceBatteryLogitech = v; Changed(); }));
+            p.Children.Add(Check("也讀其他 2.4G 接收器的電量（裝置有提供標準電量欄位才有；只讀不寫）", S.DeviceBatteryHid, v => { S.DeviceBatteryHid = v; Changed(); }));
             var batNow = new TextBlock { Foreground = Dim, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
             var bats = _h.Window?.DeviceBatteries;
-            batNow.Text = bats == null || bats.Count == 0 ? "現在沒有偵測到會回報電量的無線裝置。" : "現在：" + string.Join("、", bats.Select(b => $"{b.Name} {b.Percent}%"));
+            batNow.Text = bats == null || bats.Count == 0 ? "現在沒有偵測到會回報電量的無線裝置。" : "現在：" + string.Join("、", bats.Select(b => $"{b.Name} {b.Percent}%" + (string.IsNullOrEmpty(b.Source) ? "" : $"（{b.Source}）")));
             p.Children.Add(batNow);
+            var diag = LinkButton("裝置沒出現？產生診斷資訊");
+            diag.Margin = new Thickness(0, 6, 0, 0);
+            diag.TextDecorations = TextDecorations.Underline;
+            diag.MouseLeftButtonUp += async (s, e) =>
+            {
+                diag.Text = "正在重新偵測…";
+                await (_h.Window?.OpenBatteryReportAsync() ?? System.Threading.Tasks.Task.CompletedTask);
+                diag.Text = "裝置沒出現？產生診斷資訊";
+            };
+            p.Children.Add(diag);
 
             p.Children.Add(Heading("AI 任務完成通知", 20));
             p.Children.Add(Note("Claude Code／Codex 做完或需要你回應時，在動態島上提示。會在它們的設定檔加上通知（原檔會先備份），新開的視窗才生效。專注模式中只記數量，結束時一次告訴你。"));

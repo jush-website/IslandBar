@@ -122,7 +122,12 @@ namespace IslandBar
             if (!_settings.RgbNotify) StopRgb();
             else ApplyRgbStyle();
             ApplyVoiceSettings();
-            _batterySvc.Logitech = _settings.DeviceBatteryLogitech;
+            if (_batterySvc.Logitech != _settings.DeviceBatteryLogitech || _batterySvc.HidGeneric != _settings.DeviceBatteryHid)
+            {
+                _batterySvc.Logitech = _settings.DeviceBatteryLogitech;
+                _batterySvc.HidGeneric = _settings.DeviceBatteryHid;
+                _batterySvc.RefreshSoon();
+            }
             BuildBatteryBar();
             UpdateChatFab();
         }
