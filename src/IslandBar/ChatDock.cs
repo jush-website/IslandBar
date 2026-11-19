@@ -27,7 +27,7 @@ namespace IslandBar
         public event Action SettingsRequested;
 
         public const double DockWidth = 380, DockHeight = 500;
-        private Border _card;
+        private FrameworkElement _card;
         private ScaleTransform _scale;
         private bool _closing;
 
