@@ -293,7 +293,7 @@ namespace IslandBar
             var bats = _h.Window?.DeviceBatteries;
             batNow.Text = bats == null || bats.Count == 0 ? "現在沒有偵測到會回報電量的無線裝置。" : "現在：" + string.Join("、", bats.Select(b => $"{b.Name} {b.Percent}%" + (string.IsNullOrEmpty(b.Source) ? "" : $"（{b.Source}）")));
             p.Children.Add(batNow);
-            var diag = LinkButton("裝置沒出現？產生診斷資訊");
+            var diag = DarkUi.LinkButton("裝置沒出現？產生診斷資訊");
             diag.Margin = new Thickness(0, 6, 0, 0);
             diag.TextDecorations = TextDecorations.Underline;
             diag.MouseLeftButtonUp += async (s, e) =>
