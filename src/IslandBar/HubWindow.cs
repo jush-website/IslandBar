@@ -54,6 +54,9 @@ namespace IslandBar
             Foreground = Brushes.White;
             FontFamily = Text;
             FontSize = 13.5;
+            UseLayoutRounding = true;
+            SnapsToDevicePixels = true;
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);   // 小字比較銳利
             SourceInitialized += (s, e) => DarkTitleBar(this);
             ApplyScrollBarStyle(this);
             KeyDown += (s, e) =>

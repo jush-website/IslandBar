@@ -47,14 +47,25 @@ namespace IslandBar
             FontFamily = Text;
             FontSize = 13;
             Foreground = Brushes.White;
+            // 文字清晰：對齊實際像素、用適合小字的排版模式
+            UseLayoutRounding = true;
+            SnapsToDevicePixels = true;
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             ApplyScrollBarStyle(this);
 
+            // 陰影放在卡片「後面」的另一層：陰影效果如果加在卡片上，裡面的文字會整片變成點陣圖、看起來糊糊的
+            var shadow = new Border
+            {
+                Background = Bg, CornerRadius = new CornerRadius(18), Margin = new Thickness(10),
+                Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 2, Opacity = 0.45, Color = Colors.Black }
+            };
             var card = new Border
             {
                 Background = Bg, CornerRadius = new CornerRadius(18), Margin = new Thickness(10),
-                BorderBrush = Frozen(0x2A, 0x2A, 0x30), BorderThickness = new Thickness(1),
-                Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 2, Opacity = 0.45, Color = Colors.Black }
+                BorderBrush = Frozen(0x2A, 0x2A, 0x30), BorderThickness = new Thickness(1)
             };
+            // 不透明的卡片上可以用 ClearType（透明視窗預設只有灰階反鋸齒）
+            RenderOptions.SetClearTypeHint(card, ClearTypeHint.Enabled);
             var g = new Grid();
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -79,13 +90,16 @@ namespace IslandBar
             Grid.SetRow(_panel, 1);
             g.Children.Add(_panel);
             card.Child = g;
-            Content = card;
-            _card = card;
-            // 彈出動畫：從笑臉的位置放大出來
+            var root = new Grid();
+            root.Children.Add(shadow);
+            root.Children.Add(card);
+            Content = root;
+            _card = root;
+            // 彈出動畫：從笑臉的位置放大出來（動畫只在播的時候有縮放，播完就拿掉，文字才會銳利）
             _scale = new ScaleTransform(0.4, 0.4);
-            card.RenderTransform = _scale;
-            card.RenderTransformOrigin = new Point(1, 0);
-            card.Opacity = 0;
+            root.RenderTransform = _scale;
+            root.RenderTransformOrigin = new Point(1, 0);
+            root.Opacity = 0;
 
             KeyDown += (s, e) => { if (e.Key == Key.Escape) CloseRequested?.Invoke(); };
             _follow.Tick += (s, e) => Follow(false);
@@ -99,9 +113,8 @@ namespace IslandBar
             var a = _anchor();
             if (a == null || _card == null) return;
             double w = ActualWidth > 0 ? ActualWidth : Width, h = ActualHeight > 0 ? ActualHeight : Height;
-            double cx = a.Value.Left + a.Value.Width / 2 - Left - 10, cy = a.Value.Top + a.Value.Height / 2 - Top - 10;   // 10＝卡片外面留給陰影的邊
-            double cw = Math.Max(1, w - 20), ch = Math.Max(1, h - 20);
-            _card.RenderTransformOrigin = new Point(Math.Clamp(cx / cw, 0, 1), Math.Clamp(cy / ch, 0, 1));
+            double cx = a.Value.Left + a.Value.Width / 2 - Left, cy = a.Value.Top + a.Value.Height / 2 - Top;
+            _card.RenderTransformOrigin = new Point(Math.Clamp(cx / Math.Max(1, w), 0, 1), Math.Clamp(cy / Math.Max(1, h), 0, 1));
         }
 
         private void PlayOpen()
@@ -109,9 +122,22 @@ namespace IslandBar
             AimAtAnchor();
             var dur = TimeSpan.FromMilliseconds(380);
             var ease = new BackEase { Amplitude = 0.35, EasingMode = EasingMode.EaseOut };
-            _scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.4, 1, dur) { EasingFunction = ease });
+            var sx = new DoubleAnimation(0.4, 1, dur) { EasingFunction = ease };
+            sx.Completed += (s, e) => SettleCrisp();
+            _scale.BeginAnimation(ScaleTransform.ScaleXProperty, sx);
             _scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.4, 1, dur) { EasingFunction = ease });
             _card.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+        }
+
+        /// <summary>動畫播完：拿掉縮放與透明度（有縮放或半透明時文字會變成灰階、比較糊）</summary>
+        private void SettleCrisp()
+        {
+            if (_closing || _card == null) return;
+            _scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            _scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            _card.BeginAnimation(OpacityProperty, null);
+            _card.Opacity = 1;
+            _card.RenderTransform = Transform.Identity;
         }
 
         /// <summary>收起：縮回笑臉的位置再關掉</summary>
@@ -121,6 +147,8 @@ namespace IslandBar
             _closing = true;
             _follow.Stop();
             if (!IsVisible || _card == null) { Close(); return; }
+            _scale = new ScaleTransform(1, 1);
+            _card.RenderTransform = _scale;
             AimAtAnchor();
             var dur = TimeSpan.FromMilliseconds(200);
             var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
@@ -154,8 +182,11 @@ namespace IslandBar
             // 動態島在左右兩側：放在按鈕旁邊
             if (r.Left < wa.Left + 80) { left = r.Right - 4; top = r.Top - 10; }
             else if (r.Right > wa.Right - 80) { left = r.Left - w + 4; top = r.Top - 10; }
-            Left = Math.Clamp(left, wa.Left, wa.Right - w);
-            Top = Math.Clamp(top, wa.Top, wa.Bottom - h);
+            // 對齊到整數像素：透明視窗放在半個像素上，整個畫面都會糊掉
+            double dpi = 1;
+            try { dpi = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch { }
+            Left = Math.Round(Math.Clamp(left, wa.Left, wa.Right - w) * dpi) / dpi;
+            Top = Math.Round(Math.Clamp(top, wa.Top, wa.Bottom - h) * dpi) / dpi;
         }
     }
 }
