@@ -209,6 +209,20 @@ namespace IslandBar
                 proc.Refresh();
                 double cpuPct = (proc.TotalProcessorTime - cpu0).TotalMilliseconds / (DateTime.UtcNow - t0).TotalMilliseconds / Environment.ProcessorCount * 100;
                 geo.AppendLine($"idle CPU over 20 s: {cpuPct:0.00}% of all {Environment.ProcessorCount} cores ({(proc.TotalProcessorTime - cpu0).TotalMilliseconds:0} ms CPU)");
+                if (_widgets.Count > 0)
+                {
+                    var wd = _widgets[0];
+                    foreach (var crisp in new[] { false, true })
+                    {
+                        IslandBar.MainWindow.CrispScaling = crisp;
+                        wd.SetScale(1.0);
+                        wd.SetScale(0.8);
+                        await Task.Delay(1200);
+                        Grab(wd, Path.Combine(dir, $"widget80-{(crisp ? "on" : "off")}.png"));
+                        geo.AppendLine($"widget {(crisp ? "on" : "off")}: {wd.Left:0.##},{wd.Top:0.##} {wd.ActualWidth:0.##}x{wd.ActualHeight:0.##} dpi {VisualTreeHelper.GetDpi(wd).DpiScaleX:0.###}");
+                    }
+                    IslandBar.MainWindow.CrispScaling = true;
+                }
                 File.WriteAllText(Path.Combine(dir, "scale-geometry.txt"), geo.ToString());
             }
             catch (Exception ex)
