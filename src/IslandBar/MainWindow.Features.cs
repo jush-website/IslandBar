@@ -43,6 +43,20 @@ namespace IslandBar
         public FrameworkElement IslandVisual => Island;
         public FrameworkElement RootVisual => RootGrid;
 
+        public void DebugSetScale(double v) { _settings.Scale = v; PositionWindow(); }
+        public void DebugCollapse() => SetMode(IslandMode.Compact);
+        public string DebugGeometry
+        {
+            get
+            {
+                NativeMethods.GetWindowRect(_hwnd, out var r);
+                var ip = Island.TranslatePoint(new Point(0, 0), this);
+                return $"window DIP {Left:0.##},{Top:0.##} {Width:0.##}x{Height:0.##}; rect px {r.Left},{r.Top} {r.Right - r.Left}x{r.Bottom - r.Top}; " +
+                       $"visualDpi {VisualTreeHelper.GetDpi(this).DpiScaleX:0.###} device {DeviceScale():0.###}; island at {ip.X:0.##},{ip.Y:0.##} size {Island.ActualWidth:0.##}x{Island.ActualHeight:0.##}; " +
+                       $"text {TextOptions.GetTextFormattingMode(this)}; fab {FabBar.Visibility} {FabBar.Margin}";
+            }
+        }
+
         public void DebugExpand(string tab)
         {
             _collapseDelay.Stop();
@@ -67,6 +81,8 @@ namespace IslandBar
             _hudTimer.Stop();
             SetMode(IslandMode.Compact);
         }
+
+        public void DebugTestRgbStop() => StopRgb();
 
         /// <summary>設定畫面的「試試看」</summary>
         public void TestRgb()

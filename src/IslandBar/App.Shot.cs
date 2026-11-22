@@ -176,12 +176,61 @@ namespace IslandBar
                 _window.DebugTestRgb();
                 await Task.Delay(1200);
                 Save(_window.IslandVisual, Path.Combine(dir, "island-rgb.png"));
+
+                // 縮放後的清晰度：80%，「依實際像素排版」關／開，抓真正螢幕上的樣子；順便記錄視窗位置大小
+                var geo = new System.Text.StringBuilder();
+                _window.DebugTestRgbStop();
+                foreach (var crisp in new[] { false, true })
+                {
+                    IslandBar.MainWindow.CrispScaling = crisp;
+                    _window.DebugSetScale(0.8);
+                    _window.DebugCollapse();
+                    await Task.Delay(1500);
+                    string tag = crisp ? "on" : "off";
+                    Grab(_window, Path.Combine(dir, $"scale80-{tag}-compact.png"));
+                    geo.AppendLine($"{tag} compact: {_window.DebugGeometry}");
+                    _window.DebugExpand("stats");
+                    await Task.Delay(1800);
+                    Grab(_window, Path.Combine(dir, $"scale80-{tag}-expanded.png"));
+                    geo.AppendLine($"{tag} expanded: {_window.DebugGeometry}");
+                }
+                IslandBar.MainWindow.CrispScaling = true;
+                _window.DebugSetScale(1.0);
+                _window.DebugCollapse();
+                await Task.Delay(1500);
+                Grab(_window, Path.Combine(dir, "scale100-compact.png"));
+                geo.AppendLine($"100 compact: {_window.DebugGeometry}");
+                // 閒置時的 CPU：收合、額度點點顯示中，量 20 秒
+                var proc = System.Diagnostics.Process.GetCurrentProcess();
+                proc.Refresh();
+                var cpu0 = proc.TotalProcessorTime;
+                var t0 = DateTime.UtcNow;
+                await Task.Delay(20000);
+                proc.Refresh();
+                double cpuPct = (proc.TotalProcessorTime - cpu0).TotalMilliseconds / (DateTime.UtcNow - t0).TotalMilliseconds / Environment.ProcessorCount * 100;
+                geo.AppendLine($"idle CPU over 20 s: {cpuPct:0.00}% of all {Environment.ProcessorCount} cores ({(proc.TotalProcessorTime - cpu0).TotalMilliseconds:0} ms CPU)");
+                File.WriteAllText(Path.Combine(dir, "scale-geometry.txt"), geo.ToString());
             }
             catch (Exception ex)
             {
                 File.WriteAllText(Path.Combine(dir, "error.txt"), ex.ToString());
             }
             ExitApp();
+        }
+
+        /// <summary>抓視窗在螢幕上的真正樣子（看文字清不清楚）</summary>
+        private static void Grab(Window w, string path)
+        {
+            try
+            {
+                double dev = (PresentationSource.FromVisual(w) as System.Windows.Interop.HwndSource)?.CompositionTarget?.TransformToDevice.M11 ?? 1;
+                int x = (int)Math.Round(w.Left * dev), y = (int)Math.Round(w.Top * dev);
+                int ww = (int)Math.Round(w.ActualWidth * dev), hh = (int)Math.Round(w.ActualHeight * dev);
+                using var bmp = new System.Drawing.Bitmap(ww, hh);
+                using (var gfx = System.Drawing.Graphics.FromImage(bmp)) gfx.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(ww, hh));
+                bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            catch (Exception ex) { File.WriteAllText(path + ".txt", ex.ToString()); }
         }
 
         private static void Save(Visual v, string path)
