@@ -139,6 +139,8 @@ namespace IslandBar
                 SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
                 if (HwndSource.FromHwnd(hwnd) is HwndSource src && src.CompositionTarget != null)
                     src.CompositionTarget.RenderMode = RenderMode.SoftwareOnly;
+                ApplyCrisp();
+                DpiChanged += (s2, e2) => Dispatcher.BeginInvoke(new Action(ApplyCrisp), DispatcherPriority.Background);
                 DesktopPin.Pin(this);
             };
             Loaded += (s, e) => KeepOnScreen();
@@ -170,7 +172,32 @@ namespace IslandBar
         {
             _cfg.Scale = Math.Clamp(Math.Round(scale, 3), MinScale, MaxScale);
             _scale.ScaleX = _scale.ScaleY = _cfg.Scale;
+            ApplyCrisp();
             ApplySize();
+        }
+
+        /// <summary>
+        /// 縮放時讓文字在實際畫出來的像素大小上排版（DPI ＝ 螢幕 DPI × 縮放），縮小、放大都不會糊。
+        /// 視窗位置與拖曳換算還是用螢幕本身的 DPI（DeviceScale）。
+        /// </summary>
+        private void ApplyCrisp()
+        {
+            try
+            {
+                bool scaled = Math.Abs(_cfg.Scale - 1) >= 0.001;
+                double dev = DeviceScale();
+                double want = MainWindow.CrispScaling && scaled ? dev * _cfg.Scale : dev;
+                if (PresentationSource.FromVisual(this) != null && Math.Abs(VisualTreeHelper.GetDpi(this).DpiScaleX - want) > 0.0001)
+                    VisualTreeHelper.SetRootDpi(this, new DpiScale(want, want));
+                TextOptions.SetTextFormattingMode(this, !scaled || MainWindow.CrispScaling ? TextFormattingMode.Display : TextFormattingMode.Ideal);
+            }
+            catch (Exception ex) { Log.Error("Widget.ApplyCrisp", ex); }
+        }
+
+        private double DeviceScale()
+        {
+            try { return (PresentationSource.FromVisual(this) as HwndSource)?.CompositionTarget?.TransformToDevice.M11 ?? 1; }
+            catch { return 1; }
         }
 
         public const double MinW = 160, MaxW = 1600, MinH = 60, MaxH = 1600;
@@ -761,9 +788,9 @@ namespace IslandBar
         {
             if (!_resizing) return;
             GetCursorPos(out var p);
-            var dpi = VisualTreeHelper.GetDpi(this);
-            double dx = (p.X - _resizeStartCursor.X) / dpi.DpiScaleX;
-            double dy = (p.Y - _resizeStartCursor.Y) / dpi.DpiScaleY;
+            double dpi = DeviceScale();
+            double dx = (p.X - _resizeStartCursor.X) / dpi;
+            double dy = (p.Y - _resizeStartCursor.Y) / dpi;
             if (_resizeMode != "h") _cfg.Width = Math.Clamp(Math.Round(_resizeStartWidth + dx), MinW, MaxW);
             if (_resizeMode != "w") _cfg.Height = Math.Clamp(Math.Round(_resizeStartHeight + dy), MinH, MaxH);
             ApplySize();
@@ -803,8 +830,8 @@ namespace IslandBar
         {
             if (!_dragging) return;
             GetCursorPos(out var p);
-            var dpi = VisualTreeHelper.GetDpi(this);
-            double dx = (p.X - _dragStartCursor.X) / dpi.DpiScaleX, dy = (p.Y - _dragStartCursor.Y) / dpi.DpiScaleY;
+            double dpi = DeviceScale();
+            double dx = (p.X - _dragStartCursor.X) / dpi, dy = (p.Y - _dragStartCursor.Y) / dpi;
             if (!_moved && Math.Abs(dx) + Math.Abs(dy) < 3) return;
             _moved = true;
             Left = _dragStartLeft + dx;

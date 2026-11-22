@@ -276,10 +276,53 @@ namespace IslandBar
         private void ApplyScale()
         {
             double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
-            Island.LayoutTransform = Math.Abs(sc - 1.0) < 0.001 ? Transform.Identity : new ScaleTransform(sc, sc);
-            TextOptions.SetTextFormattingMode(this, Math.Abs(sc - 1.0) < 0.001 ? TextFormattingMode.Display : TextFormattingMode.Ideal);
+            bool scaled = Math.Abs(sc - 1.0) >= 0.001;
+            // 整個畫面一起縮放（動態島、旁邊的笑臉和電量都在同一個縮放裡，位置計算也一致）
+            RootGrid.LayoutTransform = scaled ? new ScaleTransform(sc, sc) : Transform.Identity;
+            Island.LayoutTransform = Transform.Identity;
+            FabBar.LayoutTransform = Transform.Identity;
+            // 讓文字在縮放後的實際像素大小上排版、對齊像素：不然縮小後字會糊
+            bool crisp = ApplyCrispDpi(scaled ? sc : 1.0);
+            TextOptions.SetTextFormattingMode(this, !scaled || crisp ? TextFormattingMode.Display : TextFormattingMode.Ideal);
             Width = BaseWindowWidth * sc;
             Height = BaseWindowHeight * sc;
+        }
+
+        /// <summary>截圖測試用：關掉「縮放後依實際像素排版」來比較</summary>
+        public static bool CrispScaling = true;
+        private bool _dpiHooked;
+
+        /// <summary>
+        /// 縮放時，告訴 WPF 這個視窗的 DPI 是「螢幕 DPI × 縮放」：文字會在真正畫出來的大小上做字型微調、
+        /// 版面對齊到實際的像素，縮小後也跟 100% 一樣清楚（不然是先排好再整張縮小，字會糊）。
+        /// 只影響畫面，視窗位置與大小的換算還是用螢幕本身的 DPI。
+        /// </summary>
+        private bool ApplyCrispDpi(double sc)
+        {
+            try
+            {
+                if (!(PresentationSource.FromVisual(this) is System.Windows.Interop.HwndSource src) || src.CompositionTarget == null) return false;
+                if (!_dpiHooked)
+                {
+                    _dpiHooked = true;
+                    // 換到別的 DPI 的螢幕、或改了 Windows 縮放：WPF 會把 DPI 設回去，再套一次
+                    DpiChanged += (s, e) => Dispatcher.BeginInvoke(new Action(() => ApplyCrispDpi(Math.Abs(_settings.Scale - 1.0) >= 0.001 ? Math.Clamp(_settings.Scale, MinScale, MaxScale) : 1.0)), DispatcherPriority.Background);
+                }
+                double dev = src.CompositionTarget.TransformToDevice.M11;
+                double want = CrispScaling ? dev * sc : dev;
+                var cur = VisualTreeHelper.GetDpi(this);
+                if (Math.Abs(cur.DpiScaleX - want) > 0.0001)
+                    VisualTreeHelper.SetRootDpi(this, new DpiScale(want, want));
+                return CrispScaling;
+            }
+            catch (Exception ex) { Log.Error("ApplyCrispDpi", ex); return false; }
+        }
+
+        /// <summary>螢幕本身的 DPI 倍率（不受上面的縮放影響）</summary>
+        private double DeviceScale()
+        {
+            try { return (PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource)?.CompositionTarget?.TransformToDevice.M11 ?? 1; }
+            catch { return 1; }
         }
 
         private void PositionWindow()
@@ -412,6 +455,7 @@ namespace IslandBar
         private void SetEdgeHidden(bool hide, bool animate)
         {
             _hiddenToEdge = hide;
+            RefreshLoopAnimations();
             var size = TargetSize();
             double x = 0, y = 0;
             if (hide)
@@ -830,11 +874,17 @@ namespace IslandBar
             return $"{(int)t.TotalMinutes}:{t.Seconds:00}";
         }
 
+        private bool _eqWanted;
+
         private void SetEqualizer(bool running)
         {
-            if (running == _eqRunning) return;
+            _eqWanted = running;
+            bool visible = running;
+            // 動態島看不到時（隱藏、全螢幕、收進邊緣）不要讓等化器一直跳：透明視窗每一格都要整張重畫，很吃 CPU
+            running = running && !AnimationsPaused;
+            if (running == _eqRunning && (EqBars.Visibility == Visibility.Visible) == visible) return;
             _eqRunning = running;
-            var vis = running ? Visibility.Visible : Visibility.Collapsed;
+            var vis = visible ? Visibility.Visible : Visibility.Collapsed;
             EqBars.Visibility = vis; CompactEqScrim.Visibility = vis;
             SideEqBars.Visibility = vis; SideEqScrim.Visibility = vis;
             double[] durations = { 0.42, 0.55, 0.36, 0.48 };
@@ -854,6 +904,7 @@ namespace IslandBar
                             RepeatBehavior = RepeatBehavior.Forever,
                             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
                         };
+                        Timeline.SetDesiredFrameRate(anim, 24);   // 小小的等化器 24 fps 就很順，省一半以上的重畫
                         st.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
                     }
                     else
@@ -1076,8 +1127,23 @@ namespace IslandBar
             }
         }
 
+        /// <summary>動態島現在看不到（隱藏、全螢幕、收進邊緣）：一直重複的動畫先停掉</summary>
+        private bool AnimationsPaused => _userHidden || _fullscreenHidden || _hiddenToEdge;
+        private bool _lastPaused;
+
+        /// <summary>看得到／看不到切換時，重新套用等化器與額度點點的動畫</summary>
+        private void RefreshLoopAnimations()
+        {
+            bool paused = AnimationsPaused;
+            if (paused == _lastPaused) return;
+            _lastPaused = paused;
+            SetEqualizer(_eqWanted);
+            UpdateDots();
+        }
+
         private void UpdateVisibility()
         {
+            RefreshLoopAnimations();
             Island.Visibility = (_userHidden || _fullscreenHidden) ? Visibility.Hidden : Visibility.Visible;
             UpdateChatFab();   // 全螢幕、隱藏動態島時，旁邊的笑臉按鈕也一起收起來（對話小窗也會先藏起來）
         }
@@ -1414,18 +1480,26 @@ namespace IslandBar
                     string tip = $"{it.Label}  {it.Text}" + (string.IsNullOrEmpty(it.Tip) ? "" : "\n" + it.Tip);
                     if (!Equals(dot.ToolTip, tip)) dot.ToolTip = tip;
 
-                    // 平常依序慢慢呼吸（波浪），到 90% 以上改成快閃
-                    bool alert = it.Percent >= AlertLevel;
+                    // 平常靜止（以前一直呼吸，透明視窗每一格都要整張重畫，很吃 CPU）；到 90% 以上才閃，動態島看不到時也不閃
+                    bool alert = it.Percent >= AlertLevel && !AnimationsPaused;
                     if (wasAlert != alert)
                     {
-                        var anim = new DoubleAnimation(1.0, 0.3, TimeSpan.FromMilliseconds(alert ? 350 : 1400))
+                        if (alert)
                         {
-                            AutoReverse = true,
-                            RepeatBehavior = RepeatBehavior.Forever,
-                            BeginTime = TimeSpan.FromMilliseconds(i * 160)
-                        };
-                        Timeline.SetDesiredFrameRate(anim, 20);
-                        dot.BeginAnimation(OpacityProperty, anim);
+                            var anim = new DoubleAnimation(1.0, 0.3, TimeSpan.FromMilliseconds(500))
+                            {
+                                AutoReverse = true,
+                                RepeatBehavior = RepeatBehavior.Forever,
+                                BeginTime = TimeSpan.FromMilliseconds(i * 120)
+                            };
+                            Timeline.SetDesiredFrameRate(anim, 12);
+                            dot.BeginAnimation(OpacityProperty, anim);
+                        }
+                        else
+                        {
+                            dot.BeginAnimation(OpacityProperty, null);
+                            dot.Opacity = 1;
+                        }
                         set[i] = (dot, alert);
                     }
                 }
@@ -1547,8 +1621,8 @@ namespace IslandBar
                 Island.BeginAnimation(MarginProperty, null);
                 return;
             }
-            double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
-            double shift = _mode == IslandMode.Expanded && _quotaSideOn ? QuotaSideWidth * sc : 0;
+            // 整個畫面已經一起縮放，這裡用未縮放的單位
+            double shift = _mode == IslandMode.Expanded && _quotaSideOn ? QuotaSideWidth : 0;
             var target = new Thickness(0, 0, shift, 0);
             if (animate)
                 Island.BeginAnimation(MarginProperty, new ThicknessAnimation(target, TimeSpan.FromMilliseconds(_mode == IslandMode.Expanded ? 420 : 340))

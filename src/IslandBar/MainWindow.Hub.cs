@@ -187,10 +187,8 @@ namespace IslandBar
             bool hidden = _mode == IslandMode.Wheel || !IsLoaded || _userHidden || _fullscreenHidden;
             bool showFab = _settings.ShowChatButton && Assistant != null;
             bool showBat = BatteryBarWanted;
-            double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
             if (hidden || (!showFab && !showBat)) { FabBar.Visibility = Visibility.Collapsed; return; }
 
-            FabBar.LayoutTransform = Math.Abs(sc - 1) < 0.001 ? Transform.Identity : new ScaleTransform(sc, sc);
             ChatFab.Background = Island.Background;
             BatteryBar.Background = Island.Background;
             ChatFab.Visibility = showFab ? Visibility.Visible : Visibility.Collapsed;
@@ -213,10 +211,11 @@ namespace IslandBar
             Point p;
             try { p = Island.TranslatePoint(new Point(0, 0), RootGrid); }
             catch { return; }
-            p.X -= HideTransform.X * sc;
-            p.Y -= HideTransform.Y * sc;
-            double iw = Island.ActualWidth * sc, ih = Island.ActualHeight * sc;
-            double fab = 28 * sc, gap = 8 * sc;
+            // 整個畫面一起縮放：這裡都是未縮放的單位（RootGrid 裡的座標）
+            p.X -= HideTransform.X;
+            p.Y -= HideTransform.Y;
+            double iw = Island.ActualWidth, ih = Island.ActualHeight;
+            double fab = 28, gap = 8;
             double winW = RootGrid.ActualWidth > 0 ? RootGrid.ActualWidth : Width;
             double winH = RootGrid.ActualHeight > 0 ? RootGrid.ActualHeight : Height;
 
@@ -254,7 +253,7 @@ namespace IslandBar
                     IslandMode.Expanded => 12 + 15,
                     IslandMode.Hud or IslandMode.Voice => 20,
                     _ => CompactThickness / 2
-                } * sc;
+                };
                 y = p.Y + Math.Max(0, rowCenter - fab / 2);
                 x = p.X + iw + gap;
                 if (leftOfIsland || x + bw > winW) x = p.X - gap - bw;
@@ -270,17 +269,17 @@ namespace IslandBar
         private void AnimateChatFabHide(double x, double y, TimeSpan dur, IEasingFunction ease)
         {
             if (ChatFab == null) return;
-            double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
+            // 跟動態島在同一個縮放裡：位移一樣多就會一起動
             if (dur <= TimeSpan.Zero)
             {
                 ChatFabHide.BeginAnimation(TranslateTransform.XProperty, null);
                 ChatFabHide.BeginAnimation(TranslateTransform.YProperty, null);
-                ChatFabHide.X = x * sc;
-                ChatFabHide.Y = y * sc;
+                ChatFabHide.X = x;
+                ChatFabHide.Y = y;
                 return;
             }
-            ChatFabHide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x * sc, dur) { EasingFunction = ease });
-            ChatFabHide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y * sc, dur) { EasingFunction = ease });
+            ChatFabHide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, dur) { EasingFunction = ease });
+            ChatFabHide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, dur) { EasingFunction = ease });
         }
 
         private void ChatFab_MouseEnter(object sender, MouseEventArgs e)
@@ -385,12 +384,12 @@ namespace IslandBar
             // 按鈕沒顯示（例如關掉了）：就用動態島右下角
             if (FabBar.Visibility != Visibility.Visible || ChatFab.Visibility != Visibility.Visible)
             {
-                var ip = Island.TranslatePoint(new Point(0, 0), RootGrid);
+                var ip = Island.TranslatePoint(new Point(0, 0), this);   // 視窗座標（已含縮放）
                 return new Rect(Left + ip.X + Island.ActualWidth * sc - size, Top + ip.Y - HideTransform.Y * sc + CompactThickness * sc, size, size);
             }
             // 笑臉在列裡的位置（扣掉收進邊緣的位移）
-            var fp = ChatFab.TranslatePoint(new Point(0, 0), RootGrid);
-            return new Rect(Left + fp.X - ChatFabHide.X, Top + fp.Y - ChatFabHide.Y, size, size);
+            var fp = ChatFab.TranslatePoint(new Point(0, 0), this);
+            return new Rect(Left + fp.X - ChatFabHide.X * sc, Top + fp.Y - ChatFabHide.Y * sc, size, size);
         }
     }
 }

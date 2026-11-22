@@ -502,7 +502,7 @@ namespace IslandBar
                 // 先用便宜的大小檢查：通知小視窗通常很小，主視窗開起來不算
                 if (!GetWindowRect(hwnd, out var r)) return;
                 int w = r.Right - r.Left, h = r.Bottom - r.Top;
-                double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+                double dpi = DeviceScale();
                 if (w <= 0 || h <= 0 || w > 560 * dpi || h > 420 * dpi) return;
                 string app = WatchedApp(hwnd);
                 if (app == null || AppInForeground(app)) return;

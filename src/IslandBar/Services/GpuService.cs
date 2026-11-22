@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,13 +11,21 @@ using System.Threading.Tasks;
 namespace IslandBar.Services
 {
     /// <summary>
-    /// GPU 使用率（與工作管理員相同：各引擎類型加總後取最大值）＋ NVIDIA 溫度與顯存（nvidia-smi）。
+    /// GPU 使用率（與工作管理員相同：各引擎類型加總後取最大值）＋ NVIDIA 溫度與顯存。
     /// 在背景執行緒每 2 秒取樣一次。
+    /// 省 CPU 的做法：
+    ///   ・使用率：整個「GPU Engine」類別一次讀一份快照自己算（以前每個引擎一個計數器，幾百個各自查一次，很吃 CPU）
+    ///   ・NVIDIA：直接呼叫驅動程式附的 nvml.dll（以前每 4 秒開兩次 nvidia-smi 程式）；沒有才退回 nvidia-smi
+    ///   ・用 GPU 的程式清單：只有 GPU 忙的時候才查
     /// </summary>
     public sealed class GpuService : IGpuInfo
     {
-        private readonly Dictionary<string, PerformanceCounter> _counters = new Dictionary<string, PerformanceCounter>();
+        private Dictionary<string, CounterSample> _prevSamples = new Dictionary<string, CounterSample>();
+        private PerformanceCounterCategory _engineCat;
+        private bool? _hasEngine;
         private string _smi;
+        private IntPtr _nvmlDev;
+        private bool _nvml;
         private CancellationTokenSource _cts;
         private int _tick;
 
@@ -43,6 +52,9 @@ namespace IslandBar.Services
                 Path.Combine(pf, "NVIDIA Corporation", "NVSMI", "nvidia-smi.exe")
             }.FirstOrDefault(File.Exists);
 
+            _nvml = NvmlInit();
+            if (_nvml) Log.Write("Gpu: 使用 NVML 讀取 NVIDIA 顯示卡資訊");
+
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
             Task.Run(async () =>
@@ -52,8 +64,12 @@ namespace IslandBar.Services
                     SampleUsage();
                     if (_tick++ % 2 == 0)
                     {
-                        if (_smi != null) { SampleSmi(); SampleSmiProcesses(); }
+                        if (_nvml) SampleNvml();
+                        else if (_smi != null) SampleSmi();
                         else SampleAdapterMemory();
+                        // 用 GPU 的程式（判斷是不是在訓練模型）：GPU 忙的時候才查，每 10 秒一次
+                        if (_smi != null && (Usage ?? 0) >= 30 && _tick % 10 == 1) SampleSmiProcesses();
+                        else if ((Usage ?? 0) < 30 && Processes.Count > 0) Processes = new List<(string, double)>();
                     }
                     try { await Task.Delay(2000, token); } catch { }
                 }
@@ -63,52 +79,92 @@ namespace IslandBar.Services
         public void Stop()
         {
             _cts?.Cancel();
-            foreach (var c in _counters.Values) { try { c.Dispose(); } catch { } }
-            _counters.Clear();
+            if (_nvml) { try { nvmlShutdown(); } catch { } _nvml = false; }
         }
 
         private void SampleUsage()
         {
             try
             {
-                if (!PerformanceCounterCategory.Exists("GPU Engine")) { Usage = null; return; }
-                var cat = new PerformanceCounterCategory("GPU Engine");
-                var names = cat.GetInstanceNames();
-                var alive = new HashSet<string>(names);
-
-                foreach (var gone in _counters.Keys.Where(k => !alive.Contains(k)).ToList())
-                {
-                    try { _counters[gone].Dispose(); } catch { }
-                    _counters.Remove(gone);
-                }
-
+                if (_hasEngine == null) _hasEngine = PerformanceCounterCategory.Exists("GPU Engine");
+                if (_hasEngine == false) { Usage = null; return; }
+                _engineCat ??= new PerformanceCounterCategory("GPU Engine");
+                // 一次讀整個類別的快照，跟上一次比較算出每個引擎的使用率
+                var data = _engineCat.ReadCategory();
+                var col = data["utilization percentage"];
+                if (col == null) { Usage = null; return; }
+                var next = new Dictionary<string, CounterSample>(col.Count);
                 var byType = new Dictionary<string, double>();
-                foreach (var name in names)
+                foreach (InstanceData inst in col.Values)
                 {
-                    if (!_counters.TryGetValue(name, out var pc))
-                    {
-                        try
-                        {
-                            pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", name, true);
-                            pc.NextValue(); // 第一次一定是 0
-                            _counters[name] = pc;
-                        }
-                        catch { continue; }
-                        continue;
-                    }
-
+                    string name = inst.InstanceName;
+                    var sample = inst.Sample;
+                    next[name] = sample;
+                    if (!_prevSamples.TryGetValue(name, out var prev)) continue;
                     float v;
-                    try { v = pc.NextValue(); } catch { continue; }
+                    try { v = CounterSample.Calculate(prev, sample); } catch { continue; }
+                    if (float.IsNaN(v) || v < 0) continue;
                     int idx = name.IndexOf("_engtype_", StringComparison.OrdinalIgnoreCase);
                     string type = idx >= 0 ? name.Substring(idx + 9) : "other";
                     byType[type] = (byType.TryGetValue(type, out double cur) ? cur : 0) + v;
                 }
-                Usage = byType.Count > 0 ? Math.Min(100, byType.Values.Max()) : 0;
+                bool first = _prevSamples.Count == 0;
+                _prevSamples = next;
+                if (!first) Usage = byType.Count > 0 ? Math.Min(100, byType.Values.Max()) : 0;
             }
             catch (Exception ex)
             {
                 Log.Error("Gpu.Usage", ex);
                 Usage = null;
+            }
+        }
+
+        // ---------------- NVIDIA：nvml.dll（驅動程式附的，不用開 nvidia-smi） ----------------
+
+        [StructLayout(LayoutKind.Sequential)] private struct NvmlMemory { public ulong Total, Free, Used; }
+
+        [DllImport("nvml.dll", EntryPoint = "nvmlInit_v2")] private static extern int nvmlInit();
+        [DllImport("nvml.dll")] private static extern int nvmlShutdown();
+        [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetHandleByIndex_v2")] private static extern int nvmlDeviceGetHandleByIndex(uint index, out IntPtr device);
+        [DllImport("nvml.dll")] private static extern int nvmlDeviceGetTemperature(IntPtr device, int sensor, out uint temp);
+        [DllImport("nvml.dll")] private static extern int nvmlDeviceGetMemoryInfo(IntPtr device, out NvmlMemory mem);
+        [DllImport("nvml.dll")] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
+        [DllImport("nvml.dll", CharSet = CharSet.Ansi)] private static extern int nvmlDeviceGetName(IntPtr device, StringBuilder name, uint length);
+
+        private bool NvmlInit()
+        {
+            try
+            {
+                // 驅動程式把 nvml.dll 放在 System32；舊版在 NVSMI 資料夾
+                string nvsmi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "NVIDIA Corporation", "NVSMI");
+                if (!File.Exists(Path.Combine(Environment.SystemDirectory, "nvml.dll")) && File.Exists(Path.Combine(nvsmi, "nvml.dll")))
+                    NativeLibrary.TryLoad(Path.Combine(nvsmi, "nvml.dll"), out _);
+                if (nvmlInit() != 0) return false;
+                if (nvmlDeviceGetHandleByIndex(0, out _nvmlDev) != 0) { nvmlShutdown(); return false; }
+                var sb = new StringBuilder(96);
+                if (nvmlDeviceGetName(_nvmlDev, sb, 96) == 0) Name = sb.ToString().Replace("NVIDIA ", "").Replace("GeForce ", "");
+                return true;
+            }
+            catch { return false; }   // 沒有 NVIDIA 顯示卡或驅動太舊
+        }
+
+        private void SampleNvml()
+        {
+            try
+            {
+                if (nvmlDeviceGetTemperature(_nvmlDev, 0, out uint t) == 0) Temperature = (int)t;
+                if (nvmlDeviceGetMemoryInfo(_nvmlDev, out var m) == 0 && m.Total > 0)
+                {
+                    VramUsedGb = m.Used / 1024.0 / 1024 / 1024;
+                    VramTotalGb = m.Total / 1024.0 / 1024 / 1024;
+                    VramShared = false;
+                }
+                PowerW = nvmlDeviceGetPowerUsage(_nvmlDev, out uint mw) == 0 ? mw / 1000.0 : (double?)null;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Gpu.Nvml", ex);
+                _nvml = false;   // 之後改用 nvidia-smi
             }
         }
 
