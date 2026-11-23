@@ -202,7 +202,6 @@ namespace IslandBar.Services
             if (truncated) text = text.Substring(0, max);
             var sb = new StringBuilder();
             sb.AppendLine(toEnglish ? "請把下面的內容翻成英文。" : "請把下面的內容翻成繁體中文（台灣用語）。");
-            if (!string.IsNullOrWhiteSpace(cap.Title)) sb.AppendLine("（視窗標題：" + cap.Title + "，只是參考，不用翻）");
             sb.AppendLine();
             sb.AppendLine(text);
             return sb.ToString();
