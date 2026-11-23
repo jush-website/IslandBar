@@ -172,7 +172,8 @@ namespace IslandBar
                             W("\n== 畫面重點摘要（本機）");
                             var tw = ShowSummaryTestWindow();
                             await Task.Delay(1500);
-                            var cap = ScreenSummary.Capture(false, Array.Empty<IntPtr>());
+                            // CI 上視窗搶不到前景，直接指定測試視窗
+                            var cap = ScreenSummary.Capture(false, Array.Empty<IntPtr>(), new System.Windows.Interop.WindowInteropHelper(tw).Handle);
                             W($"擷取：{cap.Describe()} {cap.Width}x{cap.Height}");
                             sw.Restart();
                             string text = await ScreenSummary.OcrAsync(cap);

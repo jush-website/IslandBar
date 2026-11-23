@@ -45,6 +45,7 @@ namespace IslandBar
         /// <summary>同一份畫面改成翻譯／改成摘要</summary>
         public event Action SwitchRequested;
         private readonly TextBlock _title;
+        private TextBlock _icon;
         private readonly Border _switchChip;
 
         public SummaryCard(Func<Rect?> anchor)
@@ -96,7 +97,7 @@ namespace IslandBar
             header.Children.Add(new Border
             {
                 Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Background = Accent, VerticalAlignment = VerticalAlignment.Top,
-                Child = Glyph("", 12, Bg), Margin = new Thickness(0, 1, 10, 0)   // 清單
+                Child = _icon = Glyph("\uE8FD", 12, Bg), Margin = new Thickness(0, 1, 10, 0)   // 清單（翻譯時換成文字圖示）
             });
             var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             _title = new TextBlock { Text = "畫面重點", FontWeight = FontWeights.SemiBold, FontSize = 14 };
@@ -199,6 +200,7 @@ namespace IslandBar
             Done = false;
             IsTranslation = translate;
             _title.Text = translate ? "畫面翻譯" : "畫面重點";
+            _icon.Text = translate ? "\uE8C1" : "\uE8FD";
             if (_switchChip.Child is StackPanel sw && sw.Children.Count > 1)
             {
                 if (sw.Children[0] is TextBlock g) g.Text = translate ? "\uE8FD" : "\uE8C1";

@@ -47,15 +47,16 @@ namespace IslandBar.Services
             "一律用繁體中文（台灣用語）回答，格式固定：\n" +
             "第一行：一句話說這是什麼（例如「一封客戶詢問報價的信」「關於某某的新聞」「Python 程式的錯誤訊息」），不要加標題或符號。\n" +
             "接著 3 到 6 點重點，每點一行、以「• 」開頭，每點一句話、具體（有數字、日期、人名就寫出來）。\n" +
-            "如果有需要使用者注意或處理的事（截止日期、錯誤原因、要回覆的問題、要付的錢），最後加一行以「⚠ 」開頭說明；沒有就不要寫。\n" +
+            "如果內容裡明確寫到需要使用者處理的事（截止日期、錯誤原因、要回覆的問題、要付的錢），最後加一行以「⚠ 」開頭說明；沒有就不要寫。" +
+            "不要評論畫面本身、不要猜測日期或設定對不對。\n" +
             "不要用 Markdown 粗體或標題，不要說「以下是摘要」之類的開場白，不要編造畫面上沒有的內容。";
 
         /// <summary>
         /// 擷取目前前景的視窗；前景是桌面、工作列、IslandBar 自己，或視窗太小時，改抓整個主螢幕。
         /// </summary>
-        public static ScreenCapture Capture(bool wholeScreen, IntPtr[] ignore)
+        public static ScreenCapture Capture(bool wholeScreen, IntPtr[] ignore, IntPtr target = default)
         {
-            IntPtr fg = GetForegroundWindow();
+            IntPtr fg = target != IntPtr.Zero ? target : GetForegroundWindow();
             string cls = fg == IntPtr.Zero ? "" : ClassName(fg);
             bool useScreen = wholeScreen || fg == IntPtr.Zero || (ignore != null && ignore.Contains(fg)) ||
                              cls is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
