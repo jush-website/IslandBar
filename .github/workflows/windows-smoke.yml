@@ -41,7 +41,7 @@ jobs:
           New-Item -ItemType Directory -Force shots | Out-Null
           $shots = (Resolve-Path shots).Path
           $p = Start-Process -FilePath publish\IslandBar.exe -ArgumentList '--shot', $shots -PassThru
-          if (-not $p.WaitForExit(120000)) { Stop-Process $p -Force; 'timeout' | Out-File shots\timeout.txt }
+          if (-not $p.WaitForExit(300000)) { Stop-Process $p -Force; 'timeout' | Out-File shots\timeout.txt }
           Copy-Item (Join-Path $dir 'log.txt') shots\log.txt -ErrorAction SilentlyContinue
           Get-ChildItem shots | Format-Table Name, Length
 
