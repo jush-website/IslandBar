@@ -329,8 +329,11 @@ namespace IslandBar
         {
             Dispatcher.BeginInvoke(new Action(UpdateChatFab), System.Windows.Threading.DispatcherPriority.Loaded);
             ApplyScale();
-            double sw = SystemParameters.PrimaryScreenWidth;
-            double sh = SystemParameters.PrimaryScreenHeight;
+            // 放在選定的螢幕（多螢幕時）；那個螢幕拔掉了就回到主螢幕
+            var mon = Services.Monitors.Find(_settings.IslandMonitor).BoundsDip;
+            double mx = mon.Left, my = mon.Top;
+            double sw = mon.Width;
+            double sh = mon.Height;
             double off = Math.Max(0, _settings.TopOffset);
             const double topSideMargin = 24; // 左上 / 右上 離左右邊的距離
             double sc = Math.Clamp(_settings.Scale, MinScale, MaxScale);
@@ -343,9 +346,9 @@ namespace IslandBar
                 {
                     double half = (128 + _pageExtra / 2) * sc; // 展開面板高度的一半，避免超出螢幕
                     double cy = Math.Clamp(along * sh, half, sh - half);
-                    Top = cy - Height / 2;
+                    Top = my + cy - Height / 2;
                     bool left = _settings.Position == IslandPosition.Left;
-                    Left = left ? off : sw - Width - off;
+                    Left = mx + (left ? off : sw - Width - off);
                     Island.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
                     Island.VerticalAlignment = VerticalAlignment.Center;
                     Island.Margin = new Thickness(0);
@@ -355,8 +358,8 @@ namespace IslandBar
                 {
                     double half = (245 + QuotaSideWidth) * sc; // 展開面板（含左邊額度欄）不要超出螢幕
                     double cx = Math.Clamp(along * sw, half, sw - half);
-                    Left = cx - Width / 2;
-                    Top = off;
+                    Left = mx + cx - Width / 2;
+                    Top = my + off;
                     Island.HorizontalAlignment = HorizontalAlignment.Center;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(0);
@@ -368,35 +371,35 @@ namespace IslandBar
             switch (_settings.Position)
             {
                 case IslandPosition.TopLeft:
-                    Left = 0; Top = off;
+                    Left = mx; Top = my + off;
                     Island.HorizontalAlignment = HorizontalAlignment.Left;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(topSideMargin, 0, 0, 0);
                     Island.BorderThickness = new Thickness(0);
                     break;
                 case IslandPosition.TopRight:
-                    Left = sw - Width; Top = off;
+                    Left = mx + sw - Width; Top = my + off;
                     Island.HorizontalAlignment = HorizontalAlignment.Right;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(0, 0, topSideMargin, 0);
                     Island.BorderThickness = new Thickness(0);
                     break;
                 case IslandPosition.Left:
-                    Left = off; Top = (sh - Height) / 2;
+                    Left = mx + off; Top = my + (sh - Height) / 2;
                     Island.HorizontalAlignment = HorizontalAlignment.Left;
                     Island.VerticalAlignment = VerticalAlignment.Center;
                     Island.Margin = new Thickness(0);
                     Island.BorderThickness = new Thickness(0);
                     break;
                 case IslandPosition.Right:
-                    Left = sw - Width - off; Top = (sh - Height) / 2;
+                    Left = mx + sw - Width - off; Top = my + (sh - Height) / 2;
                     Island.HorizontalAlignment = HorizontalAlignment.Right;
                     Island.VerticalAlignment = VerticalAlignment.Center;
                     Island.Margin = new Thickness(0);
                     Island.BorderThickness = new Thickness(0);
                     break;
                 default: // TopCenter
-                    Left = (sw - Width) / 2; Top = off;
+                    Left = mx + (sw - Width) / 2; Top = my + off;
                     Island.HorizontalAlignment = HorizontalAlignment.Center;
                     Island.VerticalAlignment = VerticalAlignment.Top;
                     Island.Margin = new Thickness(0);
@@ -1338,10 +1341,14 @@ namespace IslandBar
             Island.Opacity = 1;
 
             var cur = CursorDip();
-            double sw = SystemParameters.PrimaryScreenWidth;
-            double sh = SystemParameters.PrimaryScreenHeight;
-            double cx = Math.Clamp(cur.X, 0, sw);
-            double cy = Math.Clamp(cur.Y, 0, sh);
+            // 放開時游標在哪個螢幕，就停在那個螢幕的邊
+            var monInfo = Services.Monitors.AtDip(cur);
+            var mon = monInfo.BoundsDip;
+            _settings.IslandMonitor = monInfo.Primary ? "" : monInfo.Device;
+            double sw = mon.Width;
+            double sh = mon.Height;
+            double cx = Math.Clamp(cur.X - mon.Left, 0, sw);
+            double cy = Math.Clamp(cur.Y - mon.Top, 0, sh);
 
             // 離哪個邊最近就停在哪個邊（上 / 左 / 右）
             double dTop = cy, dLeft = cx, dRight = sw - cx;
@@ -1361,7 +1368,7 @@ namespace IslandBar
                 _settings.AlongEdge = cy / sh;
             }
             _settings.Save();
-            Log.Write($"Dragged to {_settings.Position} along={_settings.AlongEdge:0.000}");
+            Log.Write($"Dragged to {_settings.Position} along={_settings.AlongEdge:0.000} on {monInfo.Label}");
 
             PositionWindow();
             ApplyMode(animate: true);

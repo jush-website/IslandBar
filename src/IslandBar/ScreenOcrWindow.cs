@@ -26,7 +26,8 @@ namespace IslandBar
 
         public event Action<byte[]> Captured;
 
-        public ScreenOcrWindow(BitmapSource screenshot)
+        /// <param name="area">要蓋住的螢幕（DIP）；沒給就是主螢幕</param>
+        public ScreenOcrWindow(BitmapSource screenshot, Rect? area = null)
         {
             _shot = screenshot;
             WindowStyle = WindowStyle.None;
@@ -34,10 +35,11 @@ namespace IslandBar
             ShowInTaskbar = false;
             Topmost = true;
             WindowStartupLocation = WindowStartupLocation.Manual;
-            Left = 0;
-            Top = 0;
-            Width = SystemParameters.PrimaryScreenWidth;
-            Height = SystemParameters.PrimaryScreenHeight;
+            var a = area ?? new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+            Left = a.Left;
+            Top = a.Top;
+            Width = a.Width;
+            Height = a.Height;
             Cursor = Cursors.Cross;
 
             _canvas.Background = new ImageBrush(screenshot) { Stretch = Stretch.Fill };

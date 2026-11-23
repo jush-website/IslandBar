@@ -19,6 +19,9 @@ namespace IslandBar
 
     public class AppSettings
     {
+        /// <summary>動態島放在哪個螢幕（裝置名稱，例如 \\.\DISPLAY2；空白＝主螢幕；那個螢幕拔掉了也會回到主螢幕）</summary>
+        public string IslandMonitor { get; set; } = "";
+
         /// <summary>動態島位置：TopCenter / TopLeft / TopRight / Left / Right</summary>
         public IslandPosition Position { get; set; } = IslandPosition.TopCenter;
 
@@ -163,6 +166,8 @@ namespace IslandBar
 
         // ---- 桌面 Dock（工作列上方的一排小工具＋程式） ----
         public bool DockEnabled { get; set; } = false;
+        /// <summary>Dock 放在哪個螢幕（裝置名稱，空白＝主螢幕）</summary>
+        public string DockMonitor { get; set; } = "";
         /// <summary>Dock 上的東西（依序）：clock、date、weather、event、media、cpu、gpu、ram、net、quota、boost、sep、openapps、explorer、browser、recycle、app:捷徑或 App|名稱</summary>
         public List<string> DockItems { get; set; } = DockPresets.Get("night").Items.ToList();
         /// <summary>底板樣式：smoke（煙燻）、glass（玻璃）、solid（實色）、light（淺色）</summary>

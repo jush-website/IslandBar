@@ -172,7 +172,8 @@ namespace IslandBar
             if (!force && a.Value == _lastAnchor) return;
             _lastAnchor = a.Value;
             var r = a.Value;
-            var wa = SystemParameters.WorkArea;
+            // 留在動態島（笑臉）所在的那個螢幕
+            var wa = Services.Monitors.WorkAreaAt(new Point(r.Left + r.Width / 2, r.Top + r.Height / 2));
             double w = ActualWidth > 0 ? ActualWidth : Width, h = ActualHeight > 0 ? ActualHeight : Height;
             // 預設放在按鈕下方，右緣對齊按鈕；空間不夠就往另一邊、往上
             double left = r.Right - w + 10;

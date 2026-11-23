@@ -794,6 +794,20 @@ namespace IslandBar
                 mode.Items.Add(mi);
             }
             menu.Items.Add(mode);
+            var mons = Monitors.All();
+            if (mons.Count > 1)
+            {
+                var screen = new MenuItem { Header = "放在哪個螢幕" };
+                var cur = Monitors.Find(_s.DockMonitor);
+                foreach (var m in mons)
+                {
+                    var mi = new MenuItem { Header = m.Label, IsCheckable = true, IsChecked = cur?.Device == m.Device };
+                    var mm = m;
+                    mi.Click += (s, e) => { _s.DockMonitor = mm.Primary ? "" : mm.Device; _s.Save(); _shown = true; Position(false); };
+                    screen.Items.Add(mi);
+                }
+                menu.Items.Add(screen);
+            }
             var size = new MenuItem { Header = "大小" };
             foreach (var v in new[] { 0.8, 0.9, 1.0, 1.15, 1.3 })
             {
@@ -875,7 +889,8 @@ namespace IslandBar
             if (_s.DockMode == "desktop" && IsVisible) DesktopPin.Pin(this);
         }
 
-        private Rect WorkArea => SystemParameters.WorkArea;
+        /// <summary>Dock 所在螢幕的工作區（多螢幕時可以選；那個螢幕拔掉了就回到主螢幕）</summary>
+        private Rect WorkArea => Monitors.Find(_s.DockMonitor)?.WorkDip ?? SystemParameters.WorkArea;
 
         private double ShownTop => WorkArea.Bottom - ActualHeight - 8;
         private double HiddenTop => WorkArea.Bottom - 6;

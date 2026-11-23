@@ -288,7 +288,10 @@ namespace IslandBar
                 Island.Opacity = 0;
                 await Task.Delay(160);
                 BitmapSource shot;
-                var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                // 多螢幕：框選滑鼠所在的那個螢幕
+                var monOcr = Services.Monitors.AtCursor();
+                var b = monOcr == null ? System.Windows.Forms.Screen.PrimaryScreen.Bounds
+                    : new System.Drawing.Rectangle((int)monOcr.Bounds.X, (int)monOcr.Bounds.Y, (int)monOcr.Bounds.Width, (int)monOcr.Bounds.Height);
                 using (var bmp = new System.Drawing.Bitmap(b.Width, b.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
                 {
                     using (var g = System.Drawing.Graphics.FromImage(bmp))
@@ -303,7 +306,7 @@ namespace IslandBar
                 }
                 Island.Opacity = old;
 
-                var win = new ScreenOcrWindow(shot);
+                var win = new ScreenOcrWindow(shot, monOcr?.BoundsDip);
                 win.Captured += async png =>
                 {
                     try

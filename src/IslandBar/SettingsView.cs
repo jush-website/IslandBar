@@ -196,7 +196,16 @@ namespace IslandBar
             p.Children.Add(Heading("位置"));
             p.Children.Add(Segmented(new[] { ("上方置中", IslandPosition.TopCenter), ("左上", IslandPosition.TopLeft), ("右上", IslandPosition.TopRight), ("左側", IslandPosition.Left), ("右側", IslandPosition.Right) },
                 S.AlongEdge == null ? S.Position : (IslandPosition?)null, v => { S.Position = v; S.AlongEdge = null; Changed(); }));
-            p.Children.Add(Note("也可以直接把動態島拖到螢幕上、左、右邊緣任何位置。"));
+            p.Children.Add(Note("也可以直接把動態島拖到螢幕上、左、右邊緣任何位置（多螢幕時拖到哪個螢幕就停在那個螢幕）。"));
+            var monitors = Services.Monitors.All();
+            if (monitors.Count > 1)
+            {
+                var curMon = Services.Monitors.Find(S.IslandMonitor);
+                p.Children.Add(Heading("放在哪個螢幕"));
+                p.Children.Add(Segmented(monitors.Select((m, i) => (m.Label, i)), Math.Max(0, monitors.FindIndex(m => m.Device == curMon?.Device)),
+                    i => { S.IslandMonitor = monitors[i].Primary ? "" : monitors[i].Device; Changed(); }));
+                p.Children.Add(Note("螢幕由左到右編號。那個螢幕拔掉時會自動回到主螢幕，接回來再回去。"));
+            }
 
             p.Children.Add(Heading("大小（文字與圖示）"));
             p.Children.Add(Slider(MainWindow.MinScale * 100, MainWindow.MaxScale * 100, S.Scale * 100, v => { S.Scale = Math.Round(v / 5) * 5 / 100; Changed(); }, v => $"{Math.Round(v / 5) * 5:0}%"));
@@ -925,6 +934,13 @@ namespace IslandBar
                 S.DockMode switch { "float" => 1, "autohide" => 2, _ => 0 },
                 v => { S.DockMode = v switch { 1 => "float", 2 => "autohide", _ => "desktop" }; Changed(); })));
             p.Children.Add(Note("在視窗後面：像桌面小工具，最大化的視窗會蓋住它。浮在最上層：一直看得到。自動隱藏：平常收起來，滑鼠移到工作列上方才滑出來。"));
+            var dockMons = Services.Monitors.All();
+            if (dockMons.Count > 1)
+            {
+                var curDock = Services.Monitors.Find(S.DockMonitor);
+                p.Children.Add(Labeled("放在哪個螢幕", Segmented(dockMons.Select((m, i) => (m.ShortLabel, i)), Math.Max(0, dockMons.FindIndex(m => m.Device == curDock?.Device)),
+                    i => { S.DockMonitor = dockMons[i].Primary ? "" : dockMons[i].Device; Changed(); })));
+            }
             p.Children.Add(Labeled("大小", Slider(80, 130, S.DockScale * 100, v => { S.DockScale = Math.Round(v / 5) * 5 / 100; Changed(); }, v => $"{Math.Round(v / 5) * 5:0}%")));
             var dockRow = new WrapPanel();
             var editDock = MakeButton("編輯 Dock（拖曳排序、× 移除）", true);

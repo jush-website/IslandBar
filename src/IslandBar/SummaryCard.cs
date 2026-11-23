@@ -350,10 +350,12 @@ namespace IslandBar
         /// <summary>放在動態島正下方置中；動態島看不到時放右上角</summary>
         public void Reposition()
         {
-            var wa = SystemParameters.WorkArea;
             double w = ActualWidth > 0 ? ActualWidth : Width, h = ActualHeight > 0 ? ActualHeight : 200;
             double left, top;
             var a = _anchor();
+            // 留在動態島所在的螢幕；動態島看不到時用滑鼠所在的螢幕
+            var wa = a is Rect ar ? Services.Monitors.WorkAreaAt(new Point(ar.Left + ar.Width / 2, ar.Top + ar.Height / 2))
+                                  : (Services.Monitors.AtCursor()?.WorkDip ?? SystemParameters.WorkArea);
             if (a is Rect r)
             {
                 left = r.Left + r.Width / 2 - w / 2;
