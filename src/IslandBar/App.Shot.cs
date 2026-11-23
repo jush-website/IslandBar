@@ -262,10 +262,14 @@ namespace IslandBar
                     box.Focus();
                     box.Select(0, 47);
                     await Task.Delay(500);
-                    var selText = await IslandBar.Services.SelectedText.GetAsync(new System.Windows.Interop.WindowInteropHelper(sw2).Handle);
-                    sumLog.AppendLine($"\nselection test: '{selText}'");
+                    var hw = new System.Windows.Interop.WindowInteropHelper(sw2).Handle;
+                    // CI 上視窗搶不到焦點，所以直接讀這個視窗裡的文字框（同一套 UI Automation 讀法）；不送複製鍵
+                    var selText = await Task.Run(() => IslandBar.Services.SelectedText.FromWindowForTest(hw));
+                    sumLog.AppendLine($"\nselection test (UIA on window): '{selText}'");
+                    var viaFocus = await IslandBar.Services.SelectedText.GetAsync(hw, allowClipboard: false);
+                    sumLog.AppendLine($"via focused element: '{viaFocus ?? "(null: focus is elsewhere on CI)"}'");
                     box.Select(0, 0);
-                    var none = await IslandBar.Services.SelectedText.GetAsync(new System.Windows.Interop.WindowInteropHelper(sw2).Handle);
+                    var none = await Task.Run(() => IslandBar.Services.SelectedText.FromWindowForTest(hw));
                     sumLog.AppendLine($"no selection: '{none ?? "(null)"}'");
                     sw2.Close();
                 }

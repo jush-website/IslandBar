@@ -21,7 +21,7 @@ namespace IslandBar.Services
         /// <summary>剪貼簿方法的時候呼叫：之後這段時間的剪貼簿變動不要記到剪貼簿歷史</summary>
         public static Action<TimeSpan> IgnoreClipboardFor { get; set; }
 
-        public static async Task<string> GetAsync(IntPtr foreground)
+        public static async Task<string> GetAsync(IntPtr foreground, bool allowClipboard = true)
         {
             if (foreground == IntPtr.Zero) return null;
             // 使用者還按著快捷鍵（Ctrl＋Alt）：等放開，不然送出去的「複製」會變成 Ctrl＋Alt＋C
@@ -39,6 +39,7 @@ namespace IslandBar.Services
             }
             catch { }
 
+            if (!allowClipboard) return null;
             // 2. 模擬複製
             try
             {
@@ -78,11 +79,15 @@ namespace IslandBar.Services
             IgnoreClipboardFor?.Invoke(TimeSpan.FromSeconds(2));
             var saved = Snapshot();
             uint before = GetClipboardSequenceNumber();
-            string cls = ClassName(foreground);
-            bool terminal = cls is "ConsoleWindowClass" or "CASCADIA_HOSTING_WINDOW_CLASS" or "mintty" or "PuTTY" or "VirtualConsoleClass";
-            SendCopy(terminal);
-            // 等剪貼簿換掉（最多 0.6 秒）
-            for (int i = 0; i < 15 && GetClipboardSequenceNumber() == before; i++) await Task.Delay(40);
+            // 先用 Ctrl+Insert（標準的複製鍵，終端機、VS Code 裡也只會複製，不會像 Ctrl+C 那樣中斷正在跑的程式）
+            SendCopy(insert: true);
+            for (int i = 0; i < 12 && GetClipboardSequenceNumber() == before; i++) await Task.Delay(40);
+            // 少數程式不認得 Ctrl+Insert：改用 Ctrl+C，但終端機和寫程式的編輯器不送（沒選取時會中斷程式）
+            if (GetClipboardSequenceNumber() == before && !RiskyForCtrlC(foreground))
+            {
+                SendCopy(insert: false);
+                for (int i = 0; i < 12 && GetClipboardSequenceNumber() == before; i++) await Task.Delay(40);
+            }
             if (GetClipboardSequenceNumber() == before) return null;   // 沒有選取任何東西
             string text = null;
             for (int i = 0; i < 4 && text == null; i++)
@@ -137,16 +142,31 @@ namespace IslandBar.Services
             (GetAsyncKeyState(0x11) & 0x8000) != 0 || (GetAsyncKeyState(0x12) & 0x8000) != 0 ||
             (GetAsyncKeyState(0x10) & 0x8000) != 0 || (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0;
 
-        /// <summary>送出「複製」：Ctrl+C；終端機用 Ctrl+Shift+C（Ctrl+C 在終端機會中斷正在跑的程式）</summary>
-        private static void SendCopy(bool terminal)
+        /// <summary>終端機、寫程式的編輯器（裡面常有終端機）：沒選取時 Ctrl+C 會中斷正在跑的程式</summary>
+        private static bool RiskyForCtrlC(IntPtr h)
+        {
+            string cls = ClassName(h);
+            if (cls is "ConsoleWindowClass" or "CASCADIA_HOSTING_WINDOW_CLASS" or "mintty" or "PuTTY" or "VirtualConsoleClass") return true;
+            try
+            {
+                GetWindowThreadProcessId(h, out uint pid);
+                using var p = System.Diagnostics.Process.GetProcessById((int)pid);
+                string n = p.ProcessName.ToLowerInvariant();
+                return n is "code" or "code - insiders" or "cursor" or "windsurf" or "devenv" or "wezterm-gui" or "alacritty" or "tabby" or "hyper" or "warp"
+                       || n.StartsWith("idea") || n.StartsWith("pycharm") || n.StartsWith("webstorm") || n.StartsWith("rider") || n.StartsWith("clion") || n.StartsWith("goland");
+            }
+            catch { return true; }
+        }
+
+        /// <summary>送出「複製」：Ctrl+Insert 或 Ctrl+C</summary>
+        private static void SendCopy(bool insert)
         {
             var inputs = new List<INPUT>();
-            void Key(ushort vk, bool up) => inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, dwFlags = up ? 2u : 0u } });
+            void Key(ushort vk, bool up, bool ext = false) => inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, dwFlags = (up ? 2u : 0u) | (ext ? 1u : 0u) } });
+            ushort k = insert ? (ushort)0x2D : (ushort)0x43;
             Key(0x11, false);
-            if (terminal) Key(0x10, false);
-            Key(0x43, false);
-            Key(0x43, true);
-            if (terminal) Key(0x10, true);
+            Key(k, false, insert);
+            Key(k, true, insert);
             Key(0x11, true);
             var arr = inputs.ToArray();
             SendInput((uint)arr.Length, arr, Marshal.SizeOf<INPUT>());
@@ -174,5 +194,20 @@ namespace IslandBar.Services
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
         [DllImport("user32.dll")] private static extern uint GetClipboardSequenceNumber();
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
+        /// <summary>測試用：直接讀某個視窗裡第一個有選取文字的文字元件（不管焦點在哪）</summary>
+        internal static string FromWindowForTest(IntPtr hwnd)
+        {
+            var root = AutomationElement.FromHandle(hwnd);
+            foreach (AutomationElement el in root.FindAll(TreeScope.Descendants, Condition.TrueCondition))
+                if (el.TryGetCurrentPattern(TextPattern.Pattern, out object p) && p is TextPattern tp)
+                {
+                    var sb = new StringBuilder();
+                    foreach (TextPatternRange r in tp.GetSelection()) sb.Append(r.GetText(20000));
+                    if (sb.Length > 0) return sb.ToString();
+                }
+            return null;
+        }
     }
 }
