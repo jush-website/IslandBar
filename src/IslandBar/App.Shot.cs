@@ -252,6 +252,24 @@ namespace IslandBar
                 if (sc2 != null) Save(sc2.Content as Visual, Path.Combine(dir, "translate-card.png"));
                 _window.CloseSummaryCard();
                 tw.Close();
+                // 選取文字：一個文字框選了一段，看拿不拿得到
+                try
+                {
+                    var box = new System.Windows.Controls.TextBox { Text = "The Q3 project review has been moved to Thursday, November 27 at 10:00 AM. Please upload your report by Wednesday.", FontSize = 16, TextWrapping = TextWrapping.Wrap };
+                    var sw2 = new Window { Title = "Selection test", Width = 600, Height = 200, Left = 100, Top = 300, Content = box, Topmost = true };
+                    sw2.Show();
+                    sw2.Activate();
+                    box.Focus();
+                    box.Select(0, 47);
+                    await Task.Delay(500);
+                    var selText = await IslandBar.Services.SelectedText.GetAsync(new System.Windows.Interop.WindowInteropHelper(sw2).Handle);
+                    sumLog.AppendLine($"\nselection test: '{selText}'");
+                    box.Select(0, 0);
+                    var none = await IslandBar.Services.SelectedText.GetAsync(new System.Windows.Interop.WindowInteropHelper(sw2).Handle);
+                    sumLog.AppendLine($"no selection: '{none ?? "(null)"}'");
+                    sw2.Close();
+                }
+                catch (Exception ex) { sumLog.AppendLine("selection test error: " + ex.Message); }
                 File.WriteAllText(Path.Combine(dir, "summary-test.txt"), sumLog.ToString());
 
                 // 桌面 Dock：每個預設組合＋編輯模式，抓真正螢幕上的樣子（測試時用「浮在最上層」才不會被其他視窗蓋住）

@@ -104,7 +104,8 @@ namespace IslandBar
         /// <summary>快捷鍵：小卡開著、同一種、做完了、還在同一個視窗 → 當作「關掉」；不然重新擷取</summary>
         private void ToggleScreenAi(bool translate)
         {
-            if (_summaryCard != null && _summaryCard.IsVisible && _summaryCard.Done && _summaryCard.IsTranslation == translate &&
+            // 用選取文字時不做「再按一次關掉」：同一個視窗裡選了新的文字再按，要翻新的
+            if (!_settings.ScreenAiUseSelection && _summaryCard != null && _summaryCard.IsVisible && _summaryCard.Done && _summaryCard.IsTranslation == translate &&
                 GetForegroundWindowHandle() == _summaryHwnd)
             {
                 CloseSummaryCard();
@@ -157,6 +158,33 @@ namespace IslandBar
             _summaryCts?.Cancel();
             var cts = _summaryCts = new CancellationTokenSource();
             var ct = cts.Token;
+
+            // 0. 有選取文字：只處理選取的文字（不擷取畫面）
+            if (_settings.ScreenAiUseSelection && !wholeScreen)
+            {
+                var fg = GetForegroundWindowHandle();
+                var mine = new[] { _hwnd, HandleOf(_chatDock), HandleOf(_summaryCard) };
+                if (fg != IntPtr.Zero && Array.IndexOf(mine, fg) < 0)
+                {
+                    string sel = null;
+                    try { sel = await SelectedText.GetAsync(fg); } catch (Exception ex) { Log.Error("Summary.Selection", ex); }
+                    if (ct.IsCancellationRequested) return;
+                    if (!string.IsNullOrWhiteSpace(sel))
+                    {
+                        _summaryHwnd = fg;
+                        var scap = ScreenSummary.ForSelection(fg);
+                        var scard = EnsureSummaryCard();
+                        scard.Begin(scap.Describe(), translate);
+                        if (!scard.IsVisible) scard.Show();
+                        scard.Reposition();
+                        _lastCap = scap;
+                        _lastText = sel;
+                        DebugLastOcr = sel;
+                        await RunAiAsync(scard, translate, scap, sel, 0, ct);
+                        return;
+                    }
+                }
+            }
 
             // 1. 擷取：先把自己的東西藏起來，不要被截進去
             ScreenCapture cap;
@@ -271,7 +299,7 @@ namespace IslandBar
                 if (ct.IsCancellationRequested) return;
                 if (string.IsNullOrWhiteSpace(result)) { card.SetError("AI 沒有回答，再試一次看看。"); return; }
                 card.SetText(result, true);
-                card.SetFooter($"{brain.Label} · {sw.Elapsed.TotalSeconds:0.0} 秒 · 辨識 {text.Length} 字{(truncated ? "（太長，只看前面）" : "")}");
+                card.SetFooter($"{brain.Label} · {sw.Elapsed.TotalSeconds:0.0} 秒 · {(cap.Selection ? "選取" : "辨識")} {text.Length} 字{(truncated ? "（太長，只看前面）" : "")}");
                 _summaryInfo = (what, text, brain.Label);
                 Log.Write($"Summary: {(translate ? "翻譯" : "摘要")} {what} → {brain.Label}，OCR {ocrMs} ms、{text.Length} 字，AI {sw.ElapsedMilliseconds} ms");
             }

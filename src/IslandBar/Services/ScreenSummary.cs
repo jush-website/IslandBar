@@ -23,9 +23,12 @@ namespace IslandBar.Services
         public bool WholeScreen { get; set; }
         public int Width { get; set; }
         public int Height { get; set; }
+        /// <summary>用的是使用者選取的文字（不是擷取畫面）</summary>
+        public bool Selection { get; set; }
         /// <summary>給人看的：「Chrome — 某某新聞」</summary>
         public string Describe()
         {
+            if (Selection) return "選取的文字" + (string.IsNullOrEmpty(App) ? "" : " · " + App);
             if (WholeScreen && string.IsNullOrWhiteSpace(Title)) return "整個螢幕";
             string t = (Title ?? "").Trim();
             if (t.Length > 60) t = t.Substring(0, 60) + "…";
@@ -139,6 +142,9 @@ namespace IslandBar.Services
             return dark > total * 0.95;
         }
 
+        /// <summary>只記下是哪個程式／視窗（用選取的文字時，不擷取畫面）</summary>
+        public static ScreenCapture ForSelection(IntPtr hwnd) => new ScreenCapture { Selection = true, Title = WindowTitle(hwnd), App = AppName(hwnd) };
+
         /// <summary>OCR 結果整理：去掉空白行、重複行、太短的雜訊行</summary>
         public static string CleanText(string text)
         {
@@ -166,9 +172,9 @@ namespace IslandBar.Services
             var sb = new StringBuilder();
             if (!string.IsNullOrWhiteSpace(cap.App)) sb.AppendLine("程式：" + cap.App);
             if (!string.IsNullOrWhiteSpace(cap.Title)) sb.AppendLine("視窗標題：" + cap.Title);
-            sb.AppendLine(cap.WholeScreen ? "範圍：整個螢幕" : "範圍：目前的視窗");
+            sb.AppendLine(cap.Selection ? "範圍：使用者選取的文字（不是 OCR，沒有介面文字）" : cap.WholeScreen ? "範圍：整個螢幕" : "範圍：目前的視窗");
             sb.AppendLine();
-            sb.AppendLine("畫面上的文字：");
+            sb.AppendLine(cap.Selection ? "選取的文字：" : "畫面上的文字：");
             sb.AppendLine(text);
             if (truncated) sb.AppendLine("（文字太長，後面省略）");
             return sb.ToString();

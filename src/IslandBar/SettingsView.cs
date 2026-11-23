@@ -700,6 +700,7 @@ namespace IslandBar
             }
             p.Children.Add(Labeled("摘要重點的快捷鍵（按一下按鈕再按想要的組合）", HotkeyRow(() => S.ScreenSummaryHotkey, v => S.ScreenSummaryHotkey = v, () => _h.Window?.SummaryHotkeyStatus)));
             p.Children.Add(Labeled("翻譯的快捷鍵", HotkeyRow(() => S.ScreenTranslateHotkey, v => S.ScreenTranslateHotkey = v, () => _h.Window?.TranslateHotkeyStatus)));
+            p.Children.Add(Check("有選取文字時，只摘要／翻譯選取的文字（沒選取才看整個視窗）", S.ScreenAiUseSelection, v => { S.ScreenAiUseSelection = v; Changed(); }));
             p.Children.Add(Labeled("翻譯成", Segmented(new[] { ("自動辨識 → 繁體中文", 0), ("中英互翻", 1), ("→ 英文", 2) },
                 S.ScreenTranslateTarget switch { "auto" => 1, "en" => 2, _ => 0 },
                 v => { S.ScreenTranslateTarget = v switch { 1 => "auto", 2 => "en", _ => "zh" }; Changed(); })));

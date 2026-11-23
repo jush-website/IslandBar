@@ -63,6 +63,7 @@ namespace IslandBar
                 if (!RegisterHotKey(_hwnd, HotkeyOcrId, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 0x4F)) // O
                     Log.Write("Ctrl+Shift+O 已被其他程式佔用，螢幕識字請改用系統匣選單");
                 RegisterSummaryHotkey();
+                SelectedText.IgnoreClipboardFor = d => Dispatcher.BeginInvoke(new Action(() => _ignoreClipUntil = DateTime.UtcNow + d));
                 AddClipboardFormatListener(_hwnd);
             }
             catch (Exception ex) { Log.Error("InitExtras", ex); }
@@ -503,6 +504,8 @@ namespace IslandBar
 
         private readonly List<ClipEntry> _clips = new List<ClipEntry>();
         private bool _ignoreClip;
+        /// <summary>這個時間之前的剪貼簿變動不記（拿選取文字時模擬的複製、還原）</summary>
+        private DateTime _ignoreClipUntil = DateTime.MinValue;
 
         private int _clipBusy;
         private DateTime _clipBusySince;
@@ -514,6 +517,7 @@ namespace IslandBar
         {
             if (!_settings.ClipboardHistory) return;
             if (_ignoreClip) { _ignoreClip = false; return; }
+            if (DateTime.UtcNow < _ignoreClipUntil) return;
             // 上一次還沒讀完：超過 10 秒就放棄它（那個執行緒自己會結束），不然這次先跳過
             if (Interlocked.CompareExchange(ref _clipBusy, 1, 0) == 1)
             {

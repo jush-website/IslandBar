@@ -116,6 +116,8 @@ namespace IslandBar
         public string ScreenTranslateHotkey { get; set; } = "Ctrl+Alt+T";
         /// <summary>翻譯成什麼：zh＝自動辨識原文、一律翻成繁體中文（預設）；auto＝中英互翻；en＝翻成英文</summary>
         public string ScreenTranslateTarget { get; set; } = "zh";
+        /// <summary>有選取文字時，只摘要／翻譯選取的文字（沒選取才擷取整個視窗）</summary>
+        public bool ScreenAiUseSelection { get; set; } = true;
         /// <summary>擷取範圍：window（目前的視窗）或 screen（整個主螢幕）</summary>
         public string ScreenSummaryArea { get; set; } = "window";
         /// <summary>用哪個 AI：auto（PAIR → 本機）、pair、local</summary>
