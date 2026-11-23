@@ -10,6 +10,12 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.17
+
+- **修好畫面摘要／翻譯在 PAIR 上出現「AI 沒有回答」**：PAIR 上的 Qwen3.5、Qwen3.6 是「會先思考」的模型，之前關掉思考的方式 Ollama 不認得，模型把字數都用在思考、還沒寫答案就停了。現在用 Ollama 認得的方式關掉思考（不認得的伺服器會自動改用原本的方式），也替 PAIR 上的模型留了更多字數。
+- 模型如果還是先思考，小卡會顯示「AI 思考中」，不會看起來像卡住；真的只想不答時會明確說明。
+- 語音助理用 PAIR 時也一樣關掉思考，回答更快。
+
 ## v1.16.16 桌面 Dock
 
 - **新功能：桌面 Dock**，工作列上方的一排小工具＋程式（系統匣 →「桌面 Dock」，或設定 → 桌面小工具 →「桌面 Dock」）。
