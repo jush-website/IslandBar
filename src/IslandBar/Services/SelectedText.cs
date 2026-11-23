@@ -200,7 +200,7 @@ namespace IslandBar.Services
         internal static string FromWindowForTest(IntPtr hwnd)
         {
             var root = AutomationElement.FromHandle(hwnd);
-            foreach (AutomationElement el in root.FindAll(TreeScope.Descendants, Condition.TrueCondition))
+            foreach (AutomationElement el in root.FindAll(TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition))
                 if (el.TryGetCurrentPattern(TextPattern.Pattern, out object p) && p is TextPattern tp)
                 {
                     var sb = new StringBuilder();
