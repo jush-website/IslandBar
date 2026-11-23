@@ -93,7 +93,7 @@ namespace IslandBar
                 _calendar.Stop();
                 _pair?.Stop();
                 UnregisterHotKey(_hwnd, HotkeyOcrId);
-                UnregisterHotKey(_hwnd, HotkeySummaryId);
+                UnregisterSummaryHotkeys();
                 CloseSummaryCard();
                 RemoveClipboardFormatListener(_hwnd);
             }
@@ -122,6 +122,11 @@ namespace IslandBar
             else if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeySummaryId)
             {
                 ToggleScreenSummary();
+                handled = true;
+            }
+            else if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyTranslateId)
+            {
+                ToggleScreenTranslate();
                 handled = true;
             }
             else if (msg == WM_CLIPBOARDUPDATE)

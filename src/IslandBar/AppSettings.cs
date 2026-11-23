@@ -108,6 +108,8 @@ namespace IslandBar
         public bool ScreenSummaryEnabled { get; set; } = true;
         /// <summary>畫面重點摘要的快捷鍵（「Ctrl+Alt+S」）</summary>
         public string ScreenSummaryHotkey { get; set; } = "Ctrl+Alt+S";
+        /// <summary>畫面翻譯的快捷鍵（中文→英文、英文或其他語言→繁體中文）</summary>
+        public string ScreenTranslateHotkey { get; set; } = "Ctrl+Alt+T";
         /// <summary>擷取範圍：window（目前的視窗）或 screen（整個主螢幕）</summary>
         public string ScreenSummaryArea { get; set; } = "window";
         /// <summary>用哪個 AI：auto（PAIR → 本機）、pair、local</summary>

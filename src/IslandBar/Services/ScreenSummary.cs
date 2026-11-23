@@ -125,6 +125,40 @@ namespace IslandBar.Services
             return sb.ToString();
         }
 
+        public const string TranslateSystemPrompt =
+            "你是專業翻譯。使用者會給你用 OCR 從螢幕擷取的文字，可能有錯字、順序有點亂，也會混著選單、按鈕、分頁標題、廣告等介面文字：" +
+            "忽略這些介面文字，只翻譯真正的內容。\n" +
+            "規則：照使用者指定的方向翻譯；保留原本的段落、條列與換行；人名、產品名、程式碼、網址、檔名、數字保持原樣；" +
+            "OCR 明顯的錯字依上下文修正後再翻。譯文要自然流暢，像母語的人寫的。只輸出譯文，不要解釋、不要開場白、不要附原文、不要用 Markdown。";
+
+        /// <summary>畫面上主要是中文嗎？（中文字比英文字母多）</summary>
+        public static bool MostlyChinese(string text)
+        {
+            int cjk = 0, latin = 0;
+            foreach (char c in text ?? "")
+            {
+                if (c >= 0x4E00 && c <= 0x9FFF || c >= 0x3400 && c <= 0x4DBF) cjk++;
+                else if (c is >= 'A' and <= 'Z' or >= 'a' and <= 'z') latin++;
+            }
+            // 一個中文字大約等於一個英文單字（約 5 個字母）
+            return cjk * 5 >= latin;
+        }
+
+        /// <summary>給 AI 的翻譯內容：中文→英文、其他→繁體中文。翻譯的輸出跟輸入差不多長，所以本機模型能看的字比摘要少</summary>
+        public static string BuildTranslatePrompt(ScreenCapture cap, string text, bool local, out bool truncated, out bool toEnglish)
+        {
+            toEnglish = MostlyChinese(text);
+            int max = local ? 1200 : 6000;
+            truncated = text.Length > max;
+            if (truncated) text = text.Substring(0, max);
+            var sb = new StringBuilder();
+            sb.AppendLine(toEnglish ? "請把下面的內容翻成英文。" : "請把下面的內容翻成繁體中文（台灣用語）。");
+            if (!string.IsNullOrWhiteSpace(cap.Title)) sb.AppendLine("（視窗標題：" + cap.Title + "，只是參考，不用翻）");
+            sb.AppendLine();
+            sb.AppendLine(text);
+            return sb.ToString();
+        }
+
         /// <summary>整套流程（測試也用這個）：OCR → 找大腦 → 串流摘要</summary>
         public static async Task<string> OcrAsync(ScreenCapture cap) => CleanText(await OcrOps.RecognizeAsync(cap.Png));
 

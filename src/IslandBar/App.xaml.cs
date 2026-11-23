@@ -248,6 +248,10 @@ namespace IslandBar
             menu.Items.Add(_recentItem);
             menu.Items.Add(ocr);
             menu.Items.Add(summary);
+            var translate = new Forms.ToolStripMenuItem("畫面翻譯（中↔英）");
+            translate.Click += (s, e) => _ = _window?.StartScreenTranslateAsync(true);
+            menu.Items.Add(translate);
+            menu.Opening += (s, e) => translate.Text = "畫面翻譯（中↔英）" + (_settings.ScreenSummaryEnabled && !string.IsNullOrWhiteSpace(_settings.ScreenTranslateHotkey) ? $"（{_settings.ScreenTranslateHotkey}）" : "");
             menu.Opening += (s, e) => summary.Text = "畫面重點摘要" + (_settings.ScreenSummaryEnabled && !string.IsNullOrWhiteSpace(_settings.ScreenSummaryHotkey) ? $"（{_settings.ScreenSummaryHotkey}）" : "");
             menu.Items.Add(_focusItem);
             menu.Items.Add(boost);

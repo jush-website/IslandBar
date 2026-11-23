@@ -239,9 +239,9 @@ namespace IslandBar.Services.Voice
         /// <summary>
         /// 把一次畫面摘要放進對話紀錄（使用者按「追問」時）：畫面上的文字放在不顯示的背景資料裡，之後問細節 AI 也看得到。
         /// </summary>
-        public void AddSummaryTurns(string what, string summary, string screenText, string source)
+        public void AddSummaryTurns(string what, string summary, string screenText, string source, bool translation = false)
         {
-            AddTurn(new ChatTurn { Role = "user", Text = "幫我摘要畫面重點：" + what, Context = screenText });
+            AddTurn(new ChatTurn { Role = "user", Text = (translation ? "幫我翻譯畫面：" : "幫我摘要畫面重點：") + what, Context = screenText });
             AddTurn(new ChatTurn { Role = "assistant", Text = summary, Source = source });
         }
 

@@ -37,9 +37,15 @@ namespace IslandBar
         /// <summary>摘要內容（複製、追問用）</summary>
         public string Summary { get; private set; } = "";
         public bool Done { get; private set; }
+        /// <summary>這張卡現在是翻譯（不是摘要）</summary>
+        public bool IsTranslation { get; private set; }
 
         public event Action FollowUpRequested;
         public event Action CloseRequested;
+        /// <summary>同一份畫面改成翻譯／改成摘要</summary>
+        public event Action SwitchRequested;
+        private readonly TextBlock _title;
+        private readonly Border _switchChip;
 
         public SummaryCard(Func<Rect?> anchor)
         {
@@ -93,7 +99,8 @@ namespace IslandBar
                 Child = Glyph("", 12, Bg), Margin = new Thickness(0, 1, 10, 0)   // 清單
             });
             var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            titles.Children.Add(new TextBlock { Text = "畫面重點", FontWeight = FontWeights.SemiBold, FontSize = 14 });
+            _title = new TextBlock { Text = "畫面重點", FontWeight = FontWeights.SemiBold, FontSize = 14 };
+            titles.Children.Add(_title);
             _subtitle = new TextBlock { Foreground = Dim, FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
             titles.Children.Add(_subtitle);
             Grid.SetColumn(titles, 1);
@@ -132,6 +139,8 @@ namespace IslandBar
                 if (string.IsNullOrWhiteSpace(Summary)) return;
                 try { Clipboard.SetText(Summary); _footer.Text = "已複製"; } catch { }
             }));
+            _switchChip = Chip("\uE8C1", "翻譯", () => SwitchRequested?.Invoke());
+            act.Children.Add(_switchChip);
             act.Children.Add(Chip("", "追問", () => FollowUpRequested?.Invoke(), accent: true));
             _actions = new Border { Child = act, Visibility = Visibility.Collapsed };
             _errorButton = Chip("", "打開設定", () => _errorAction?.Invoke(), accent: true);
@@ -157,7 +166,7 @@ namespace IslandBar
             _dots.Tick += (s, e) => { _dotCount = (_dotCount + 1) % 4; _status.Text = _statusText + new string('.', _dotCount); };
             _renderLater.Tick += (s, e) => { _renderLater.Stop(); if (_pending != null) Render(_pending); };
             KeyDown += (s, e) => { if (e.Key == Key.Escape) CloseRequested?.Invoke(); };
-            MouseLeftButtonDown += (s, e) => { try { Activate(); } catch { } };   // 點一下才拿焦點（之後 Esc 可以關）
+            PreviewMouseLeftButtonDown += (s, e) => { if (!IsActive) try { Activate(); } catch { } };   // 點一下才拿焦點（之後 Esc 可以關、可以選字）
             SizeChanged += (s, e) => Reposition();
             Loaded += (s, e) => { Reposition(); PlayOpen(); };
             Closed += (s, e) => { _dots.Stop(); _renderLater.Stop(); };
@@ -183,11 +192,18 @@ namespace IslandBar
         //  狀態
         // ================================================================
 
-        /// <summary>開始一次新的摘要</summary>
-        public void Begin(string what)
+        /// <summary>開始一次新的摘要（translate＝翻譯）</summary>
+        public void Begin(string what, bool translate = false)
         {
             Summary = "";
             Done = false;
+            IsTranslation = translate;
+            _title.Text = translate ? "畫面翻譯" : "畫面重點";
+            if (_switchChip.Child is StackPanel sw && sw.Children.Count > 1)
+            {
+                if (sw.Children[0] is TextBlock g) g.Text = translate ? "\uE8FD" : "\uE8C1";
+                if (sw.Children[1] is TextBlock t) t.Text = translate ? "摘要" : "翻譯";
+            }
             _subtitle.Text = what;
             _subtitle.ToolTip = what;
             _body.Children.Clear();
@@ -224,6 +240,8 @@ namespace IslandBar
 
         public void SetFooter(string text) => _footer.Text = text;
 
+        public void SetSubtitle(string text) { _subtitle.Text = text; _subtitle.ToolTip = text; }
+
         /// <summary>更新內容（串流中會一直呼叫；太密就合併成每 90 毫秒畫一次）</summary>
         public void SetText(string text, bool done)
         {
@@ -250,6 +268,22 @@ namespace IslandBar
             _pending = null;
             _lastRender = DateTime.UtcNow;
             _body.Children.Clear();
+            if (IsTranslation)
+            {
+                // 翻譯：照原本的段落顯示，不加粗、不改格式；可以選取
+                foreach (var para in System.Text.RegularExpressions.Regex.Split((text ?? "").Replace("\r", "").Trim(), @"\n\s*\n"))
+                {
+                    if (para.Trim().Length == 0) continue;
+                    _body.Children.Add(new TextBox
+                    {
+                        Text = para.Trim(), IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Foreground = Brushes.White,
+                        TextWrapping = TextWrapping.Wrap, Padding = new Thickness(0), Margin = new Thickness(-2, 0, 0, 8), FontSize = 13.5, CaretBrush = Accent,
+                        SelectionBrush = Accent, Cursor = Cursors.IBeam
+                    });
+                }
+                if (!Done) _scroll.ScrollToEnd();
+                return;
+            }
             var lines = (text ?? "").Replace("\r", "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
             bool first = true;
             foreach (var raw in lines)
