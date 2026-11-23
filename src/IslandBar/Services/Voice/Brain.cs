@@ -206,8 +206,8 @@ namespace IslandBar.Services.Voice
                 if (i == ctxAt) content += "\n\n【當時畫面上的文字（OCR，可能有錯字）】\n" + Truncate(h.Context, brain.Local ? 1200 : 4000);
                 messages.Add(new JsonObject { ["role"] = h.Role == "user" ? "user" : "assistant", ["content"] = content });
             }
-            bool qwen3 = Regex.IsMatch(brain.Model ?? "", @"qwen3(?!\.)", RegexOptions.IgnoreCase);
-            messages.Add(new JsonObject { ["role"] = "user", ["content"] = text + (qwen3 ? " /no_think" : "") });
+            messages.Add(new JsonObject { ["role"] = "user", ["content"] = text + NoThinkSuffix(brain) });
+            bool effort = UseEffort(brain);
 
             var sw = Stopwatch.StartNew();
             for (int round = 0; round < 4; round++)
@@ -219,10 +219,10 @@ namespace IslandBar.Services.Voice
                     ["tools"] = Tools(),
                     ["tool_choice"] = "auto",
                     ["temperature"] = 0.3,
-                    ["max_tokens"] = 400,
-                    ["stream"] = false,
-                    ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false }
+                    ["max_tokens"] = brain.Local ? 400 : 1500,   // 遠端可能是思考型模型，留多一點字數
+                    ["stream"] = false
                 };
+                AddThinkingOff(body, brain, effort);
                 using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/v1/chat/completions")
                 {
                     Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
@@ -230,6 +230,14 @@ namespace IslandBar.Services.Voice
                 using var resp = await Chat.SendAsync(req, ct);
                 string json = await resp.Content.ReadAsStringAsync(ct);
                 if (brain.Local) Local.Touch();
+                if (!resp.IsSuccessStatusCode && effort && ((int)resp.StatusCode == 400 || (int)resp.StatusCode == 422))
+                {
+                    Log.Write($"Voice: AI 不認得 reasoning_effort，不帶再試：{Truncate(json, 200)}");
+                    NoEffortServers.Add(brain.BaseUrl ?? "");
+                    effort = false;
+                    round--;
+                    continue;
+                }
                 if (!resp.IsSuccessStatusCode)
                 {
                     Log.Write($"Voice: AI 回應 {(int)resp.StatusCode}：{Truncate(json, 300)}");
@@ -304,62 +312,121 @@ namespace IslandBar.Services.Voice
         /// 單純的一問一答（不用工具），串流回傳：每收到一段就用目前為止的全文呼叫 onText。
         /// 本機模型會先啟動。最多等 4 分鐘（本機小模型讀長文比較慢）。
         /// </summary>
-        public async Task<string> CompleteAsync(string system, string user, BrainInfo brain, int maxTokens, Action<string> onText, CancellationToken ct)
+        public async Task<string> CompleteAsync(string system, string user, BrainInfo brain, int maxTokens, Action<string> onText, CancellationToken ct, Action onThinking = null)
         {
             string baseUrl = brain.BaseUrl;
             if (brain.Local) baseUrl = await Local.EnsureAsync(ct);
-            bool qwen3 = Regex.IsMatch(brain.Model ?? "", @"qwen3(?!\.)", RegexOptions.IgnoreCase);
-            var body = new JsonObject
-            {
-                ["model"] = brain.Model,
-                ["messages"] = new JsonArray
-                {
-                    new JsonObject { ["role"] = "system", ["content"] = system },
-                    new JsonObject { ["role"] = "user", ["content"] = user + (qwen3 ? " /no_think" : "") }
-                },
-                ["temperature"] = 0.2,
-                ["max_tokens"] = maxTokens,
-                ["stream"] = true,
-                ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false }
-            };
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromMinutes(4));
-            using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/v1/chat/completions")
+            bool effort = UseEffort(brain);
+            for (int attempt = 0; ; attempt++)
             {
-                Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
-            };
-            using var resp = await StreamClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            if (!resp.IsSuccessStatusCode)
-            {
-                string err = await resp.Content.ReadAsStringAsync(timeout.Token);
-                Log.Write($"Summary: AI 回應 {(int)resp.StatusCode}：{Truncate(err, 300)}");
-                throw new InvalidOperationException($"AI 回應錯誤（{(int)resp.StatusCode}）");
-            }
-            using var stream = await resp.Content.ReadAsStreamAsync(timeout.Token);
-            using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
-            var sb = new StringBuilder();
-            var lastTouch = DateTime.UtcNow;
-            string line;
-            while ((line = await reader.ReadLineAsync(timeout.Token)) != null)
-            {
-                if (brain.Local && DateTime.UtcNow - lastTouch > TimeSpan.FromSeconds(5)) { Local.Touch(); lastTouch = DateTime.UtcNow; }
-                if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
-                string data = line.Substring(5).Trim();
-                if (data == "[DONE]") break;
-                try
+                var body = new JsonObject
                 {
-                    // 只拿正式內容；思考過程（reasoning）不顯示
-                    var piece = JsonNode.Parse(data)?["choices"]?[0]?["delta"]?["content"];
-                    string text = piece is JsonValue v && v.TryGetValue(out string str) ? str : null;
-                    if (string.IsNullOrEmpty(text)) continue;
-                    sb.Append(text);
-                    onText?.Invoke(StripThink(sb.ToString()));
+                    ["model"] = brain.Model,
+                    ["messages"] = new JsonArray
+                    {
+                        new JsonObject { ["role"] = "system", ["content"] = system },
+                        new JsonObject { ["role"] = "user", ["content"] = user + NoThinkSuffix(brain) }
+                    },
+                    ["temperature"] = 0.2,
+                    ["max_tokens"] = maxTokens,
+                    ["stream"] = true
+                };
+                AddThinkingOff(body, brain, effort);
+                using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/v1/chat/completions")
+                {
+                    Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
+                };
+                using var resp = await StreamClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    string err = await resp.Content.ReadAsStringAsync(timeout.Token);
+                    Log.Write($"Summary: AI 回應 {(int)resp.StatusCode}：{Truncate(err, 300)}");
+                    // 不認得「關掉思考」的參數：記下來，不帶再試一次
+                    if (effort && attempt == 0 && ((int)resp.StatusCode == 400 || (int)resp.StatusCode == 422))
+                    {
+                        NoEffortServers.Add(brain.BaseUrl);
+                        effort = false;
+                        continue;
+                    }
+                    throw new InvalidOperationException($"AI 回應錯誤（{(int)resp.StatusCode}）");
                 }
-                catch { }
+                using var stream = await resp.Content.ReadAsStreamAsync(timeout.Token);
+                using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
+                var sb = new StringBuilder();
+                var raw = new StringBuilder();
+                int reasoning = 0;
+                bool sawData = false;
+                var lastTouch = DateTime.UtcNow;
+                string line;
+                while ((line = await reader.ReadLineAsync(timeout.Token)) != null)
+                {
+                    if (brain.Local && DateTime.UtcNow - lastTouch > TimeSpan.FromSeconds(5)) { Local.Touch(); lastTouch = DateTime.UtcNow; }
+                    if (!line.StartsWith("data:", StringComparison.Ordinal))
+                    {
+                        if (!sawData && raw.Length < 200000) raw.AppendLine(line);
+                        continue;
+                    }
+                    sawData = true;
+                    string data = line.Substring(5).Trim();
+                    if (data == "[DONE]") break;
+                    try
+                    {
+                        var delta = JsonNode.Parse(data)?["choices"]?[0]?["delta"];
+                        string text = Str(delta?["content"]);
+                        if (string.IsNullOrEmpty(text))
+                        {
+                            // 思考過程（Ollama：reasoning；vLLM／DeepSeek：reasoning_content）不顯示，只告訴畫面「正在想」
+                            string think = Str(delta?["reasoning"]) ?? Str(delta?["reasoning_content"]);
+                            if (!string.IsNullOrEmpty(think)) { if (reasoning++ == 0) onThinking?.Invoke(); }
+                            continue;
+                        }
+                        sb.Append(text);
+                        onText?.Invoke(StripThink(sb.ToString()));
+                    }
+                    catch { }
+                }
+                if (brain.Local) Local.Touch();
+                // 伺服器沒有照串流回（整份 JSON 一次回來）
+                if (!sawData && raw.Length > 0)
+                {
+                    try
+                    {
+                        var msg = JsonNode.Parse(raw.ToString())?["choices"]?[0]?["message"];
+                        sb.Append(Str(msg?["content"]) ?? "");
+                        if (sb.Length == 0 && (Str(msg?["reasoning"]) ?? Str(msg?["reasoning_content"])) is string r && r.Length > 0) reasoning++;
+                    }
+                    catch { }
+                }
+                string result = StripThink(sb.ToString());
+                if (result.Length == 0 && reasoning > 0)
+                {
+                    Log.Write($"Summary: {brain.Label} 只有思考、沒有答案（{reasoning} 段思考）");
+                    throw new InvalidOperationException("模型一直在思考、沒寫出答案（可能想太久用完了字數）。再試一次，或在設定裡換一個模型。");
+                }
+                return result;
             }
-            if (brain.Local) Local.Touch();
-            return StripThink(sb.ToString());
         }
+
+        // ---- 關掉「思考」：思考型模型（Qwen3.5、Qwen3.6、DeepSeek-R1…）先想很久才回答，摘要、翻譯、語音都不需要 ----
+
+        /// <summary>不認得 reasoning_effort 的伺服器（會回 400），之後就不帶</summary>
+        private static readonly HashSet<string> NoEffortServers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        private static bool UseEffort(BrainInfo brain) => !brain.Local && !NoEffortServers.Contains(brain.BaseUrl ?? "");
+
+        /// <summary>llama.cpp（本機）用 chat_template_kwargs；Ollama 的 OpenAI 相容介面用 reasoning_effort = "none"</summary>
+        private static void AddThinkingOff(JsonObject body, BrainInfo brain, bool effort)
+        {
+            body["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false };
+            if (effort) body["reasoning_effort"] = "none";
+        }
+
+        /// <summary>Qwen3（不含 3.5 之後）支援在訊息後面加 /no_think</summary>
+        private static string NoThinkSuffix(BrainInfo brain) => Regex.IsMatch(brain.Model ?? "", @"qwen3(?![\.\d])", RegexOptions.IgnoreCase) ? " /no_think" : "";
+
+        private static string Str(JsonNode n) => n is JsonValue v && v.TryGetValue(out string s) ? s : null;
 
         private static string Truncate(string s, int n) => s == null ? "" : s.Length <= n ? s : s.Substring(0, n) + "…";
 

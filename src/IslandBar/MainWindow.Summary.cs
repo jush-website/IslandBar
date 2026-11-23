@@ -252,7 +252,7 @@ namespace IslandBar
                 {
                     prompt = ScreenSummary.BuildTranslatePrompt(cap, text, brain.Local, out truncated, out bool toEnglish);
                     system = ScreenSummary.TranslateSystemPrompt;
-                    maxTokens = brain.Local ? 1400 : 3500;
+                    maxTokens = brain.Local ? 1400 : 6000;
                     extra = toEnglish ? "中 → 英" : "→ 繁中";
                     card.SetSubtitle($"{extra} · {what}");
                 }
@@ -260,13 +260,14 @@ namespace IslandBar
                 {
                     prompt = ScreenSummary.BuildPrompt(cap, text, brain.Local, out truncated);
                     system = ScreenSummary.SystemPrompt;
-                    maxTokens = 500;
+                    maxTokens = brain.Local ? 500 : 2500;   // PAIR 上可能是思考型模型：就算關不掉思考也留得下答案
                 }
                 card.SetStatus(brain.Local && !brainSvc.Local.Running ? "啟動本機模型（第一次比較久）" : translate ? "翻譯中" : "整理重點");
 
                 var sw = Stopwatch.StartNew();
                 string result = await brainSvc.CompleteAsync(system, prompt, brain, maxTokens,
-                    partial => Dispatcher.BeginInvoke(new Action(() => { if (!ct.IsCancellationRequested && _summaryCard == card) card.SetText(partial, false); })), ct);
+                    partial => Dispatcher.BeginInvoke(new Action(() => { if (!ct.IsCancellationRequested && _summaryCard == card) card.SetText(partial, false); })), ct,
+                    () => Dispatcher.BeginInvoke(new Action(() => { if (!ct.IsCancellationRequested && _summaryCard == card && !card.Done) card.SetStatus("AI 思考中（這個模型會先想一下）"); })));
                 if (ct.IsCancellationRequested) return;
                 if (string.IsNullOrWhiteSpace(result)) { card.SetError("AI 沒有回答，再試一次看看。"); return; }
                 card.SetText(result, true);
