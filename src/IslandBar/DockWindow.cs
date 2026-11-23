@@ -403,7 +403,7 @@ namespace IslandBar
 
         private Border MiniButton(string glyph, string tip, Action click)
         {
-            var b = new Border { Width = 24, Height = 22, CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Child = Icon(glyph, 11, P.Text), ToolTip = tip, Cursor = Cursors.Hand };
+            var b = new Border { Width = 24, Height = 22, CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Child = Sym(glyph, 11, P.Text), ToolTip = tip, Cursor = Cursors.Hand };
             b.MouseEnter += (s, e) => b.Background = P.Track;
             b.MouseLeave += (s, e) => b.Background = Brushes.Transparent;
             b.MouseLeftButtonUp += (s, e) => { if (_edit) return; e.Handled = true; click(); };
