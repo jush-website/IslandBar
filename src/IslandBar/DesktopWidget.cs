@@ -50,6 +50,9 @@ namespace IslandBar
         public event Action<DesktopWidget> SplitRequested;
         /// <summary>按區塊右上角的齒輪：要開的設定頁、要捲到的標題</summary>
         public event Action<string, string> SettingsRequested;
+        /// <summary>開／關桌面 Dock（跟 Dock 整合）</summary>
+        public event Action<bool> DockToggleRequested;
+        public Func<bool> DockOn { get; set; } = () => false;
 
         public WidgetConfig Config => _cfg;
 
@@ -732,6 +735,9 @@ namespace IslandBar
             var add = new MenuItem { Header = "新增另一個小工具" };
             add.Click += (s, e) => AddRequested?.Invoke();
             menu.Items.Add(add);
+            var dock = new MenuItem { Header = "顯示桌面 Dock（工作列上方的一排小工具＋程式）", IsCheckable = true, IsChecked = DockOn() };
+            dock.Click += (s, e) => DockToggleRequested?.Invoke(dock.IsChecked);
+            menu.Items.Add(dock);
             var radar = new MenuItem { Header = "開啟 Windy 雷達" };
             radar.Click += (s, e) => OpenRadarRequested?.Invoke();
             menu.Items.Add(radar);

@@ -29,6 +29,10 @@ namespace IslandBar
         public Action<bool> SetPair { get; set; }
         public Action<string> Notify { get; set; }
         public Action OpenAssistant { get; set; }
+        public Action<bool> SetDock { get; set; }
+        public Action EditDock { get; set; }
+        public Action AddDockApp { get; set; }
+        public Action<string> ApplyDockPreset { get; set; }
     }
 
     /// <summary>
@@ -886,6 +890,52 @@ namespace IslandBar
             edit.Click += (s, e) => _h.EditWidgets?.Invoke();
             row.Children.Add(edit);
             p.Children.Add(row);
+
+            // ---- 桌面 Dock ----
+            p.Children.Add(Heading("桌面 Dock", 24));
+            p.Children.Add(Note("工作列上方的一排小工具＋程式：時鐘、日期、天氣、行程、音樂（任何播放器都能控制）、CPU／GPU／記憶體、網路、AI 額度、一鍵加速，加上開著的程式和固定的程式（檔案總管、瀏覽器、資源回收筒、開始功能表的任何 App）。跟桌面小工具用同一份資料；全螢幕遊戲時會讓開、不吃 CPU。在 Dock 上按右鍵也能設定。"));
+            p.Children.Add(Check("顯示桌面 Dock", S.DockEnabled, v => _h.SetDock?.Invoke(v)));
+            p.Children.Add(Labeled("預設組合（換掉內容、樣式和顏色；自己加的程式會留著）", Segmented(DockPresets.All.Select((x, i) => (x.Name, i)),
+                Math.Max(0, Array.FindIndex(DockPresets.All, x => x.Id == S.DockPreset)),
+                i => _h.ApplyDockPreset?.Invoke(DockPresets.All[i].Id))));
+            p.Children.Add(Labeled("底板樣式", Segmented(new[] { ("煙燻", 0), ("玻璃", 1), ("實色", 2), ("淺色", 3) },
+                S.DockStyle switch { "glass" => 1, "solid" => 2, "light" => 3, _ => 0 },
+                v => { S.DockStyle = v switch { 1 => "glass", 2 => "solid", 3 => "light", _ => "smoke" }; Changed(); })));
+            var accents = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var hex in DockPresets.Accents)
+            {
+                var c = (Color)ColorConverter.ConvertFromString(hex);
+                var sw = new Border
+                {
+                    Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Background = new SolidColorBrush(c), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand,
+                    BorderThickness = new Thickness(2), BorderBrush = string.Equals(S.DockAccent, hex, StringComparison.OrdinalIgnoreCase) ? Brushes.White : Brushes.Transparent, ToolTip = hex
+                };
+                string h = hex;
+                sw.MouseLeftButtonUp += (s, e) =>
+                {
+                    S.DockAccent = h;
+                    foreach (Border b in accents.Children) b.BorderBrush = Brushes.Transparent;
+                    sw.BorderBrush = Brushes.White;
+                    Changed();
+                };
+                accents.Children.Add(sw);
+            }
+            p.Children.Add(Labeled("強調色", accents));
+            p.Children.Add(Labeled("位置", Segmented(new[] { ("在視窗後面", 0), ("浮在最上層", 1), ("自動隱藏", 2) },
+                S.DockMode switch { "float" => 1, "autohide" => 2, _ => 0 },
+                v => { S.DockMode = v switch { 1 => "float", 2 => "autohide", _ => "desktop" }; Changed(); })));
+            p.Children.Add(Note("在視窗後面：像桌面小工具，最大化的視窗會蓋住它。浮在最上層：一直看得到。自動隱藏：平常收起來，滑鼠移到工作列上方才滑出來。"));
+            p.Children.Add(Labeled("大小", Slider(80, 130, S.DockScale * 100, v => { S.DockScale = Math.Round(v / 5) * 5 / 100; Changed(); }, v => $"{Math.Round(v / 5) * 5:0}%")));
+            var dockRow = new WrapPanel();
+            var editDock = MakeButton("編輯 Dock（拖曳排序、× 移除）", true);
+            editDock.Click += (s, e) => _h.EditDock?.Invoke();
+            var addApp = MakeButton("＋ 新增程式…", false);
+            addApp.Margin = new Thickness(8, 0, 0, 0);
+            addApp.Click += (s, e) => _h.AddDockApp?.Invoke();
+            dockRow.Children.Add(editDock);
+            dockRow.Children.Add(addApp);
+            dockRow.Margin = new Thickness(0, 10, 0, 0);
+            p.Children.Add(dockRow);
         }
 
         // ================================================================

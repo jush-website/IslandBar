@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -159,6 +160,19 @@ namespace IslandBar
 
         /// <summary>桌面小工具</summary>
         public bool WidgetEnabled { get; set; } = false;
+
+        // ---- 桌面 Dock（工作列上方的一排小工具＋程式） ----
+        public bool DockEnabled { get; set; } = false;
+        /// <summary>Dock 上的東西（依序）：clock、date、weather、event、media、cpu、gpu、ram、net、quota、boost、sep、openapps、explorer、browser、recycle、app:捷徑或 App|名稱</summary>
+        public List<string> DockItems { get; set; } = DockPresets.Get("night").Items.ToList();
+        /// <summary>底板樣式：smoke（煙燻）、glass（玻璃）、solid（實色）、light（淺色）</summary>
+        public string DockStyle { get; set; } = "smoke";
+        /// <summary>強調色（#RRGGBB）</summary>
+        public string DockAccent { get; set; } = "#34D3C0";
+        /// <summary>desktop（在視窗後面，像桌面小工具）、float（浮在最上層）、autohide（平常藏起來，滑鼠移到工作列上方才出現）</summary>
+        public string DockMode { get; set; } = "desktop";
+        public double DockScale { get; set; } = 1.0;
+        public string DockPreset { get; set; } = "night";
         public double? WidgetLeft { get; set; }
         public double? WidgetTop { get; set; }
         public List<string> WidgetSections { get; set; } = new List<string> { "clock", "weather", "perf", "events", "quota" };
