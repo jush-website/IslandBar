@@ -30,7 +30,7 @@ namespace IslandBar.Services
         public static List<MonitorInfo> All()
         {
             var list = new List<MonitorInfo>();
-            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (h, dc, ref RECT r, IntPtr d) =>
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr h, IntPtr dc, ref RECT r, IntPtr d) =>
             {
                 var mi = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
                 if (GetMonitorInfo(h, ref mi))
