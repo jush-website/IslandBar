@@ -81,14 +81,62 @@ namespace IslandBar.Services
                 cap.Title = WindowTitle(fg);
                 cap.App = AppName(fg);
             }
-            using var bmp = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(r.Left, r.Top, 0, 0, bmp.Size);
+            // 視窗：先請視窗自己畫一份（被其他置頂視窗蓋住也抓得到）；有些用顯示卡畫的程式會給全黑，就改抓螢幕
+            using var bmp = (!useScreen ? PrintWindowBitmap(fg, r) : null) ?? ScreenBitmap(r);
+            r = new Rectangle(r.Location, bmp.Size);
             using var ms = new MemoryStream();
             bmp.Save(ms, ImageFormat.Png);
             cap.Png = ms.ToArray();
             cap.Width = r.Width;
             cap.Height = r.Height;
             return cap;
+        }
+
+        private static Bitmap ScreenBitmap(Rectangle r)
+        {
+            var bmp = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(r.Left, r.Top, 0, 0, bmp.Size);
+            return bmp;
+        }
+
+        /// <summary>PrintWindow（PW_RENDERFULLCONTENT）：拿到視窗自己的內容；失敗或全黑傳回 null</summary>
+        private static Bitmap PrintWindowBitmap(IntPtr hwnd, Rectangle frame)
+        {
+            try
+            {
+                if (!GetWindowRect(hwnd, out RECT wr)) return null;
+                int w = wr.Right - wr.Left, h = wr.Bottom - wr.Top;
+                if (w <= 0 || h <= 0 || w > 16000 || h > 16000) return null;
+                using var full = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+                bool ok;
+                using (var g = Graphics.FromImage(full))
+                {
+                    IntPtr hdc = g.GetHdc();
+                    try { ok = PrintWindow(hwnd, hdc, 2 /* PW_RENDERFULLCONTENT */); }
+                    finally { g.ReleaseHdc(hdc); }
+                }
+                if (!ok || MostlyBlack(full)) return null;
+                // 去掉視窗外圍看不見的邊框（Windows 10/11 的陰影區）
+                var crop = new Rectangle(frame.Left - wr.Left, frame.Top - wr.Top, frame.Width, frame.Height);
+                crop.Intersect(new Rectangle(0, 0, w, h));
+                if (crop.Width < 100 || crop.Height < 60) return null;
+                return full.Clone(crop, PixelFormat.Format32bppArgb);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>抽樣看是不是幾乎全黑（用顯示卡畫的程式 PrintWindow 常會這樣）</summary>
+        private static bool MostlyBlack(Bitmap b)
+        {
+            int dark = 0, total = 0;
+            for (int y = 0; y < 24; y++)
+                for (int x = 0; x < 24; x++)
+                {
+                    var c = b.GetPixel(Math.Min(b.Width - 1, b.Width * x / 24 + 2), Math.Min(b.Height - 1, b.Height * y / 24 + 2));
+                    total++;
+                    if (c.A < 10 || c.R + c.G + c.B < 12) dark++;
+                }
+            return dark > total * 0.95;
         }
 
         /// <summary>OCR 結果整理：去掉空白行、重複行、太短的雜訊行</summary>
@@ -203,6 +251,7 @@ namespace IslandBar.Services
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr h, StringBuilder s, int n);
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [DllImport("user32.dll")] private static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
         [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
     }
 }
