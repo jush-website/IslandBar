@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using IslandBar.Services;
 using IslandBar.Services.Voice;
 
 namespace IslandBar
@@ -164,6 +165,26 @@ namespace IslandBar
                             }
                             catch (Exception ex) { W($"問：{q}\n失敗：{ex.Message}"); }
                         }
+
+                        // 畫面重點摘要（本機模型）：測試用信件視窗 → 擷取 → OCR → 串流摘要
+                        try
+                        {
+                            W("\n== 畫面重點摘要（本機）");
+                            var tw = ShowSummaryTestWindow();
+                            await Task.Delay(1500);
+                            var cap = ScreenSummary.Capture(false, Array.Empty<IntPtr>());
+                            W($"擷取：{cap.Describe()} {cap.Width}x{cap.Height}");
+                            sw.Restart();
+                            string text = await ScreenSummary.OcrAsync(cap);
+                            W($"OCR {sw.ElapsedMilliseconds} ms、{text.Length} 字：\n{text}");
+                            string prompt = ScreenSummary.BuildPrompt(cap, text, true, out bool cut);
+                            int chunks = 0;
+                            sw.Restart();
+                            string res = await brain.CompleteAsync(ScreenSummary.SystemPrompt, prompt, info, 500, _ => chunks++, CancellationToken.None);
+                            W($"摘要（{sw.ElapsedMilliseconds} ms，串流 {chunks} 段{(cut ? "，有截短" : "")}）：\n{res}");
+                            tw.Close();
+                        }
+                        catch (Exception ex) { W("摘要失敗：" + ex); }
                     }
                 }
                 }

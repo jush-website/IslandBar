@@ -177,6 +177,7 @@ namespace IslandBar
                 var sw = Stopwatch.StartNew();
                 string text = await ScreenSummary.OcrAsync(cap);
                 long ocrMs = sw.ElapsedMilliseconds;
+                DebugLastOcr = text;
                 if (ct.IsCancellationRequested) return;
                 if (text.Replace("\n", "").Length < 12)
                 {
@@ -221,6 +222,23 @@ namespace IslandBar
                 Log.Error("Summary", ex);
                 card.SetError("整理失敗：" + ex.Message);
             }
+        }
+
+        // ---- 截圖測試用 ----
+        public string DebugLastOcr { get; private set; } = "";
+        public SummaryCard DebugSummaryCardWindow => _summaryCard;
+
+        /// <summary>截圖測試用：直接顯示一張有內容的小卡（模擬串流）</summary>
+        public async Task DebugSummaryCard(string what, string text)
+        {
+            var card = EnsureSummaryCard();
+            card.Begin(what);
+            if (!card.IsVisible) card.Show();
+            card.SetStatus("整理重點");
+            await Task.Delay(400);
+            for (int i = 20; i < text.Length; i += 20) { card.SetText(text.Substring(0, i), false); await Task.Delay(30); }
+            card.SetText(text, true);
+            card.SetFooter("PAIR／Ollama · qwen3:8b · 2.1 秒 · 辨識 642 字");
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]

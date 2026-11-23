@@ -224,12 +224,65 @@ namespace IslandBar
                     IslandBar.MainWindow.CrispScaling = true;
                 }
                 File.WriteAllText(Path.Combine(dir, "scale-geometry.txt"), geo.ToString());
+
+                // 畫面重點摘要：測試用的信件視窗 → 真的擷取＋OCR → CI 沒有 AI，應該顯示「沒有可以用的 AI」
+                var sumLog = new System.Text.StringBuilder();
+                var tw = ShowSummaryTestWindow();
+                await Task.Delay(1200);
+                await _window.StartScreenSummaryAsync(false);
+                await Task.Delay(800);
+                sumLog.AppendLine("OCR：\n" + _window.DebugLastOcr);
+                var sc0 = _window.DebugSummaryCardWindow;
+                sumLog.AppendLine($"\ncard visible={sc0?.IsVisible} done={sc0?.Done} at {sc0?.Left:0},{sc0?.Top:0} {sc0?.ActualWidth:0}x{sc0?.ActualHeight:0}");
+                if (sc0 != null) Save(sc0.Content as Visual, Path.Combine(dir, "summary-noai.png"));
+                await _window.DebugSummaryCard("Outlook — 【重要】第三季專案進度會議改期通知",
+                    "一封通知第三季專案會議改期的信\n• 會議從 11/25（二）14:00 改到 11/27（四）10:00，地點同樣在 5 樓大會議室\n• 各組負責人要在 11/26 17:00 前上傳最新進度報告\n• 報告要寫完成度、遇到的問題、需要的支援\n• 下個月預算申請截止日提前到 12/3，逾期不列入第四季預算\n⚠ 11/26 下午 5 點前要交進度報告；預算申請 12/3 截止");
+                await Task.Delay(700);
+                var sc1 = _window.DebugSummaryCardWindow;
+                if (sc1 != null)
+                {
+                    Save(sc1.Content as Visual, Path.Combine(dir, "summary-card.png"));
+                    Grab(sc1, Path.Combine(dir, "summary-card-screen.png"));
+                    sumLog.AppendLine($"card2 at {sc1.Left:0},{sc1.Top:0} {sc1.ActualWidth:0}x{sc1.ActualHeight:0}; island {_window.Left:0},{_window.Top:0}");
+                }
+                _window.CloseSummaryCard();
+                tw.Close();
+                File.WriteAllText(Path.Combine(dir, "summary-test.txt"), sumLog.ToString());
             }
             catch (Exception ex)
             {
                 File.WriteAllText(Path.Combine(dir, "error.txt"), ex.ToString());
             }
             ExitApp();
+        }
+
+        /// <summary>畫面摘要測試用：一個像郵件的視窗（英文，CI 的 Windows 只有英文 OCR）</summary>
+        internal static Window ShowSummaryTestWindow()
+        {
+            var sp = new System.Windows.Controls.StackPanel { Margin = new Thickness(28) };
+            void T(string t, double size = 16, bool bold = false, double top = 6) => sp.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = t, FontSize = size, FontWeight = bold ? FontWeights.Bold : FontWeights.Normal, TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, top, 0, 0), Foreground = Brushes.Black
+            });
+            T("Inbox    Sent    Drafts    Reply    Forward    Delete    Archive", 13, false, 0);
+            T("[Important] Q3 project review meeting rescheduled", 22, true, 18);
+            T("From: Daniel Wang <daniel.wang@example.com>    To: Project team", 14);
+            T("Hi everyone,", 16, false, 18);
+            T("The Q3 project review originally planned for Tuesday, November 25 at 2:00 PM has been moved to Thursday, November 27 at 10:00 AM because a client is visiting. The location is unchanged: the large meeting room on the 5th floor.");
+            T("Team leads, please upload your latest progress report to the shared folder by 5:00 PM on Wednesday, November 26. Each report must include the current completion rate, the problems you ran into, and the support you need.");
+            T("Also note that the deadline for next month's budget requests has been moved up to December 3. Late requests will not be included in the Q4 budget.");
+            T("If you have any questions, just reply to this email.");
+            T("Thanks,\nDaniel");
+            var w = new Window
+            {
+                Title = "Q3 project review meeting rescheduled - Mail", Width = 900, Height = 620, Left = 60, Top = 140,
+                Background = Brushes.White, Content = sp, WindowStartupLocation = WindowStartupLocation.Manual
+            };
+            w.Show();
+            w.Topmost = true;
+            w.Activate();
+            return w;
         }
 
         /// <summary>抓視窗在螢幕上的真正樣子（看文字清不清楚）</summary>
