@@ -104,6 +104,15 @@ namespace IslandBar
         /// <summary>剩 50%、10% 時通知</summary>
         public bool DeviceBatteryNotify { get; set; } = true;
 
+        /// <summary>畫面重點摘要：按快捷鍵擷取目前畫面，用 PAIR 或本機小模型整理重點</summary>
+        public bool ScreenSummaryEnabled { get; set; } = true;
+        /// <summary>畫面重點摘要的快捷鍵（「Ctrl+Alt+S」）</summary>
+        public string ScreenSummaryHotkey { get; set; } = "Ctrl+Alt+S";
+        /// <summary>擷取範圍：window（目前的視窗）或 screen（整個主螢幕）</summary>
+        public string ScreenSummaryArea { get; set; } = "window";
+        /// <summary>用哪個 AI：auto（PAIR → 本機）、pair、local</summary>
+        public string ScreenSummaryBrain { get; set; } = "auto";
+
         /// <summary>動態島旁邊顯示對話按鈕（表情圖示）</summary>
         public bool ShowChatButton { get; set; } = true;
 

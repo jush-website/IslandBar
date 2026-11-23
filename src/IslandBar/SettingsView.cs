@@ -637,6 +637,63 @@ namespace IslandBar
             p.Children.Add(Note("會從 llama.cpp 官方 GitHub 下載 llama-server（約 24 MB），模型從 Hugging Face 下載。用到時才在背景啟動，閒置 10 分鐘自動關掉、把記憶體還回去。"));
             UpdateLlmUi();
 
+            // ---- 畫面重點摘要 ----
+            p.Children.Add(Heading("畫面重點摘要", 20));
+            p.Children.Add(Note("按快捷鍵擷取目前的視窗，用 Windows 內建的文字辨識讀出畫面上的字，交給 PAIR 或本機小模型整理成一句話＋幾點重點，顯示在動態島下方。再按一次快捷鍵關掉；按「追問」可以帶著畫面內容繼續問。只傳辨識出來的文字、不傳圖片；用 PAIR／本機模型時資料不出你的電腦／叢集。"));
+            p.Children.Add(Check("開啟畫面重點摘要", S.ScreenSummaryEnabled, v => { S.ScreenSummaryEnabled = v; Changed(); }));
+            var hkRow = new WrapPanel();
+            var hkBtn = MakeButton(HotkeyText.Pretty(S.ScreenSummaryHotkey), false);
+            hkBtn.Margin = new Thickness(0, 8, 10, 0);
+            var hkStatus = new TextBlock { Foreground = DarkUi.Warn, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
+            bool capturing = false;
+            void ShowHkStatus() => Dispatcher.BeginInvoke(new Action(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(600);   // 設定套用有一點延遲
+                hkStatus.Text = _h.Window?.SummaryHotkeyStatus ?? "";
+            }));
+            void EndCapture(string newKey)
+            {
+                if (!capturing) return;
+                capturing = false;
+                if (newKey != null) { S.ScreenSummaryHotkey = newKey; Changed(); }
+                hkBtn.Content = HotkeyText.Pretty(S.ScreenSummaryHotkey);
+                _h.Window?.SuspendSummaryHotkey(false);
+                ShowHkStatus();
+            }
+            hkBtn.Click += (s, e) =>
+            {
+                capturing = true;
+                hkStatus.Text = "";
+                hkBtn.Content = "請按新的快捷鍵…（Esc 取消）";
+                _h.Window?.SuspendSummaryHotkey(true);
+                hkBtn.Focus();
+            };
+            hkBtn.PreviewKeyDown += (s, e) =>
+            {
+                if (!capturing) return;
+                e.Handled = true;
+                var key = e.Key == Key.System ? e.SystemKey : e.Key;
+                if (key == Key.Escape) { EndCapture(null); return; }
+                string t = HotkeyText.Format(Keyboard.Modifiers, key);
+                if (t != null) EndCapture(t);   // 還只按著 Ctrl／Alt 時繼續等
+            };
+            hkBtn.LostKeyboardFocus += (s, e) => EndCapture(null);
+            hkRow.Children.Add(hkBtn);
+            hkRow.Children.Add(hkStatus);
+            p.Children.Add(Labeled("快捷鍵（按一下按鈕再按想要的組合，例如 Ctrl + Alt + S）", hkRow));
+            ShowHkStatus();
+            p.Children.Add(Segmented(new[] { ("目前的視窗", 0), ("整個螢幕", 1) }, S.ScreenSummaryArea == "screen" ? 1 : 0,
+                v => { S.ScreenSummaryArea = v == 1 ? "screen" : "window"; Changed(); }));
+            p.Children.Add(Segmented(new[] { ("自動（PAIR → 本機）", 0), ("只用 PAIR／Ollama", 1), ("只用本機小模型", 2) },
+                S.ScreenSummaryBrain switch { "pair" => 1, "local" => 2, _ => 0 },
+                v => { S.ScreenSummaryBrain = v switch { 1 => "pair", 2 => "local", _ => "auto" }; Changed(); }));
+            p.Children.Add(Note("PAIR／Ollama 的模型、網址、本機小模型跟上面的 AI 大腦共用設定。本機小模型讀長文比較慢（只看前 2000 字，約十幾秒到一分鐘）；PAIR 快很多、也能看比較長的內容。文字辨識用的是 Windows 的語言套件，中文和英文都看得懂。"));
+            var trySum = MakeButton("現在試試（摘要這個設定畫面）", false);
+            trySum.Margin = new Thickness(0, 8, 0, 0);
+            trySum.HorizontalAlignment = HorizontalAlignment.Left;
+            trySum.Click += (s, e) => { if (_h.Window != null) _ = _h.Window.StartScreenSummaryAsync(false); };
+            p.Children.Add(trySum);
+
             // ---- 語音回答 ----
             p.Children.Add(Heading("語音回答", 20));
             p.Children.Add(Check("用語音念出回覆（Windows 內建語音）", S.AssistantSpeak, v => { S.AssistantSpeak = v; Changed(); }));

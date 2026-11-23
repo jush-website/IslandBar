@@ -22,6 +22,8 @@ namespace IslandBar.Services.Voice
         public List<string> Actions { get; set; } = new List<string>();
         /// <summary>這則回覆是誰想的：「規則」「PAIR · qwen3:8b」「本機 Qwen3.5 2B」</summary>
         public string Source { get; set; } = "";
+        /// <summary>不顯示、只給 AI 看的背景資料（例如畫面摘要時擷取到的文字），讓之後追問答得出來</summary>
+        public string Context { get; set; }
     }
 
     /// <summary>目前用哪個 AI 大腦</summary>
@@ -193,8 +195,17 @@ namespace IslandBar.Services.Voice
             {
                 new JsonObject { ["role"] = "system", ["content"] = SystemPrompt }   // 固定不變：本機模型可以重用快取，第二句起快很多
             };
-            foreach (var h in (history ?? Array.Empty<ChatTurn>()).TakeLast(6))
-                if (!string.IsNullOrWhiteSpace(h.Text)) messages.Add(new JsonObject { ["role"] = h.Role == "user" ? "user" : "assistant", ["content"] = h.Text });
+            var recent = (history ?? Array.Empty<ChatTurn>()).TakeLast(6).ToList();
+            // 背景資料（畫面上的文字）只附最近一份，太長的截短：本機小模型的上下文不大
+            int ctxAt = recent.FindLastIndex(h => !string.IsNullOrWhiteSpace(h.Context));
+            for (int i = 0; i < recent.Count; i++)
+            {
+                var h = recent[i];
+                if (string.IsNullOrWhiteSpace(h.Text)) continue;
+                string content = h.Text;
+                if (i == ctxAt) content += "\n\n【當時畫面上的文字（OCR，可能有錯字）】\n" + Truncate(h.Context, brain.Local ? 1200 : 4000);
+                messages.Add(new JsonObject { ["role"] = h.Role == "user" ? "user" : "assistant", ["content"] = content });
+            }
             bool qwen3 = Regex.IsMatch(brain.Model ?? "", @"qwen3(?!\.)", RegexOptions.IgnoreCase);
             messages.Add(new JsonObject { ["role"] = "user", ["content"] = text + (qwen3 ? " /no_think" : "") });
 
@@ -281,6 +292,73 @@ namespace IslandBar.Services.Voice
             }
             result.Reply = result.Actions.Count > 0 ? "好了" : "這個我做不到";
             return result;
+        }
+
+        // ================================================================
+        //  一般的文字生成（畫面摘要用）：串流，一邊產生一邊顯示
+        // ================================================================
+
+        private static readonly HttpClient StreamClient = new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+
+        /// <summary>
+        /// 單純的一問一答（不用工具），串流回傳：每收到一段就用目前為止的全文呼叫 onText。
+        /// 本機模型會先啟動。最多等 4 分鐘（本機小模型讀長文比較慢）。
+        /// </summary>
+        public async Task<string> CompleteAsync(string system, string user, BrainInfo brain, int maxTokens, Action<string> onText, CancellationToken ct)
+        {
+            string baseUrl = brain.BaseUrl;
+            if (brain.Local) baseUrl = await Local.EnsureAsync(ct);
+            bool qwen3 = Regex.IsMatch(brain.Model ?? "", @"qwen3(?!\.)", RegexOptions.IgnoreCase);
+            var body = new JsonObject
+            {
+                ["model"] = brain.Model,
+                ["messages"] = new JsonArray
+                {
+                    new JsonObject { ["role"] = "system", ["content"] = system },
+                    new JsonObject { ["role"] = "user", ["content"] = user + (qwen3 ? " /no_think" : "") }
+                },
+                ["temperature"] = 0.2,
+                ["max_tokens"] = maxTokens,
+                ["stream"] = true,
+                ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false }
+            };
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMinutes(4));
+            using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/v1/chat/completions")
+            {
+                Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
+            };
+            using var resp = await StreamClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            if (!resp.IsSuccessStatusCode)
+            {
+                string err = await resp.Content.ReadAsStringAsync(timeout.Token);
+                Log.Write($"Summary: AI 回應 {(int)resp.StatusCode}：{Truncate(err, 300)}");
+                throw new InvalidOperationException($"AI 回應錯誤（{(int)resp.StatusCode}）");
+            }
+            using var stream = await resp.Content.ReadAsStreamAsync(timeout.Token);
+            using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
+            var sb = new StringBuilder();
+            var lastTouch = DateTime.UtcNow;
+            string line;
+            while ((line = await reader.ReadLineAsync(timeout.Token)) != null)
+            {
+                if (brain.Local && DateTime.UtcNow - lastTouch > TimeSpan.FromSeconds(5)) { Local.Touch(); lastTouch = DateTime.UtcNow; }
+                if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+                string data = line.Substring(5).Trim();
+                if (data == "[DONE]") break;
+                try
+                {
+                    // 只拿正式內容；思考過程（reasoning）不顯示
+                    var piece = JsonNode.Parse(data)?["choices"]?[0]?["delta"]?["content"];
+                    string text = piece is JsonValue v && v.TryGetValue(out string str) ? str : null;
+                    if (string.IsNullOrEmpty(text)) continue;
+                    sb.Append(text);
+                    onText?.Invoke(StripThink(sb.ToString()));
+                }
+                catch { }
+            }
+            if (brain.Local) Local.Touch();
+            return StripThink(sb.ToString());
         }
 
         private static string Truncate(string s, int n) => s == null ? "" : s.Length <= n ? s : s.Substring(0, n) + "…";

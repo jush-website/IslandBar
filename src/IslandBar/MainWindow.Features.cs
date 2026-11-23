@@ -131,6 +131,7 @@ namespace IslandBar
         /// <summary>設定改變時呼叫</summary>
         public void ApplyFeatureSettings()
         {
+            RegisterSummaryHotkey();
             if (!_featuresStarted) return;
             ApplyDownloadWatcher();
             UpdateShelfTab();

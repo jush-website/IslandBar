@@ -183,6 +183,8 @@ namespace IslandBar
 
             var ocr = new Forms.ToolStripMenuItem("螢幕識字（Ctrl+Shift+O）");
             ocr.Click += (s, e) => _window?.StartScreenOcr();
+            var summary = new Forms.ToolStripMenuItem("畫面重點摘要");
+            summary.Click += (s, e) => _ = _window?.StartScreenSummaryAsync(true);   // 從選單開：前景是工作列，直接抓整個螢幕
             _focusItem = new Forms.ToolStripMenuItem("專注模式（25 分鐘 + 休息 5 分鐘）");
             _focusItem.Click += (s, e) => _window?.ToggleFocus();
 
@@ -245,6 +247,8 @@ namespace IslandBar
             menu.Items.Add(openWheel);
             menu.Items.Add(_recentItem);
             menu.Items.Add(ocr);
+            menu.Items.Add(summary);
+            menu.Opening += (s, e) => summary.Text = "畫面重點摘要" + (_settings.ScreenSummaryEnabled && !string.IsNullOrWhiteSpace(_settings.ScreenSummaryHotkey) ? $"（{_settings.ScreenSummaryHotkey}）" : "");
             menu.Items.Add(_focusItem);
             menu.Items.Add(boost);
             menu.Items.Add(windy);

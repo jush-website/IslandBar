@@ -62,6 +62,7 @@ namespace IslandBar
                 _hwndSource?.AddHook(WndProc);
                 if (!RegisterHotKey(_hwnd, HotkeyOcrId, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 0x4F)) // O
                     Log.Write("Ctrl+Shift+O 已被其他程式佔用，螢幕識字請改用系統匣選單");
+                RegisterSummaryHotkey();
                 AddClipboardFormatListener(_hwnd);
             }
             catch (Exception ex) { Log.Error("InitExtras", ex); }
@@ -92,6 +93,8 @@ namespace IslandBar
                 _calendar.Stop();
                 _pair?.Stop();
                 UnregisterHotKey(_hwnd, HotkeyOcrId);
+                UnregisterHotKey(_hwnd, HotkeySummaryId);
+                CloseSummaryCard();
                 RemoveClipboardFormatListener(_hwnd);
             }
             catch { }
@@ -114,6 +117,11 @@ namespace IslandBar
             if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyOcrId)
             {
                 StartScreenOcr();
+                handled = true;
+            }
+            else if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeySummaryId)
+            {
+                ToggleScreenSummary();
                 handled = true;
             }
             else if (msg == WM_CLIPBOARDUPDATE)
