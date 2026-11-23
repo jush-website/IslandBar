@@ -253,6 +253,47 @@ namespace IslandBar
                 _window.CloseSummaryCard();
                 tw.Close();
                 File.WriteAllText(Path.Combine(dir, "summary-test.txt"), sumLog.ToString());
+
+                // 桌面 Dock：每個預設組合＋編輯模式，抓真正螢幕上的樣子（測試時用「浮在最上層」才不會被其他視窗蓋住）
+                var dockLog = new System.Text.StringBuilder();
+                try
+                {
+                    _settings.DockMode = "float";
+                    _settings.DockScale = 1.0;
+                    SetDock(true);
+                    await Task.Delay(1500);
+                    foreach (var p in DockPresets.All)
+                    {
+                        _dock.ApplyPreset(p.Id);
+                        _dock.ApplyMode();
+                        await Task.Delay(1800);
+                        Grab(_dock, Path.Combine(dir, $"dock-{p.Id}.png"));
+                        dockLog.AppendLine($"{p.Id}: at {_dock.Left:0},{_dock.Top:0} {_dock.ActualWidth:0}x{_dock.ActualHeight:0}");
+                    }
+                    _dock.ApplyPreset("night");
+                    _dock.SetEdit(true);
+                    await Task.Delay(1200);
+                    Grab(_dock, Path.Combine(dir, "dock-edit.png"));
+                    _dock.SetEdit(false);
+                    var apps = IslandBar.Services.OpenWindows.List();
+                    dockLog.AppendLine($"open apps: {apps.Count} — " + string.Join("、", apps.Select(a => $"{a.Name}({a.Windows.Count}) aumid={a.Aumid.Length > 0} icon={(IslandBar.Services.OpenWindows.Icon(a) != null)}")));
+                    dockLog.AppendLine($"icons: explorer={(IslandBar.Services.ShellIcons.Get(IslandBar.Services.DockApps.ExplorerPath) != null)} recycle={(IslandBar.Services.ShellIcons.Get(IslandBar.Services.ShellIcons.RecycleBin) != null)} browser='{IslandBar.Services.DockApps.BrowserPath()}'");
+                    var catalog = IslandBar.Services.Voice.AppCatalog.All();
+                    int withIcon = catalog.Take(20).Count(a => IslandBar.Services.ShellIcons.Get(a.Launch, 32) != null);
+                    dockLog.AppendLine($"catalog: {catalog.Count} apps, first 20 with icon: {withIcon}");
+                    var picker = new DockAppPicker(_settings.DockItems);
+                    picker.Show();
+                    await Task.Delay(2500);
+                    Grab(picker, Path.Combine(dir, "dock-picker.png"));
+                    picker.Close();
+                    _settings.DockMode = "autohide";
+                    _dock.ApplyMode();
+                    await Task.Delay(2500);
+                    dockLog.AppendLine($"autohide after 2.5s: top={_dock.Top:0} (work area bottom {SystemParameters.WorkArea.Bottom:0})");
+                    SetDock(false);
+                }
+                catch (Exception ex) { dockLog.AppendLine("錯誤：" + ex); }
+                File.WriteAllText(Path.Combine(dir, "dock-test.txt"), dockLog.ToString());
             }
             catch (Exception ex)
             {

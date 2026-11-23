@@ -266,7 +266,7 @@ namespace IslandBar
             HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis
         };
 
-        private TextBlock Icon(string glyph, double size, Brush fg) => new TextBlock
+        private TextBlock Sym(string glyph, double size, Brush fg) => new TextBlock
         {
             Text = glyph, FontFamily = IconFont, FontSize = size, Foreground = fg, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
         };
@@ -312,7 +312,7 @@ namespace IslandBar
 
         private FrameworkElement Weather()
         {
-            var glyph = Icon("", 22, P.Text);
+            var glyph = Sym("", 22, P.Text);
             var temp = T("—", 15, P.Text, FontWeights.SemiBold, DigitFont);
             var desc = T("", 9.5, P.Sub);
             var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -359,7 +359,7 @@ namespace IslandBar
         private FrameworkElement Media()
         {
             var art = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(10), Background = P.Track, VerticalAlignment = VerticalAlignment.Center };
-            var note = Icon("", 18, P.Sub);
+            var note = Sym("", 18, P.Sub);
             art.Child = note;
             var title = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = P.Text, TextTrimming = TextTrimming.CharacterEllipsis };
             var artist = new TextBlock { FontSize = 10.5, Foreground = P.Sub, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -479,7 +479,7 @@ namespace IslandBar
 
         private FrameworkElement Boost()
         {
-            var icon = Icon("", 20, P.Accent);
+            var icon = Sym("", 20, P.Accent);
             var label = T("加速", 10, P.Sub, FontWeights.SemiBold);
             label.Margin = new Thickness(0, 4, 0, 0);
             var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -648,7 +648,7 @@ namespace IslandBar
             {
                 Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Background = P.Badge, BorderBrush = P.PaneBorder, BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-4, -6, 0, 0),
-                Child = Icon("", 8, Brushes.White), Cursor = Cursors.Hand, ToolTip = "從 Dock 移除"
+                Child = Sym("", 8, Brushes.White), Cursor = Cursors.Hand, ToolTip = "從 Dock 移除"
             };
             x.MouseLeftButtonDown += (s, e) => e.Handled = true;
             x.MouseLeftButtonUp += (s, e) =>
