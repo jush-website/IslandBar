@@ -693,7 +693,7 @@ namespace IslandBar
                 S.ScreenSummaryBrain switch { "pair" => 1, "local" => 2, _ => 0 },
                 v => { S.ScreenSummaryBrain = v switch { 1 => "pair", 2 => "local", _ => "auto" }; Changed(); }));
             p.Children.Add(Note("PAIR／Ollama 的模型、網址、本機小模型跟上面的 AI 大腦共用設定。本機小模型比較慢、能看的字也比較少（摘要看前 2000 字、翻譯看前 1200 字，約十幾秒到一分鐘）；PAIR 快很多、也能看比較長的內容。文字辨識用的是 Windows 的語言套件，中文和英文都看得懂。"));
-            var tryRow = new WrapPanel();
+            var sumTryRow = new WrapPanel();
             var trySum = MakeButton("試試摘要（這個設定畫面）", false);
             trySum.Margin = new Thickness(0, 8, 0, 0);
             trySum.HorizontalAlignment = HorizontalAlignment.Left;
@@ -701,9 +701,9 @@ namespace IslandBar
             var tryTr = MakeButton("試試翻譯", false);
             tryTr.Margin = new Thickness(8, 8, 0, 0);
             tryTr.Click += (s, e) => { if (_h.Window != null) _ = _h.Window.StartScreenTranslateAsync(false); };
-            tryRow.Children.Add(trySum);
-            tryRow.Children.Add(tryTr);
-            p.Children.Add(tryRow);
+            sumTryRow.Children.Add(trySum);
+            sumTryRow.Children.Add(tryTr);
+            p.Children.Add(sumTryRow);
 
             // ---- 語音回答 ----
             p.Children.Add(Heading("語音回答", 20));
