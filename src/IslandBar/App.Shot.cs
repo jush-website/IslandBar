@@ -284,12 +284,13 @@ namespace IslandBar
                     var picker = new DockAppPicker(_settings.DockItems);
                     picker.Show();
                     await Task.Delay(2500);
-                    Grab(picker, Path.Combine(dir, "dock-picker.png"));
+                    Save(picker.Content as Visual, Path.Combine(dir, "dock-picker.png"));
                     picker.Close();
                     _settings.DockMode = "autohide";
                     _dock.ApplyMode();
+                    dockLog.AppendLine("autohide start: " + _dock.DebugState);
                     await Task.Delay(2500);
-                    dockLog.AppendLine($"autohide after 2.5s: top={_dock.Top:0} (work area bottom {SystemParameters.WorkArea.Bottom:0})");
+                    dockLog.AppendLine($"autohide after 2.5s: {_dock.DebugState} (work area bottom {SystemParameters.WorkArea.Bottom:0}); fullscreen={_window.ForegroundIsFullscreen}");
                     SetDock(false);
                 }
                 catch (Exception ex) { dockLog.AppendLine("錯誤：" + ex); }

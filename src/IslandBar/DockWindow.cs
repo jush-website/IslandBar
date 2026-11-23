@@ -56,6 +56,7 @@ namespace IslandBar
         public Func<bool> WidgetsOn { get; set; } = () => false;
 
         public bool EditMode => _edit;
+        public string DebugState => $"mode={_s.DockMode} shown={_shown} hideTimer={_hideTimer.IsEnabled} over={IsMouseOver} fullscreen={_fullscreen} visible={IsVisible} top={Top:0} topmost={Topmost}";
 
         public DockWindow(MainWindow main, AppSettings settings)
         {
