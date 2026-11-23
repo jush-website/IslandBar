@@ -652,7 +652,7 @@ namespace IslandBar
 
             // ---- 畫面重點摘要與翻譯 ----
             p.Children.Add(Heading("畫面重點摘要與翻譯", 20));
-            p.Children.Add(Note("按快捷鍵擷取目前的視窗，用 Windows 內建的文字辨識讀出畫面上的字，交給 PAIR 或本機小模型：摘要＝一句話＋幾點重點；翻譯＝中文翻成英文、英文或其他語言翻成繁體中文（自動判斷）。結果顯示在動態島下方，卡片上可以直接切換摘要／翻譯、複製，或按「追問」帶著畫面內容繼續問；再按一次同一組快捷鍵關掉。只傳辨識出來的文字、不傳圖片；用 PAIR／本機模型時資料不出你的電腦／叢集。"));
+            p.Children.Add(Note("按快捷鍵擷取目前的視窗，用 Windows 內建的文字辨識讀出畫面上的字，交給 PAIR 或本機小模型：摘要＝一句話＋幾點重點；翻譯＝自動辨識原文的語言，翻成繁體中文（也可以改成中英互翻或翻成英文）。結果顯示在動態島下方，卡片上可以直接切換摘要／翻譯、複製，或按「追問」帶著畫面內容繼續問；再按一次同一組快捷鍵關掉。只傳辨識出來的文字、不傳圖片；用 PAIR／本機模型時資料不出你的電腦／叢集。"));
             p.Children.Add(Check("開啟畫面摘要與翻譯的快捷鍵", S.ScreenSummaryEnabled, v => { S.ScreenSummaryEnabled = v; Changed(); }));
             FrameworkElement HotkeyRow(Func<string> get, Action<string> set, Func<string> status)
             {
@@ -700,6 +700,9 @@ namespace IslandBar
             }
             p.Children.Add(Labeled("摘要重點的快捷鍵（按一下按鈕再按想要的組合）", HotkeyRow(() => S.ScreenSummaryHotkey, v => S.ScreenSummaryHotkey = v, () => _h.Window?.SummaryHotkeyStatus)));
             p.Children.Add(Labeled("翻譯的快捷鍵", HotkeyRow(() => S.ScreenTranslateHotkey, v => S.ScreenTranslateHotkey = v, () => _h.Window?.TranslateHotkeyStatus)));
+            p.Children.Add(Labeled("翻譯成", Segmented(new[] { ("自動辨識 → 繁體中文", 0), ("中英互翻", 1), ("→ 英文", 2) },
+                S.ScreenTranslateTarget switch { "auto" => 1, "en" => 2, _ => 0 },
+                v => { S.ScreenTranslateTarget = v switch { 1 => "auto", 2 => "en", _ => "zh" }; Changed(); })));
             p.Children.Add(Segmented(new[] { ("目前的視窗", 0), ("整個螢幕", 1) }, S.ScreenSummaryArea == "screen" ? 1 : 0,
                 v => { S.ScreenSummaryArea = v == 1 ? "screen" : "window"; Changed(); }));
             p.Children.Add(Segmented(new[] { ("自動（PAIR → 本機）", 0), ("只用 PAIR／Ollama", 1), ("只用本機小模型", 2) },

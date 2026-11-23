@@ -193,15 +193,28 @@ namespace IslandBar.Services
             return cjk * 5 >= latin;
         }
 
-        /// <summary>給 AI 的翻譯內容：中文→英文、其他→繁體中文。翻譯的輸出跟輸入差不多長，所以本機模型能看的字比摘要少</summary>
-        public static string BuildTranslatePrompt(ScreenCapture cap, string text, bool local, out bool truncated, out bool toEnglish)
+        /// <summary>
+        /// 給 AI 的翻譯內容。target：zh＝不管原文什麼語言都翻成繁體中文（預設）、en＝翻成英文、auto＝中文翻英文、其他翻繁中。
+        /// 翻譯的輸出跟輸入差不多長，所以本機模型能看的字比摘要少。label 是給小卡顯示的方向（「英 → 繁中」）
+        /// </summary>
+        public static string BuildTranslatePrompt(ScreenCapture cap, string text, bool local, string target, out bool truncated, out string label)
         {
-            toEnglish = MostlyChinese(text);
+            bool chinese = MostlyChinese(text);
+            bool toEnglish = target == "en" || (target == "auto" && chinese);
             int max = local ? 1200 : 6000;
             truncated = text.Length > max;
             if (truncated) text = text.Substring(0, max);
             var sb = new StringBuilder();
-            sb.AppendLine(toEnglish ? "請把下面的內容翻成英文。" : "請把下面的內容翻成繁體中文（台灣用語）。");
+            if (toEnglish)
+            {
+                label = chinese ? "中 → 英" : "→ 英文";
+                sb.AppendLine("請把下面的內容翻成英文。");
+            }
+            else
+            {
+                label = chinese ? "→ 繁中" : "自動辨識 → 繁中";
+                sb.AppendLine("請把下面的內容翻成繁體中文（台灣用語）。原文不管是英文、日文、韓文或其他語言都翻；已經是中文的部分保留原意，簡體字改成繁體。");
+            }
             sb.AppendLine();
             sb.AppendLine(text);
             return sb.ToString();

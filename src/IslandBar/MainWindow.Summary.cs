@@ -250,10 +250,10 @@ namespace IslandBar
                 int maxTokens;
                 if (translate)
                 {
-                    prompt = ScreenSummary.BuildTranslatePrompt(cap, text, brain.Local, out truncated, out bool toEnglish);
+                    prompt = ScreenSummary.BuildTranslatePrompt(cap, text, brain.Local, _settings.ScreenTranslateTarget, out truncated, out string direction);
                     system = ScreenSummary.TranslateSystemPrompt;
                     maxTokens = brain.Local ? 1400 : 6000;
-                    extra = toEnglish ? "中 → 英" : "→ 繁中";
+                    extra = direction;
                     card.SetSubtitle($"{extra} · {what}");
                 }
                 else

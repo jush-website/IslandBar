@@ -183,10 +183,10 @@ namespace IslandBar
                             sw.Restart();
                             string res = await brain.CompleteAsync(ScreenSummary.SystemPrompt, prompt, info, 500, _ => chunks++, CancellationToken.None);
                             W($"摘要（{sw.ElapsedMilliseconds} ms，串流 {chunks} 段{(cut ? "，有截短" : "")}）：\n{res}");
-                            string tp = ScreenSummary.BuildTranslatePrompt(cap, text, true, out bool tcut, out bool toEn);
+                            string tp = ScreenSummary.BuildTranslatePrompt(cap, text, true, "zh", out bool tcut, out string tdir);
                             sw.Restart();
                             string tr = await brain.CompleteAsync(ScreenSummary.TranslateSystemPrompt, tp, info, 1400, null, CancellationToken.None);
-                            W($"翻譯（{(toEn ? "中→英" : "→繁中")}，{sw.ElapsedMilliseconds} ms{(tcut ? "，有截短" : "")}）：\n{tr}");
+                            W($"翻譯（{tdir}，{sw.ElapsedMilliseconds} ms{(tcut ? "，有截短" : "")}）：\n{tr}");
                             tw.Close();
                         }
                         catch (Exception ex) { W("摘要失敗：" + ex); }

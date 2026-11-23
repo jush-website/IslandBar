@@ -245,7 +245,7 @@ namespace IslandBar
                     Grab(sc1, Path.Combine(dir, "summary-card-screen.png"));
                     sumLog.AppendLine($"card2 at {sc1.Left:0},{sc1.Top:0} {sc1.ActualWidth:0}x{sc1.ActualHeight:0}; island {_window.Left:0},{_window.Top:0}");
                 }
-                await _window.DebugSummaryCard("→ 繁中 · Mail — Q3 project review meeting rescheduled",
+                await _window.DebugSummaryCard("自動辨識 → 繁中 · Mail — Q3 project review meeting rescheduled",
                     "大家好：\n\n原訂 11 月 25 日（星期二）下午 2 點的第三季專案檢討會議，因為客戶來訪，改到 11 月 27 日（星期四）上午 10 點。地點不變，在 5 樓的大會議室。\n\n請各組負責人在 11 月 26 日（星期三）下午 5 點前，把最新的進度報告上傳到共用資料夾。每份報告都要寫目前的完成度、遇到的問題，以及需要的支援。\n\n另外，下個月預算申請的截止日提前到 12 月 3 日，逾期的申請不會列入第四季預算。", translate: true);
                 await Task.Delay(700);
                 var sc2 = _window.DebugSummaryCardWindow;
