@@ -32,6 +32,8 @@ namespace IslandBar
         private readonly Rectangle _dropRect;
         private readonly Dictionary<string, ItemRow> _rows = new Dictionary<string, ItemRow>();
         private string _fullUrl = "";
+        /// <summary>除錯：誰改了寬度</summary>
+        public string WidthLog { get; private set; } = "";
 
         public event Action CloseRequested;
         public event Action HideRequested;
@@ -213,8 +215,11 @@ namespace IslandBar
             KeyDown += (s, e) => { if (e.Key == Key.Escape) HideRequested?.Invoke(); };
             PreviewMouseLeftButtonDown += (s, e) => { if (!IsActive) try { Activate(); } catch { } };
             SizeChanged += (s, e) => Reposition();
+            System.ComponentModel.DependencyPropertyDescriptor.FromProperty(WidthProperty, typeof(Window)).AddValueChanged(this, (s, e) =>
+            {
+                if (WidthLog.Length < 6000) WidthLog += $"Width → {Width}\n{Environment.StackTrace}\n\n";
+            });
             Loaded += (s, e) => { Reposition(); PlayOpen(); };
-            IsVisibleChanged += (s, e) => { if (IsVisible) Reposition(); };
         }
 
         private void OnDragOver(object sender, DragEventArgs e)
@@ -412,6 +417,7 @@ namespace IslandBar
 
         public void Reposition()
         {
+            if (Math.Abs(Width - CardWidth) > 0.5) { Width = CardWidth; return; }   // 寬度被改掉了：改回來（SizeChanged 會再叫一次）
             double w = ActualWidth > 0 ? ActualWidth : Width, h = ActualHeight > 0 ? ActualHeight : 300;
             double left, top;
             var a = _anchor();
