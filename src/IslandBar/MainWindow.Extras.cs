@@ -586,6 +586,7 @@ namespace IslandBar
         {
             ClipList.Children.Clear();
             ClipEmpty.Visibility = _clips.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            ClipHeader.Text = _settings.ClipClickPaste ? "最近複製的內容（點一下貼上，右鍵只複製）" : "最近複製的內容（點一下再複製）";
             var tertiary = (Brush)FindResource("Tertiary");
             foreach (var c in _clips)
             {
@@ -621,24 +622,38 @@ namespace IslandBar
                 row.Child = grid;
 
                 var entry = c;
-                row.MouseLeftButtonUp += (s, e) =>
-                {
-                    e.Handled = true;
-                    try
-                    {
-                        _ignoreClip = true;
-                        if (entry.Image != null) Clipboard.SetImage(entry.Image);
-                        else Clipboard.SetText(entry.Text);
-                        _clips.Remove(entry);
-                        entry.Time = DateTime.Now;
-                        _clips.Insert(0, entry);
-                        BuildClipList();
-                        ShowNotice("已複製，可以直接貼上", TimeSpan.FromSeconds(2));
-                    }
-                    catch (Exception ex) { _ignoreClip = false; ShowNotice("複製失敗：" + ex.Message, TimeSpan.FromSeconds(3)); }
-                };
+                // 點一下＝貼到剛剛在用的程式；右鍵＝只複製（設定可以改成點一下只複製）
+                row.MouseLeftButtonUp += (s, e) => { e.Handled = true; _ = UseClipAsync(entry, _settings.ClipClickPaste); };
+                row.MouseRightButtonUp += (s, e) => { e.Handled = true; _ = UseClipAsync(entry, false); };
+                row.ToolTip = _settings.ClipClickPaste ? "點一下：貼上　右鍵：只複製" : "點一下：複製";
                 ClipList.Children.Add(row);
             }
+        }
+
+        private async Task UseClipAsync(ClipEntry entry, bool paste)
+        {
+            IntPtr target = paste ? PasteTarget() : IntPtr.Zero;   // 先記下要貼到哪（收合動態島之前）
+            try
+            {
+                _ignoreClip = true;
+                if (entry.Image != null) Clipboard.SetImage(entry.Image);
+                else Clipboard.SetText(entry.Text);
+                _clips.Remove(entry);
+                entry.Time = DateTime.Now;
+                _clips.Insert(0, entry);
+                BuildClipList();
+            }
+            catch (Exception ex)
+            {
+                _ignoreClip = false;
+                ShowNotice("複製失敗：" + ex.Message, TimeSpan.FromSeconds(3));
+                return;
+            }
+            if (!paste) { ShowNotice("已複製，可以直接貼上", TimeSpan.FromSeconds(2)); return; }
+            if (target == IntPtr.Zero) { ShowNotice("已複製（找不到要貼上的程式，請自己按 Ctrl＋V）", TimeSpan.FromSeconds(3)); return; }
+            SetMode(IslandMode.Compact);
+            bool ok = await PasteIntoAsync(target);
+            if (!ok) ShowNotice("已複製（沒辦法切回那個程式，請自己按 Ctrl＋V）", TimeSpan.FromSeconds(3));
         }
 
         private void ClipClear_Click(object sender, RoutedEventArgs e)

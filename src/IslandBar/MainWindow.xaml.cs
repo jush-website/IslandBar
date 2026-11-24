@@ -1116,6 +1116,7 @@ namespace IslandBar
 
         private void WatchTick()
         {
+            TrackForeground();   // 剪貼簿「點一下貼上」要知道貼到哪個程式
             bool fs = _forceFullscreen || (_settings.HideOnFullscreen && IsForegroundFullscreen());
             if (fs != _fullscreenHidden)
             {

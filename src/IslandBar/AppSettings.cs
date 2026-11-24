@@ -54,6 +54,8 @@ namespace IslandBar
 
         /// <summary>剪貼簿歷史（只存在記憶體）</summary>
         public bool ClipboardHistory { get; set; } = true;
+        /// <summary>剪貼簿歷史：點一下直接貼到剛剛在用的程式（false＝點一下只複製）</summary>
+        public bool ClipClickPaste { get; set; } = true;
 
         /// <summary>Google 日曆等的 iCal 私人網址</summary>
         public string CalendarIcsUrl { get; set; } = "";

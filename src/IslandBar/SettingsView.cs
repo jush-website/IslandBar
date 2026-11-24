@@ -291,6 +291,7 @@ namespace IslandBar
             p.Children.Add(Check("耳機等播放裝置連上／中斷時提示", S.DeviceConnectHud, v => { S.DeviceConnectHud = v; Changed(); }));
             p.Children.Add(Check("麥克風／鏡頭使用中指示燈", S.MicCamIndicator, v => { S.MicCamIndicator = v; Changed(); }));
             p.Children.Add(Check("剪貼簿歷史（只存在記憶體）", S.ClipboardHistory, v => { S.ClipboardHistory = v; Changed(); }));
+            p.Children.Add(Check("剪貼簿歷史：點一下直接貼上（右鍵＝只複製；取消＝點一下只複製）", S.ClipClickPaste, v => { S.ClipClickPaste = v; Changed(); }));
 
             p.Children.Add(Heading("無線裝置電量", 20));
             p.Children.Add(Note("藍牙耳機、滑鼠、鍵盤、手把等的剩餘電量，顯示在動態島旁的笑臉旁邊（收合時也看得到）；沒有連線的無線裝置就不顯示。Logitech 的滑鼠鍵盤（接收器或藍牙）直接問裝置，最準；其他藍牙裝置用 Windows「藍牙與裝置」裡看得到的電量（裝置有回報才有）；Xbox 無線手把只有大概的等級。裝置睡著時先顯示上次的電量（變淡）；充飽了會打勾。"));

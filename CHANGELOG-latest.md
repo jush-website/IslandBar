@@ -10,6 +10,13 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.24
+
+- **剪貼簿歷史點一下就直接貼上**：在動態島的剪貼簿分頁點一個項目，會貼到你剛剛在用的程式（文字、圖片都可以），不用再自己按 Ctrl＋V。那個項目也會變成目前的剪貼簿內容。
+  - 只想複製不貼上：在項目上按右鍵。
+  - 終端機也能貼（mintty、PuTTY 這類 Ctrl＋V 不是貼上的程式，會改送 Shift＋Insert）。
+  - 想改回「點一下只複製」：設定 → 通知與提示 → 取消「剪貼簿歷史：點一下直接貼上」。
+
 ## v1.16.23 OpenJarvis
 
 - **可以用 OpenJarvis 當 AI 大腦**：[OpenJarvis](https://github.com/open-jarvis/OpenJarvis) 是史丹佛做的開源本機 AI 框架（有自己的記憶、技能、模型路由，底下一樣用 Ollama）。裝好之後，它的 jarvis serve 開著時，語音助理、對話、畫面摘要／翻譯都會優先交給它（對話裡會顯示「OpenJarvis · 模型名稱」）；沒開就照原本的 PAIR → 本機順序，什麼都不用改。

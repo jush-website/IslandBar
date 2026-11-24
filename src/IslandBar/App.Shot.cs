@@ -421,6 +421,42 @@ namespace IslandBar
                     _settings.OpenJarvisUrl = Services.OpenJarvisLauncher.DefaultUrl;
                 }
                 File.WriteAllText(Path.Combine(dir, "openjarvis-test.txt"), ojLog.ToString());
+
+                // 剪貼簿「點一下貼上」：開記事本，貼一段文字進去，再用 UI Automation 讀回來
+                var cpLog = new System.Text.StringBuilder();
+                System.Diagnostics.Process np = null;
+                try
+                {
+                    np = System.Diagnostics.Process.Start("notepad.exe");
+                    IntPtr nh = IntPtr.Zero;
+                    for (int i = 0; i < 40 && nh == IntPtr.Zero; i++)
+                    {
+                        await Task.Delay(250);
+                        try { np.Refresh(); nh = np.MainWindowHandle; } catch { }
+                        if (nh == IntPtr.Zero)
+                            foreach (var pr in System.Diagnostics.Process.GetProcessesByName("notepad")) { try { if (pr.MainWindowHandle != IntPtr.Zero) nh = pr.MainWindowHandle; } catch { } }
+                    }
+                    cpLog.AppendLine($"notepad window: {nh}");
+                    if (nh != IntPtr.Zero)
+                    {
+                        bool ok = await _window.DebugPasteTo(nh, "IslandBar 貼上測試 123");
+                        await Task.Delay(800);
+                        string got = await Task.Run(() =>
+                        {
+                            var root = System.Windows.Automation.AutomationElement.FromHandle(nh);
+                            foreach (System.Windows.Automation.AutomationElement el in root.FindAll(System.Windows.Automation.TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition))
+                            {
+                                if (el.TryGetCurrentPattern(System.Windows.Automation.ValuePattern.Pattern, out object vp) && vp is System.Windows.Automation.ValuePattern v && !string.IsNullOrEmpty(v.Current.Value)) return v.Current.Value;
+                                if (el.TryGetCurrentPattern(System.Windows.Automation.TextPattern.Pattern, out object tp) && tp is System.Windows.Automation.TextPattern t) { var s2 = t.DocumentRange.GetText(500); if (!string.IsNullOrEmpty(s2)) return s2; }
+                            }
+                            return null;
+                        });
+                        cpLog.AppendLine($"paste sent={ok}; notepad now contains: '{got ?? "(empty)"}'; pasted={got?.Contains("IslandBar 貼上測試 123") == true}");
+                    }
+                }
+                catch (Exception ex) { cpLog.AppendLine("錯誤：" + ex.Message); }
+                finally { try { foreach (var pr in System.Diagnostics.Process.GetProcessesByName("notepad")) pr.Kill(); } catch { } }
+                File.WriteAllText(Path.Combine(dir, "clip-paste-test.txt"), cpLog.ToString());
                 try { Directory.Delete(Path.Combine(dir, "phone-recv"), true); File.Delete(Path.Combine(dir, "電腦給手機.txt")); } catch { }
                 _settings.PhoneShareFolder = "";
             }
