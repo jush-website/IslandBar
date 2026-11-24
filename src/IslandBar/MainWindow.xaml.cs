@@ -791,7 +791,6 @@ namespace IslandBar
 
         private void OnMediaChanged(MediaInfo info)
         {
-            try { MediaUpdated?.Invoke(info); } catch (Exception ex) { Log.Error("MediaUpdated", ex); }
             bool hadMedia = _currentMedia != null;
             string oldTitle = _currentMedia?.Title;
             _currentMedia = info;
@@ -1117,10 +1116,7 @@ namespace IslandBar
 
         private void WatchTick()
         {
-            // 全螢幕偵測：動態島（設定開著才藏）和 Dock（一律讓開遊戲）共用
-            bool raw = _forceFullscreen || ((_settings.HideOnFullscreen || FullscreenChanged != null) && IsForegroundFullscreen());
-            if (raw != _rawFullscreen) { _rawFullscreen = raw; try { FullscreenChanged?.Invoke(raw); } catch (Exception ex) { Log.Error("FullscreenChanged", ex); } }
-            bool fs = _settings.HideOnFullscreen ? raw : _forceFullscreen;
+            bool fs = _forceFullscreen || (_settings.HideOnFullscreen && IsForegroundFullscreen());
             if (fs != _fullscreenHidden)
             {
                 _fullscreenHidden = fs;

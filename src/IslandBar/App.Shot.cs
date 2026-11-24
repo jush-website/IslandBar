@@ -276,47 +276,77 @@ namespace IslandBar
                 catch (Exception ex) { sumLog.AppendLine("selection test error: " + ex.Message); }
                 File.WriteAllText(Path.Combine(dir, "summary-test.txt"), sumLog.ToString());
 
-                // 桌面 Dock：每個預設組合＋編輯模式，抓真正螢幕上的樣子（測試時用「浮在最上層」才不會被其他視窗蓋住）
-                var dockLog = new System.Text.StringBuilder();
+                // 手機傳檔：真的開伺服器，用 HttpClient 當手機（網頁、上傳、下載、文字、錯誤的密碼）
+                var phLog = new System.Text.StringBuilder();
                 try
                 {
-                    _settings.DockMode = "float";
-                    _settings.DockScale = 1.0;
-                    SetDock(true);
-                    await Task.Delay(1500);
-                    foreach (var p in DockPresets.All)
-                    {
-                        _dock.ApplyPreset(p.Id);
-                        _dock.ApplyMode();
-                        await Task.Delay(1800);
-                        Grab(_dock, Path.Combine(dir, $"dock-{p.Id}.png"));
-                        dockLog.AppendLine($"{p.Id}: at {_dock.Left:0},{_dock.Top:0} {_dock.ActualWidth:0}x{_dock.ActualHeight:0}");
-                    }
-                    _dock.ApplyPreset("night");
-                    _dock.SetEdit(true);
+                    _settings.PhoneShareFolder = Path.Combine(dir, "phone-recv");
+                    _window.OpenPhoneShare();
                     await Task.Delay(1200);
-                    Grab(_dock, Path.Combine(dir, "dock-edit.png"));
-                    _dock.SetEdit(false);
-                    var apps = IslandBar.Services.OpenWindows.List();
-                    dockLog.AppendLine($"open apps: {apps.Count} — " + string.Join("、", apps.Select(a => $"{a.Name}({a.Windows.Count}) aumid={a.Aumid.Length > 0} icon={(IslandBar.Services.OpenWindows.Icon(a) != null)}")));
-                    dockLog.AppendLine($"icons: explorer={(IslandBar.Services.ShellIcons.Get(IslandBar.Services.DockApps.ExplorerPath) != null)} recycle={(IslandBar.Services.ShellIcons.Get(IslandBar.Services.ShellIcons.RecycleBin) != null)} browser='{IslandBar.Services.DockApps.BrowserPath()}'");
-                    var catalog = IslandBar.Services.Voice.AppCatalog.All();
-                    int withIcon = catalog.Take(20).Count(a => IslandBar.Services.ShellIcons.Get(a.Launch, 32) != null);
-                    dockLog.AppendLine($"catalog: {catalog.Count} apps, first 20 with icon: {withIcon}");
-                    var picker = new DockAppPicker(_settings.DockItems);
-                    picker.Show();
-                    await Task.Delay(2500);
-                    Save(picker.Content as Visual, Path.Combine(dir, "dock-picker.png"));
-                    picker.Close();
-                    _settings.DockMode = "autohide";
-                    _dock.ApplyMode();
-                    dockLog.AppendLine("autohide start: " + _dock.DebugState);
-                    await Task.Delay(2500);
-                    dockLog.AppendLine($"autohide after 2.5s: {_dock.DebugState} (work area bottom {SystemParameters.WorkArea.Bottom:0}); fullscreen={_window.ForegroundIsFullscreen}");
-                    SetDock(false);
+                    var share = _window.PhoneShareSession;
+                    phLog.AppendLine($"url: {share.Url.Replace(share.Token, "<token>")}  addresses: {string.Join(", ", share.Addresses.Select(a => a.Ip + "/" + a.Adapter + "/" + a.Score))}");
+                    using var http = new System.Net.Http.HttpClient(new System.Net.Http.HttpClientHandler { UseProxy = false, AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) };
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148");
+                    foreach (var host in new[] { "127.0.0.1", share.Host }.Distinct())
+                    {
+                        string b = $"http://{host}:{share.Port}/s/{share.Token}";
+                        var page = await http.GetAsync(b + "/");
+                        string html = await page.Content.ReadAsStringAsync();
+                        phLog.AppendLine($"[{host}] page: {(int)page.StatusCode} {html.Length} chars, has upload button={html.Contains("pickBtn")}");
+                    }
+                    string bs = $"http://127.0.0.1:{share.Port}/s/{share.Token}";
+                    var redirect = await http.GetAsync(bs);
+                    phLog.AppendLine($"no slash: {(int)redirect.StatusCode} → {redirect.Headers.Location}");
+                    var bad = await http.GetAsync($"http://127.0.0.1:{share.Port}/s/wrongtoken123/state");
+                    phLog.AppendLine($"wrong token: {(int)bad.StatusCode}");
+                    // 上傳（中文檔名＋3 MB 隨機內容），比對雜湊
+                    var data = new byte[3 * 1024 * 1024 + 123];
+                    new Random(7).NextBytes(data);
+                    for (int round = 0; round < 2; round++)
+                    {
+                        var up = await http.PostAsync(bs + "/up?name=" + Uri.EscapeDataString("手機 照片.jpg"), new System.Net.Http.ByteArrayContent(data));
+                        phLog.AppendLine($"upload #{round + 1}: {(int)up.StatusCode} {await up.Content.ReadAsStringAsync()}");
+                    }
+                    await Task.Delay(500);
+                    foreach (var f in Directory.GetFiles(_settings.PhoneShareFolder))
+                    {
+                        bool same = File.ReadAllBytes(f).AsSpan().SequenceEqual(data);
+                        phLog.AppendLine($"saved: {Path.GetFileName(f)} {new FileInfo(f).Length} bytes, identical={same}");
+                    }
+                    var evil = await http.PostAsync(bs + "/up?name=" + Uri.EscapeDataString(@"..\..\evil.txt"), new System.Net.Http.StringContent("x"));
+                    phLog.AppendLine($"path traversal name → {await evil.Content.ReadAsStringAsync()} (outside exists={File.Exists(Path.Combine(dir, "evil.txt"))})");
+                    // 文字
+                    var tx = await http.PostAsync(bs + "/text", new System.Net.Http.StringContent("https://example.com/手機傳來的網址", System.Text.Encoding.UTF8, "text/plain"));
+                    phLog.AppendLine($"text: {(int)tx.StatusCode}");
+                    // 電腦 → 手機
+                    string offerPath = Path.Combine(dir, "電腦給手機.txt");
+                    File.WriteAllText(offerPath, "從電腦傳到手機 OK");
+                    _window.OfferToPhone(new[] { offerPath, dir });
+                    share.OfferText("電腦剪貼簿的一段文字");
+                    var st = await http.GetStringAsync(bs + "/state");
+                    phLog.AppendLine("state: " + st);
+                    var first = share.Offers().First(o => !o.IsText);
+                    var dl = await http.GetAsync(bs + "/f/" + first.Id);
+                    phLog.AppendLine($"download: {(int)dl.StatusCode} '{await dl.Content.ReadAsStringAsync()}' disposition={dl.Content.Headers.ContentDisposition}");
+                    var gone = await http.GetAsync(bs + "/f/nope");
+                    phLog.AppendLine($"missing offer: {(int)gone.StatusCode}");
+                    phLog.AppendLine($"client: {share.Client}");
+                    await Task.Delay(1500);
+                    if (_window.PhoneShareCardWindow != null) Grab(_window.PhoneShareCardWindow, Path.Combine(dir, "phone-share-card.png"));
+                    _window.HidePhoneShareCard();
+                    await Task.Delay(400);
+                    phLog.AppendLine($"after hide: running={share.Running} cardVisible={_window.PhoneShareCardWindow?.IsVisible}");
+                    _window.StopPhoneShare();
+                    await Task.Delay(300);
+                    try { await http.GetAsync(bs + "/state"); phLog.AppendLine("after stop: still answering (BAD)"); }
+                    catch (Exception ex) { phLog.AppendLine("after stop: refused (" + ex.GetType().Name + ")"); }
+                    phLog.AppendLine($"IsLocal 8.8.8.8={Services.PhoneShare.IsLocal(System.Net.IPAddress.Parse("8.8.8.8"))} 192.168.1.5={Services.PhoneShare.IsLocal(System.Net.IPAddress.Parse("192.168.1.5"))}");
+                    phLog.AppendLine($"SafeName: '{Services.PhoneShare.SafeName("CON.txt")}' '{Services.PhoneShare.SafeName("a/b\\c:d?.png")}' '{Services.PhoneShare.SafeName("")[..5]}'");
                 }
-                catch (Exception ex) { dockLog.AppendLine("錯誤：" + ex); }
-                File.WriteAllText(Path.Combine(dir, "dock-test.txt"), dockLog.ToString());
+                catch (Exception ex) { phLog.AppendLine("錯誤：" + ex); }
+                File.WriteAllText(Path.Combine(dir, "phone-share-test.txt"), phLog.ToString());
+                try { Directory.Delete(Path.Combine(dir, "phone-recv"), true); File.Delete(Path.Combine(dir, "電腦給手機.txt")); } catch { }
+                _settings.PhoneShareFolder = "";
             }
             catch (Exception ex)
             {

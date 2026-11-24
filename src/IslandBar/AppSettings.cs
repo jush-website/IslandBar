@@ -116,6 +116,8 @@ namespace IslandBar
         public string ScreenTranslateHotkey { get; set; } = "Ctrl+Alt+T";
         /// <summary>翻譯成什麼：zh＝自動辨識原文、一律翻成繁體中文（預設）；auto＝中英互翻；en＝翻成英文</summary>
         public string ScreenTranslateTarget { get; set; } = "zh";
+        /// <summary>手機傳檔：收到的檔案存到哪（空白＝下載\手機傳來）</summary>
+        public string PhoneShareFolder { get; set; } = "";
         /// <summary>有選取文字時，只摘要／翻譯選取的文字（沒選取才擷取整個視窗）</summary>
         public bool ScreenAiUseSelection { get; set; } = true;
         /// <summary>擷取範圍：window（目前的視窗）或 screen（整個主螢幕）</summary>
@@ -168,20 +170,6 @@ namespace IslandBar
         /// <summary>桌面小工具</summary>
         public bool WidgetEnabled { get; set; } = false;
 
-        // ---- 桌面 Dock（工作列上方的一排小工具＋程式） ----
-        public bool DockEnabled { get; set; } = false;
-        /// <summary>Dock 放在哪個螢幕（裝置名稱，空白＝主螢幕）</summary>
-        public string DockMonitor { get; set; } = "";
-        /// <summary>Dock 上的東西（依序）：clock、date、weather、event、media、cpu、gpu、ram、net、quota、boost、sep、openapps、explorer、browser、recycle、app:捷徑或 App|名稱</summary>
-        public List<string> DockItems { get; set; } = DockPresets.Get("night").Items.ToList();
-        /// <summary>底板樣式：smoke（煙燻）、glass（玻璃）、solid（實色）、light（淺色）</summary>
-        public string DockStyle { get; set; } = "smoke";
-        /// <summary>強調色（#RRGGBB）</summary>
-        public string DockAccent { get; set; } = "#34D3C0";
-        /// <summary>desktop（在視窗後面，像桌面小工具）、float（浮在最上層）、autohide（平常藏起來，滑鼠移到工作列上方才出現）</summary>
-        public string DockMode { get; set; } = "desktop";
-        public double DockScale { get; set; } = 1.0;
-        public string DockPreset { get; set; } = "night";
         public double? WidgetLeft { get; set; }
         public double? WidgetTop { get; set; }
         public List<string> WidgetSections { get; set; } = new List<string> { "clock", "weather", "perf", "events", "quota" };

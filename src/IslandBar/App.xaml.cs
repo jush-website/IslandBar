@@ -110,7 +110,7 @@ namespace IslandBar
             _window.AssistantWindowRequested += OpenAssistant;
             _window.SettingsPageRequested += (page, anchor) => OpenSettings(page, anchor);
             _window.RestartRequested += RestartViaExplorer;
-            _window.RecoverRequested += () => { foreach (var w in _widgets.ToList()) w.Recover(); _dock?.Repin(); };
+            _window.RecoverRequested += () => { foreach (var w in _widgets.ToList()) w.Recover(); };
             _window.Show();
 
             CreateTrayIcon();
@@ -128,7 +128,6 @@ namespace IslandBar
                 _settings.Save();
             }
             if (_settings.WidgetEnabled) ShowWidgets();
-            if (_settings.DockEnabled) ShowDock();
             if (_settings.WindyPinned) OpenWindy();
             if (updateFailCode != 0)
             {
@@ -252,14 +251,14 @@ namespace IslandBar
             var translate = new Forms.ToolStripMenuItem("畫面翻譯");
             translate.Click += (s, e) => _ = _window?.StartScreenTranslateAsync(true);
             menu.Items.Add(translate);
+            var phone = new Forms.ToolStripMenuItem("手機傳檔（掃 QR code 互傳）");
+            phone.Click += (s, e) => _window?.OpenPhoneShare();
+            menu.Items.Add(phone);
             menu.Opening += (s, e) => translate.Text = "畫面翻譯" + (_settings.ScreenSummaryEnabled && !string.IsNullOrWhiteSpace(_settings.ScreenTranslateHotkey) ? $"（{_settings.ScreenTranslateHotkey}）" : "");
             menu.Opening += (s, e) => summary.Text = "畫面重點摘要" + (_settings.ScreenSummaryEnabled && !string.IsNullOrWhiteSpace(_settings.ScreenSummaryHotkey) ? $"（{_settings.ScreenSummaryHotkey}）" : "");
             menu.Items.Add(_focusItem);
             menu.Items.Add(boost);
             menu.Items.Add(windy);
-            _dockItem = new Forms.ToolStripMenuItem("桌面 Dock") { CheckOnClick = true, Checked = _settings.DockEnabled };
-            _dockItem.Click += (s, e) => SetDock(_dockItem.Checked);
-            menu.Items.Add(_dockItem);
             menu.Items.Add(accounts);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(toggle);
@@ -345,11 +344,9 @@ namespace IslandBar
                     }
                 },
                 Notify = text => Balloon("IslandBar", text, Forms.ToolTipIcon.Info),
-                SetDock = SetDock,
-                EditDock = () => { SetDock(true); _dock?.SetEdit(true); },
-                AddDockApp = () => { SetDock(true); _dock?.OpenAppPicker(); },
-                ApplyDockPreset = id => { SetDock(true); _dock?.ApplyPreset(id); },
-                OpenAssistant = OpenAssistant
+                OpenAssistant = OpenAssistant,
+                OpenPhoneShare = () => _window?.OpenPhoneShare(),
+                PhoneShareFolder = () => _window?.PhoneShareFolder ?? ""
             };
             _hub = new HubWindow(host, _window?.Assistant);
             _hub.Closed += (s, e) => { if (_hub == s) _hub = null; };
@@ -399,8 +396,6 @@ namespace IslandBar
             w.RemoveRequested += RemoveWidget;
             w.SplitRequested += SplitWidget;
             w.SettingsRequested += (page, anchor) => OpenSettings(page, anchor);
-            w.DockOn = () => _settings.DockEnabled;
-            w.DockToggleRequested += on => SetDock(on);
             w.Closed += (s, e) => _widgets.Remove(w);
             _widgets.Add(w);
             w.Show();
@@ -512,57 +507,7 @@ namespace IslandBar
             _settings.Save();
             SyncMenu();
             _window?.ApplySettings(_settings);
-            SyncDock();
         }
-
-        // ================================================================
-        //  桌面 Dock（跟桌面小工具共用資料與設定頁）
-        // ================================================================
-
-        private DockWindow _dock;
-
-        private void ShowDock()
-        {
-            if (_window == null || _dock != null) return;
-            var d = new DockWindow(_window, _settings) { WidgetsOn = () => _settings.WidgetEnabled };
-            d.SettingsRequested += (page, anchor) => OpenSettings(page, anchor);
-            d.CloseRequested += () => SetDock(false);
-            d.WidgetsToggleRequested += on => SetWidgetsEnabled(on);
-            d.Closed += (s, e) => { if (_dock == d) _dock = null; };
-            _dock = d;
-            d.Show();
-        }
-
-        private void CloseDock()
-        {
-            try { _dock?.Close(); } catch { }
-            _dock = null;
-        }
-
-        private void SetDock(bool on)
-        {
-            if (_settings.DockEnabled != on) { _settings.DockEnabled = on; _settings.Save(); }
-            if (on) ShowDock(); else CloseDock();
-            if (_dockItem != null) _dockItem.Checked = on;
-        }
-
-        /// <summary>設定頁改了 Dock 的樣式／位置／大小：重畫</summary>
-        private void SyncDock()
-        {
-            if (_settings.DockEnabled && _dock == null) ShowDock();
-            else if (!_settings.DockEnabled && _dock != null) CloseDock();
-            else if (_dock != null) { _dock.Rebuild(); _dock.ApplyMode(); }
-        }
-
-        private void SetWidgetsEnabled(bool on)
-        {
-            if (_settings.WidgetEnabled == on) return;
-            _settings.WidgetEnabled = on;
-            _settings.Save();
-            if (on) ShowWidgets(); else CloseWidgets();
-        }
-
-        private Forms.ToolStripMenuItem _dockItem;
 
         // ================================================================
         //  自動更新

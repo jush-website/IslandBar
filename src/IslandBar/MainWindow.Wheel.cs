@@ -67,7 +67,7 @@ namespace IslandBar
             _wheelFiles = files;
             _wheelKind = ConvertCatalog.KindOf(files);
             (_wheelPage1, _wheelPage2) = ConvertCatalog.For(files);
-            _wheelPage1 = new List<WheelAction>(_wheelPage1 ?? new List<WheelAction>()) { ShelfAction };   // 最後一格：暫存架
+            _wheelPage1 = new List<WheelAction>(_wheelPage1 ?? new List<WheelAction>()) { PhoneAction, ShelfAction };   // 最後兩格：傳到手機、暫存架
             _wheelPage = 0;
             _wheelHover = -1;
             _wheelClickMode = clickMode;
@@ -392,6 +392,7 @@ namespace IslandBar
         private async void RunWheelAction(WheelAction action, string[] files)
         {
             if (ReferenceEquals(action, ShelfAction)) { AddToShelf(files); return; }
+            if (ReferenceEquals(action, PhoneAction)) { OfferToPhone(files); return; }
             if (_converting)
             {
                 ShowNotice("上一個轉換還在進行中…", TimeSpan.FromSeconds(2));

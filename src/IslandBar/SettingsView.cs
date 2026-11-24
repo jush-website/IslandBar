@@ -29,10 +29,8 @@ namespace IslandBar
         public Action<bool> SetPair { get; set; }
         public Action<string> Notify { get; set; }
         public Action OpenAssistant { get; set; }
-        public Action<bool> SetDock { get; set; }
-        public Action EditDock { get; set; }
-        public Action AddDockApp { get; set; }
-        public Action<string> ApplyDockPreset { get; set; }
+        public Action OpenPhoneShare { get; set; }
+        public Func<string> PhoneShareFolder { get; set; }
     }
 
     /// <summary>
@@ -904,58 +902,6 @@ namespace IslandBar
             row.Children.Add(edit);
             p.Children.Add(row);
 
-            // ---- 桌面 Dock ----
-            p.Children.Add(Heading("桌面 Dock", 24));
-            p.Children.Add(Note("工作列上方的一排小工具＋程式：時鐘、日期、天氣、行程、音樂（任何播放器都能控制）、CPU／GPU／記憶體、網路、AI 額度、一鍵加速，加上開著的程式和固定的程式（檔案總管、瀏覽器、資源回收筒、開始功能表的任何 App）。跟桌面小工具用同一份資料；全螢幕遊戲時會讓開、不吃 CPU。在 Dock 上按右鍵也能設定。"));
-            p.Children.Add(Check("顯示桌面 Dock", S.DockEnabled, v => _h.SetDock?.Invoke(v)));
-            p.Children.Add(Labeled("預設組合（換掉內容、樣式和顏色；自己加的程式會留著）", Segmented(DockPresets.All.Select((x, i) => (x.Name, i)),
-                Math.Max(0, Array.FindIndex(DockPresets.All, x => x.Id == S.DockPreset)),
-                i => _h.ApplyDockPreset?.Invoke(DockPresets.All[i].Id))));
-            p.Children.Add(Labeled("底板樣式", Segmented(new[] { ("煙燻", 0), ("玻璃", 1), ("實色", 2), ("淺色", 3) },
-                S.DockStyle switch { "glass" => 1, "solid" => 2, "light" => 3, _ => 0 },
-                v => { S.DockStyle = v switch { 1 => "glass", 2 => "solid", 3 => "light", _ => "smoke" }; Changed(); })));
-            var accents = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
-            foreach (var hex in DockPresets.Accents)
-            {
-                var c = (Color)ColorConverter.ConvertFromString(hex);
-                var sw = new Border
-                {
-                    Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Background = new SolidColorBrush(c), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand,
-                    BorderThickness = new Thickness(2), BorderBrush = string.Equals(S.DockAccent, hex, StringComparison.OrdinalIgnoreCase) ? Brushes.White : Brushes.Transparent, ToolTip = hex
-                };
-                string h = hex;
-                sw.MouseLeftButtonUp += (s, e) =>
-                {
-                    S.DockAccent = h;
-                    foreach (Border b in accents.Children) b.BorderBrush = Brushes.Transparent;
-                    sw.BorderBrush = Brushes.White;
-                    Changed();
-                };
-                accents.Children.Add(sw);
-            }
-            p.Children.Add(Labeled("強調色", accents));
-            p.Children.Add(Labeled("位置", Segmented(new[] { ("在視窗後面", 0), ("浮在最上層", 1), ("自動隱藏", 2) },
-                S.DockMode switch { "float" => 1, "autohide" => 2, _ => 0 },
-                v => { S.DockMode = v switch { 1 => "float", 2 => "autohide", _ => "desktop" }; Changed(); })));
-            p.Children.Add(Note("在視窗後面：像桌面小工具，最大化的視窗會蓋住它。浮在最上層：一直看得到。自動隱藏：平常收起來，滑鼠移到工作列上方才滑出來。"));
-            var dockMons = Services.Monitors.All();
-            if (dockMons.Count > 1)
-            {
-                var curDock = Services.Monitors.Find(S.DockMonitor);
-                p.Children.Add(Labeled("放在哪個螢幕", Segmented(dockMons.Select((m, i) => (m.ShortLabel, i)), Math.Max(0, dockMons.FindIndex(m => m.Device == curDock?.Device)),
-                    i => { S.DockMonitor = dockMons[i].Primary ? "" : dockMons[i].Device; Changed(); })));
-            }
-            p.Children.Add(Labeled("大小", Slider(80, 130, S.DockScale * 100, v => { S.DockScale = Math.Round(v / 5) * 5 / 100; Changed(); }, v => $"{Math.Round(v / 5) * 5:0}%")));
-            var dockRow = new WrapPanel();
-            var editDock = MakeButton("編輯 Dock（拖曳排序、× 移除）", true);
-            editDock.Click += (s, e) => _h.EditDock?.Invoke();
-            var addApp = MakeButton("＋ 新增程式…", false);
-            addApp.Margin = new Thickness(8, 0, 0, 0);
-            addApp.Click += (s, e) => _h.AddDockApp?.Invoke();
-            dockRow.Children.Add(editDock);
-            dockRow.Children.Add(addApp);
-            dockRow.Margin = new Thickness(0, 10, 0, 0);
-            p.Children.Add(dockRow);
         }
 
         // ================================================================
@@ -979,6 +925,29 @@ namespace IslandBar
             row.Children.Add(folder);
             p.Children.Add(row);
             p.Children.Add(Note("其他少用的設定可以直接編輯設定資料夾裡的 settings.json，存檔後在系統匣選「重新載入設定」。"));
+
+            // ---- 手機傳檔 ----
+            p.Children.Add(Heading("手機傳檔", 24));
+            p.Children.Add(Note("手機和電腦連同一個 Wi-Fi，在動態島「快速設定 → 手機傳檔」（或系統匣、或把檔案拖到動態島選「手機」）打開 QR code，手機相機掃一下就能互傳照片、檔案和文字，不用線、不用裝 App。只在區域網路裡傳，網址每次都不一樣，10 分鐘沒動作自動關閉。第一次用時 Windows 會問防火牆，請允許「私人網路」。"));
+            var shareFolder = new TextBlock { Foreground = Brushes.White, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 6, 0, 0) };
+            void ShowFolder() { string f = _h.PhoneShareFolder?.Invoke() ?? ""; shareFolder.Text = "收到的檔案存到：" + f; shareFolder.ToolTip = f; }
+            ShowFolder();
+            p.Children.Add(shareFolder);
+            var shareRow = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+            var openShare = MakeButton("打開手機傳檔", true);
+            openShare.Click += (s, e) => _h.OpenPhoneShare?.Invoke();
+            shareRow.Children.Add(openShare);
+            var pickFolder = MakeButton("換資料夾…", false);
+            pickFolder.Click += (s, e) =>
+            {
+                var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "手機傳來的檔案要存到哪裡" };
+                if (dlg.ShowDialog() == true) { S.PhoneShareFolder = dlg.FolderName; Changed(); ShowFolder(); }
+            };
+            shareRow.Children.Add(pickFolder);
+            var resetFolder = MakeButton("用預設（下載\\手機傳來）", false);
+            resetFolder.Click += (s, e) => { S.PhoneShareFolder = ""; Changed(); ShowFolder(); };
+            shareRow.Children.Add(resetFolder);
+            p.Children.Add(shareRow);
         }
 
         private static void OpenFile(string path)

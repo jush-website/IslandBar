@@ -926,10 +926,10 @@
                                     <TextBlock Text="鎖定" FontSize="11" Margin="0,6,0,0" HorizontalAlignment="Center" />
                                 </StackPanel>
                             </Button>
-                            <Button Style="{StaticResource TileButton}" Click="Settings_Click">
+                            <Button x:Name="PhoneTile" Style="{StaticResource TileButton}" Click="PhoneTile_Click" ToolTip="手機和電腦互傳檔案：手機掃 QR code 就好，不用線、不用裝 App">
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE713;" FontSize="17" />
-                                    <TextBlock Text="Windows 設定" FontSize="11" Margin="0,6,0,0" HorizontalAlignment="Center" />
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE8EA;" FontSize="17" Foreground="#34D3C0" />
+                                    <TextBlock Text="手機傳檔" FontSize="11" Margin="0,6,0,0" HorizontalAlignment="Center" />
                                 </StackPanel>
                             </Button>
                             <Button Style="{StaticResource TileButton}" Click="IslandSettings_Click">
