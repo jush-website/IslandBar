@@ -136,6 +136,11 @@ namespace IslandBar
         public string AssistantMic { get; set; } = "";
         /// <summary>AI 大腦：auto（PAIR／Ollama，沒開就用本機小模型）、pair、local、off（只用基本指令）</summary>
         public string AssistantBrain { get; set; } = "auto";
+        /// <summary>OpenJarvis（jarvis serve）開著時，AI 大腦和畫面摘要優先用它</summary>
+        public bool OpenJarvisEnabled { get; set; } = true;
+        public string OpenJarvisUrl { get; set; } = "http://127.0.0.1:8000";
+        /// <summary>IslandBar 啟動時在背景執行 jarvis serve（關掉 IslandBar 時一起關）</summary>
+        public bool OpenJarvisAutoStart { get; set; } = false;
         /// <summary>PAIR／Ollama 上要用的模型（空白＝自動挑）</summary>
         public string AssistantModel { get; set; } = "";
         /// <summary>自訂 OpenAI 相容網址（例如 http://192.168.1.10:11434），空白＝不用</summary>

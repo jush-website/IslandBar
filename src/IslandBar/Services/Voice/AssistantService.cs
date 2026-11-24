@@ -66,6 +66,7 @@ namespace IslandBar.Services.Voice
                 Mode = () => _s.AssistantBrain,
                 Ports = () => _s.PairProxyPorts,
                 PreferredModel = () => _s.AssistantModel,
+                OpenJarvisUrl = () => _s.OpenJarvisEnabled ? _s.OpenJarvisUrl : "",
                 CustomUrl = () => _s.AssistantLlmUrl
             };
             Key.Pressed += () => _ui.BeginInvoke(new Action(BeginListening));

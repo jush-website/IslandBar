@@ -129,6 +129,13 @@ namespace IslandBar
             }
             if (_settings.WidgetEnabled) ShowWidgets();
             if (_settings.WindyPinned) OpenWindy();
+            if (_settings.OpenJarvisAutoStart && _settings.OpenJarvisEnabled)
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(5000);   // 開機時先讓動態島、網路就緒
+                    string err = await Services.OpenJarvisLauncher.StartAsync(_settings.OpenJarvisUrl);
+                    if (err != null) Log.Write("OpenJarvis: " + err);
+                });
             if (updateFailCode != 0)
             {
                 string why = UpdateService.DescribeMsiError(updateFailCode);
@@ -708,6 +715,7 @@ namespace IslandBar
                 _tray.Visible = false;
                 _tray.Dispose();
             }
+            Services.OpenJarvisLauncher.Stop();
             try { _mutex?.ReleaseMutex(); } catch { }
             base.OnExit(e);
         }

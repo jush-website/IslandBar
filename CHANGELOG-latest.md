@@ -10,6 +10,16 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.23 OpenJarvis
+
+- **可以用 OpenJarvis 當 AI 大腦**：[OpenJarvis](https://github.com/open-jarvis/OpenJarvis) 是史丹佛做的開源本機 AI 框架（有自己的記憶、技能、模型路由，底下一樣用 Ollama）。裝好之後，它的 jarvis serve 開著時，語音助理、對話、畫面摘要／翻譯都會優先交給它（對話裡會顯示「OpenJarvis · 模型名稱」）；沒開就照原本的 PAIR → 本機順序，什麼都不用改。
+- 設定 → 語音助理 →「OpenJarvis（選用）」：
+  - 顯示有沒有安裝、jarvis serve 有沒有在跑、用哪個模型。
+  - 「立即啟動 jarvis serve」：在背景執行，不會跳出黑色視窗；輸出寫到「啟動記錄」。
+  - 可以勾「IslandBar 啟動時在背景執行 jarvis serve」，關掉 IslandBar 時一起關（只關 IslandBar 自己開的那個）。
+  - 網址預設 http://127.0.0.1:8000，可以改；OpenJarvis 有設 API 金鑰的話會讀 OPENJARVIS_API_KEY 環境變數。
+- IslandBar 不內建 OpenJarvis（它是 Python 程式，要另外安裝）：Windows 在 PowerShell 執行官方的一行安裝指令，或下載官方的桌面版。
+
 ## v1.16.22
 
 - 修好 v1.16.21「手機傳檔」小卡打開時寬度變成一條細線、看不到 QR code 的問題。
