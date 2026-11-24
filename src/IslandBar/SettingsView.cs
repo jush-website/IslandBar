@@ -1174,7 +1174,7 @@ namespace IslandBar
 
         private static readonly Dictionary<string, string[]> Synonyms = new Dictionary<string, string[]>
         {
-            ["熱鍵"] = new[] { "快捷鍵" }, ["計時"] = new[] { "提醒", "專注" }, ["計時器"] = new[] { "提醒", "專注" }, ["電池"] = new[] { "電量" },
+            ["熱鍵"] = new[] { "快捷鍵" }, ["計時"] = new[] { "行程與提醒", "專注模式" }, ["計時器"] = new[] { "行程與提醒", "專注模式" }, ["電池"] = new[] { "電量" },
             ["藍牙"] = new[] { "電量", "耳機" }, ["耳機"] = new[] { "電量", "播放裝置" }, ["模型"] = new[] { "AI 大腦", "本機小模型" },
             ["ollama"] = new[] { "PAIR", "Ollama" }, ["翻譯"] = new[] { "翻譯" }, ["ocr"] = new[] { "螢幕識字", "文字辨識" },
             ["燈"] = new[] { "燈效" }, ["分頁"] = new[] { "展開時的分頁" }, ["傳檔"] = new[] { "手機傳檔" }, ["手機"] = new[] { "手機傳檔" },
@@ -1233,11 +1233,18 @@ namespace IslandBar
             var terms = q.Split(new[] { ' ', '　' }, StringSplitOptions.RemoveEmptyEntries)
                          .Select(t => new[] { t }.Concat(Synonyms.TryGetValue(t.ToLowerInvariant(), out var syn) ? syn : Array.Empty<string>()).ToArray()).ToList();
             bool Match(string text) => terms.All(alts => alts.Any(a => text.Contains(a, StringComparison.OrdinalIgnoreCase)));
-            // 同一個標題底下只列一次：標題本身符合優先，不然取第一個符合的句子
+            // 只用打的字（不含同義詞）比對：用來排前面
+            bool Exact(string text) => terms.All(alts => text.Contains(alts[0], StringComparison.OrdinalIgnoreCase));
+            int Score((string page, string title, string heading, string text) x) =>
+                Exact(x.heading) || Exact(x.title) ? 3 : Exact(x.text) ? 2 : Match(x.heading) ? 1 : 0;
+            // 同一個標題底下只列一次：標題本身符合優先，不然取第一個符合的句子；照符合程度排
             var hits = _index.Where(x => Match(x.text) || Match(x.heading))
                              .GroupBy(x => (x.page, x.heading))
-                             .Select(g => g.FirstOrDefault(x => Match(x.text)) is var m && m.text != null ? m : g.First())
-                             .Take(40).ToList();
+                             .Select(g => g.OrderByDescending(Score).First())
+                             .Select((x, i) => (x, i))
+                             .OrderByDescending(t => Score(t.x)).ThenBy(t => t.i)
+                             .Select(t => t.x)
+                             .Take(30).ToList();
 
             var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
             page.Children.Add(PageTitle($"搜尋「{q}」"));

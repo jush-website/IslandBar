@@ -118,10 +118,13 @@ namespace IslandBar
             _calendar.Events.Where(e => e.AllDay ? (e.Start.Date <= day && e.End.Date > day) : e.Start.Date == day)
                             .OrderBy(e => e.AllDay ? 0 : 1).ThenBy(e => e.Start).ToList();
 
+        /// <summary>一小時內寫「還有幾分」（不會跟時鐘時間搞混），更久的寫幾點</summary>
         private static string ReminderWhen(Reminder r)
         {
             var left = r.Due - DateTime.Now;
-            return left <= TimeSpan.FromHours(1) ? Countdown(left) : r.Due.ToString("HH:mm");
+            if (left <= TimeSpan.FromSeconds(60)) return $"{Math.Max(0, (int)Math.Ceiling(left.TotalSeconds))} 秒";
+            if (left <= TimeSpan.FromHours(1)) return $"{(int)Math.Ceiling(left.TotalMinutes)} 分";
+            return r.Due.Date == DateTime.Today ? r.Due.ToString("HH:mm") : "明 " + r.Due.ToString("HH:mm");
         }
 
         private static Grid RowGrid()
