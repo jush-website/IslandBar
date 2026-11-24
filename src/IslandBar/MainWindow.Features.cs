@@ -60,18 +60,19 @@ namespace IslandBar
         public void DebugExpand(string tab)
         {
             _collapseDelay.Stop();
+            SetMode(IslandMode.Expanded);   // 先展開再選分頁（展開時沒在放音樂會自動離開音樂分頁）
             switch (tab)
             {
                 case "shelf": TabShelf.Visibility = Visibility.Visible; TabShelf.IsChecked = true; break;
                 case "quick": TabQuick.IsChecked = true; break;
                 case "media": TabMedia.IsChecked = true; break;
-                case "quota": TabQuota.IsChecked = true; break;
+                case "quota": TabStats.IsChecked = true; SysViewQuota.IsChecked = true; break;
                 case "calendar": TabCalendar.IsChecked = true; break;
                 case "weather": TabWeather.IsChecked = true; break;
                 case "clip": TabClip.IsChecked = true; break;
-                default: TabStats.IsChecked = true; break;
+                default: TabStats.IsChecked = true; SysViewRes.IsChecked = true; break;
             }
-            SetMode(IslandMode.Expanded);
+            ApplyMode(true);
         }
 
         public void DebugTestRgb()

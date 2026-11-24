@@ -28,7 +28,7 @@ namespace IslandBar
                 Save(_hub.CurrentContent, Path.Combine(dir, "hub-chat-start.png"));
                 OpenSettings();
                 await Task.Delay(900);
-                foreach (var page in new[] { "appearance", "voice", "compact", "notify", "boost", "gpu", "weather", "widgets", "general" })
+                foreach (var page in SettingsView.Pages.Select(x => x.id))
                 {
                     _hub.ShowSettings(page);
                     await Task.Delay(1100);
@@ -41,6 +41,17 @@ namespace IslandBar
                 OpenSettings("compact", "點點顯示的項目");
                 await Task.Delay(1200);
                 Save(_hub.CurrentContent, Path.Combine(dir, "settings-jump-quota.png"));
+                OpenSettings("voice", "畫面重點摘要");   // 舊的分頁名稱要能轉到新的地方
+                await Task.Delay(1200);
+                Save(_hub.CurrentContent, Path.Combine(dir, "settings-jump-oldvoice.png"));
+                foreach (var q in new[] { "快捷鍵", "電量", "計時" })
+                {
+                    _hub.DebugSearch(q);
+                    await Task.Delay(1500);
+                    Save(_hub.CurrentContent, Path.Combine(dir, "settings-search-" + q + ".png"));
+                }
+                _hub.DebugSearch("");
+                await Task.Delay(500);
                 File.WriteAllText(Path.Combine(dir, "hub-size.txt"), $"settings {_hub.ActualWidth}x{_hub.ActualHeight}");
                 _hub.ShowChat();
                 await Task.Delay(800);
@@ -143,12 +154,32 @@ namespace IslandBar
                 }
                 _settings.DeviceBatteryStyle = "ring";
                 _window.DebugQuotaSample();
+                // 接下來：一個計時、一個提醒（測試完取消）
+                var upLog = new System.Text.StringBuilder();
+                var t1 = _window.Assistant?.AddTimer(TimeSpan.FromMinutes(12));
+                var t2 = _window.Assistant?.AddReminderAt(DateTime.Now.AddMinutes(95), "交報告給教授");
+                upLog.AppendLine($"reminders: {_window.Assistant?.Reminders.Count}; saved file: {File.Exists(Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), "reminders.json"))}");
+                foreach (var q in new[] { "20", "1.5 小時", "14:30", "下午3點", "3點半", "明天", "90分", "0" })
+                    upLog.AppendLine($"parse '{q}' → {(ReminderDialog.Parse(q) is DateTime pd ? pd.ToString("MM/dd HH:mm") : "(null)")}");
                 foreach (var tab in new[] { "media", "calendar", "weather", "quota", "stats", "clip", "quick" })
                 {
                     _window.DebugExpand(tab);
                     await Task.Delay(1500);
                     Save(_window.RootVisual, Path.Combine(dir, "island-root-" + tab + ".png"));
                 }
+                upLog.AppendLine($"compact timer: '{_window.DebugCompactTimer}'");
+                if (t1 != null) _window.Assistant.CancelReminder(t1);
+                if (t2 != null) _window.Assistant.CancelReminder(t2);
+                upLog.AppendLine($"after cancel: {_window.Assistant?.Reminders.Count}");
+                File.WriteAllText(Path.Combine(dir, "upcoming-test.txt"), upLog.ToString());
+                // 系統分頁：AI 額度不放左欄時，裡面多一個「AI 額度」
+                _settings.PinQuotaStrip = false;
+                _window.ApplySettings(_settings);
+                _window.DebugExpand("quota");
+                await Task.Delay(1500);
+                Save(_window.RootVisual, Path.Combine(dir, "island-root-system-quota.png"));
+                _settings.PinQuotaStrip = true;
+                _window.ApplySettings(_settings);
                 foreach (var tab in new[] { "shelf", "stats", "quick" })
                 {
                     _window.DebugExpand(tab);

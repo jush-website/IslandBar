@@ -44,6 +44,10 @@ namespace IslandBar
         private readonly ScrollViewer _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(30, 22, 30, 28) };
         private readonly DispatcherTimer _applyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         private string _page = "appearance";
+        private readonly Border _searchBox;
+        private readonly TextBox _searchInput;
+        private bool _searching, _clearingSearch;
+        private List<(string page, string title, string heading, string text)> _index;
 
         /// <summary>按「← 對話」</summary>
         public event Action BackRequested;
@@ -59,18 +63,45 @@ namespace IslandBar
         private static readonly Brush Good = Frozen(Color.FromRgb(0x30, 0xD1, 0x58));
         private static readonly Brush Bad = Frozen(Color.FromRgb(0xFF, 0x6B, 0x6B));
 
-        public static readonly (string id, string glyph, string title)[] Pages =
+        /// <summary>設定的分頁（照用途分組；group 是左邊的小標題）</summary>
+        public static readonly (string id, string glyph, string title, string group)[] Pages =
         {
-            ("appearance", "\uE790", "外觀"),
-            ("voice", "\uE720", "語音助理"),
-            ("compact", "\uE8A1", "收合內容"),
-            ("notify", "\uEA8F", "通知與提示"),
-            ("boost", "\uEC4A", "一鍵加速"),
-            ("gpu", "\uE7F4", "GPU 與 PAIR"),
-            ("weather", "\uE9CA", "天氣與行程"),
-            ("widgets", "\uE8A9", "桌面小工具"),
-            ("general", "\uE713", "一般")
+            ("appearance", "\uE790", "外觀與位置", "動態島"),
+            ("island", "\uE8A1", "動態島內容", "動態島"),
+            ("notify", "\uEA8F", "通知", "動態島"),
+            ("devices", "\uE83F", "裝置電量", "動態島"),
+            ("assistant", "\uE720", "語音助理", "AI"),
+            ("ai", "\uE99A", "AI 模型", "AI"),
+            ("aitools", "\uE945", "Claude 與 Codex", "AI"),
+            ("tools", "\uE765", "快捷鍵與工具", "工具"),
+            ("system", "\uEC4A", "系統與加速", "工具"),
+            ("weather", "\uE9CA", "天氣與行程", "工具"),
+            ("widgets", "\uE8A9", "桌面小工具", "工具"),
+            ("general", "\uE713", "一般", "")
         };
+
+        /// <summary>舊的分頁名稱（其他地方的齒輪、錯誤訊息還在用）→ 新的分頁</summary>
+        public static (string id, string anchor) Resolve(string id, string anchor)
+        {
+            anchor ??= "";
+            switch (id)
+            {
+                case "voice":
+                    if (anchor.StartsWith("畫面重點摘要")) return ("tools", "畫面重點摘要");
+                    if (anchor.StartsWith("AI 大腦") || anchor.StartsWith("本機小模型") || anchor.StartsWith("OpenJarvis")) return ("ai", anchor);
+                    return ("assistant", anchor);
+                case "compact": return ("island", anchor);
+                case "notify":
+                    if (anchor.StartsWith("無線裝置電量")) return ("devices", null);
+                    if (anchor.StartsWith("AI 任務") || anchor.StartsWith("Claude 額度")) return ("aitools", anchor);
+                    if (anchor.StartsWith("剪貼簿")) return ("tools", "剪貼簿歷史");
+                    return ("notify", anchor);
+                case "boost": return ("system", string.IsNullOrEmpty(anchor) ? "一鍵加速" : anchor);
+                case "gpu": return ("system", string.IsNullOrEmpty(anchor) ? "GPU 與 PAIR" : anchor);
+                case "general" when anchor.StartsWith("手機傳檔"): return ("tools", "手機傳檔");
+            }
+            return (id, anchor.Length == 0 ? null : anchor);
+        }
 
         public SettingsView(SettingsHost host)
         {
@@ -85,6 +116,29 @@ namespace IslandBar
             Children.Add(side);
             Grid.SetColumn(_scroll, 1);
             Children.Add(_scroll);
+
+            // 搜尋設定：打字就列出符合的設定，點一下跳過去
+            _searchInput = new TextBox
+            {
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Brushes.White, CaretBrush = Accent,
+                Padding = new Thickness(26, 6, 8, 6), FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center
+            };
+            var hint = new TextBlock { Text = "搜尋設定（例如：快捷鍵、電量）", Foreground = Dim, FontSize = 12.5, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(28, 0, 0, 0) };
+            var icon = new TextBlock { Text = "\uE721", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 12, Foreground = Dim, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0) };
+            var sg = new Grid();
+            sg.Children.Add(hint);
+            sg.Children.Add(icon);
+            sg.Children.Add(_searchInput);
+            _searchBox = new Border { Background = Card, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 0, 6), Child = sg };
+            _searchInput.TextChanged += (s, e) =>
+            {
+                hint.Visibility = _searchInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+                if (_clearingSearch) return;
+                string q = _searchInput.Text.Trim();
+                if (q.Length == 0) { if (_searching) { _searching = false; ShowSection(_page); } return; }
+                ShowSearch(q);
+            };
+            _searchInput.KeyDown += (s, e) => { if (e.Key == Key.Escape) ClearSearch(); };
             ShowSection(_page);
         }
 
@@ -99,7 +153,8 @@ namespace IslandBar
         /// <summary>開啟到指定分頁；anchor＝捲到那一頁裡標題是這個字的地方</summary>
         public void ShowPage(string id, string anchor = null)
         {
-            ShowSection(id ?? _page);
+            (id, anchor) = Resolve(id ?? _page, anchor);
+            ShowSection(id);
             if (!string.IsNullOrEmpty(anchor)) ScrollToAnchor(anchor);
         }
 
@@ -128,6 +183,7 @@ namespace IslandBar
         private void ShowSection(string id)
         {
             _page = id;
+            if (_searching) ClearSearch(rebuild: false);
             _nav.Children.Clear();
             var back = new Border { Padding = new Thickness(10, 8, 10, 8), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 0, 12), Cursor = Cursors.Hand, Background = Brushes.Transparent };
             var bsp = new StackPanel { Orientation = Orientation.Horizontal };
@@ -140,23 +196,42 @@ namespace IslandBar
             _nav.Children.Add(back);
             _nav.Children.Add(new TextBlock { Text = "設定", FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10, 0, 0, 2) });
             _nav.Children.Add(new TextBlock { Text = "IslandBar v" + UpdateService.CurrentVersion.ToString(3), Foreground = Dim, FontSize = 11, Margin = new Thickness(10, 0, 0, 14) });
-            foreach (var (pid, glyph, title) in Pages) _nav.Children.Add(NavItem(pid, glyph, title));
+            _nav.Children.Add(_searchBox);
+            string lastGroup = null;
+            foreach (var (pid, glyph, title, group) in Pages)
+            {
+                if (group != lastGroup)
+                {
+                    lastGroup = group;
+                    if (group.Length > 0) _nav.Children.Add(new TextBlock { Text = group, Foreground = Dim, FontSize = 11, Margin = new Thickness(12, 10, 0, 2) });
+                    else _nav.Children.Add(new Border { Height = 1, Background = Card, Margin = new Thickness(10, 10, 10, 6) });
+                }
+                _nav.Children.Add(NavItem(pid, glyph, title));
+            }
 
             var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
+            BuildPage(id, page);
+            _scroll.Content = page;
+            _scroll.ScrollToTop();
+        }
+
+        private void BuildPage(string id, StackPanel page)
+        {
             switch (id)
             {
-                case "compact": BuildCompact(page); break;
+                case "island": BuildIsland(page); break;
                 case "notify": BuildNotify(page); break;
-                case "boost": BuildBoost(page); break;
-                case "voice": BuildVoice(page); break;
-                case "gpu": BuildGpu(page); break;
+                case "devices": BuildDevices(page); break;
+                case "assistant": BuildAssistant(page); break;
+                case "ai": BuildAi(page); break;
+                case "aitools": BuildAiTools(page); break;
+                case "tools": BuildTools(page); break;
+                case "system": BuildSystem(page); break;
                 case "weather": BuildWeather(page); break;
                 case "widgets": BuildWidgets(page); break;
                 case "general": BuildGeneral(page); break;
                 default: _page = "appearance"; BuildAppearance(page); break;
             }
-            _scroll.Content = page;
-            _scroll.ScrollToTop();
         }
 
         private FrameworkElement NavItem(string id, string glyph, string title)
@@ -190,7 +265,7 @@ namespace IslandBar
 
         private void BuildAppearance(StackPanel p)
         {
-            p.Children.Add(PageTitle("外觀"));
+            p.Children.Add(PageTitle("外觀與位置"));
             p.Children.Add(Heading("位置"));
             p.Children.Add(Segmented(new[] { ("上方置中", IslandPosition.TopCenter), ("左上", IslandPosition.TopLeft), ("右上", IslandPosition.TopRight), ("左側", IslandPosition.Left), ("右側", IslandPosition.Right) },
                 S.AlongEdge == null ? S.Position : (IslandPosition?)null, v => { S.Position = v; S.AlongEdge = null; Changed(); }));
@@ -228,12 +303,19 @@ namespace IslandBar
         //  收合內容
         // ================================================================
 
-        private void BuildCompact(StackPanel p)
+        private void BuildIsland(StackPanel p)
         {
-            p.Children.Add(PageTitle("收合內容"));
-            p.Children.Add(Check("顯示 AI 額度點點", S.ShowQuotaDots, v => { S.ShowQuotaDots = v; Changed(); }));
-            p.Children.Add(Check("播放音樂時顯示歌名", S.ShowCompactTitle, v => { S.ShowCompactTitle = v; Changed(); }));
+            p.Children.Add(PageTitle("動態島內容"));
+            p.Children.Add(Heading("展開時的分頁", 4));
+            p.Children.Add(Note("勾選要顯示的分頁，用 ↑↓ 排順序。沒在放音樂時，音樂分頁會自動排到最後；暫存架有檔案時才會出現。"));
+            p.Children.Add(TabEditor());
             p.Children.Add(Check("展開時，左邊固定顯示 AI 額度（面板往左延伸）", S.PinQuotaStrip, v => { S.PinQuotaStrip = v; Changed(); }));
+            p.Children.Add(Note("不勾的話，AI 額度在「系統」分頁裡的「AI 額度」看。"));
+
+            p.Children.Add(Heading("收合時", 20));
+            p.Children.Add(Check("顯示 AI 額度、系統資源的點點", S.ShowQuotaDots, v => { S.ShowQuotaDots = v; Changed(); }));
+            p.Children.Add(Check("播放音樂時顯示歌名", S.ShowCompactTitle, v => { S.ShowCompactTitle = v; Changed(); }));
+            p.Children.Add(Note("計時、提醒、專注模式、下一個行程快到時，收合時也會顯示倒數。"));
 
             p.Children.Add(Heading("點點顯示的項目", 18));
             var labels = _h.Window?.AllItemLabels ?? new List<(string group, string label)>();
@@ -255,7 +337,7 @@ namespace IslandBar
             }
             p.Children.Add(wrap);
             var all = MakeButton("全部顯示", false);
-            all.Click += (s, e) => { S.HiddenItems.Clear(); S.Save(); _h.Window?.RefreshItemsFromSettings(); ShowSection("compact"); };
+            all.Click += (s, e) => { S.HiddenItems.Clear(); S.Save(); _h.Window?.RefreshItemsFromSettings(); ShowSection("island"); };
             p.Children.Add(all);
         }
 
@@ -265,7 +347,7 @@ namespace IslandBar
 
         private void BuildNotify(StackPanel p)
         {
-            p.Children.Add(PageTitle("通知與提示"));
+            p.Children.Add(PageTitle("通知"));
 
             p.Children.Add(Heading("聊天訊息燈效邊框"));
             p.Children.Add(Note("這些程式有新訊息時（工作列按鈕閃爍、或跳出自己的通知小視窗），動態島會亮起燈效邊框（顏色可以自訂）；打開那個程式或點一下動態島就停。"));
@@ -290,10 +372,16 @@ namespace IslandBar
             p.Children.Add(Check("網路中斷、恢復、換網路時提示", S.NetworkNotify, v => { S.NetworkNotify = v; Changed(); }));
             p.Children.Add(Check("耳機等播放裝置連上／中斷時提示", S.DeviceConnectHud, v => { S.DeviceConnectHud = v; Changed(); }));
             p.Children.Add(Check("麥克風／鏡頭使用中指示燈", S.MicCamIndicator, v => { S.MicCamIndicator = v; Changed(); }));
-            p.Children.Add(Check("剪貼簿歷史（只存在記憶體）", S.ClipboardHistory, v => { S.ClipboardHistory = v; Changed(); }));
-            p.Children.Add(Check("剪貼簿歷史：點一下直接貼上（右鍵＝只複製；取消＝點一下只複製）", S.ClipClickPaste, v => { S.ClipClickPaste = v; Changed(); }));
 
-            p.Children.Add(Heading("無線裝置電量", 20));
+        }
+
+        // ================================================================
+        //  裝置電量
+        // ================================================================
+
+        private void BuildDevices(StackPanel p)
+        {
+            p.Children.Add(PageTitle("裝置電量"));
             p.Children.Add(Note("藍牙耳機、滑鼠、鍵盤、手把等的剩餘電量，顯示在動態島旁的笑臉旁邊（收合時也看得到）；沒有連線的無線裝置就不顯示。Logitech 的滑鼠鍵盤（接收器或藍牙）直接問裝置，最準；其他藍牙裝置用 Windows「藍牙與裝置」裡看得到的電量（裝置有回報才有）；Xbox 無線手把只有大概的等級。裝置睡著時先顯示上次的電量（變淡）；充飽了會打勾。"));
             p.Children.Add(Check("顯示無線裝置電量", S.DeviceBatteryShow, v => { S.DeviceBatteryShow = v; Changed(); }));
             p.Children.Add(Segmented(new[] { ("圓環", "ring"), ("數字", "number") }.Select(x => (x.Item1, x.Item2 == "ring" ? 0 : 1)),
@@ -316,7 +404,17 @@ namespace IslandBar
             };
             p.Children.Add(diag);
 
-            p.Children.Add(Heading("AI 任務完成通知", 20));
+        }
+
+        // ================================================================
+        //  Claude 與 Codex
+        // ================================================================
+
+        private void BuildAiTools(StackPanel p)
+        {
+            p.Children.Add(PageTitle("Claude 與 Codex"));
+            p.Children.Add(Note("Claude Code、Codex、Antigravity 的額度顯示在動態島左邊（或「系統」分頁），收合時是點點。要登入或重新整理額度：系統匣 →「AI 帳號」。顯示方式在「動態島內容」裡調。"));
+            p.Children.Add(Heading("AI 任務完成通知", 4));
             p.Children.Add(Note("Claude Code／Codex 做完或需要你回應時，在動態島上提示。會在它們的設定檔加上通知（原檔會先備份），新開的視窗才生效。專注模式中只記數量，結束時一次告訴你。"));
             p.Children.Add(HookCheck("Claude Code 完成時通知我", HookBridge.IsClaudeInstalled, () => HookBridge.InstallClaude(), HookBridge.UninstallClaude));
             p.Children.Add(HookCheck("Codex 完成時通知我", HookBridge.IsCodexInstalled, () => HookBridge.InstallCodex(), HookBridge.UninstallCodex));
@@ -442,9 +540,16 @@ namespace IslandBar
         //  一鍵加速
         // ================================================================
 
+        private void BuildSystem(StackPanel p)
+        {
+            p.Children.Add(PageTitle("系統與加速"));
+            BuildBoost(p);
+            BuildGpu(p);
+        }
+
         private void BuildBoost(StackPanel p)
         {
-            p.Children.Add(PageTitle("一鍵加速"));
+            p.Children.Add(Heading("一鍵加速", 4));
             p.Children.Add(Note("像手機的加速工具：整理記憶體、清掉沒用的暫存檔。只清不會影響使用的東西，不會碰你的文件、桌面、下載、資源回收筒、瀏覽器資料，也不會關掉任何程式。展開動態島 → 快速設定 →「一鍵加速」，或系統匣選單也能用。"));
 
             var (pct, used, total) = Services.CleanupService.Memory();
@@ -492,13 +597,13 @@ namespace IslandBar
         private TextBlock _sttStatus, _llmStatus, _brainStatus;
         private Button _sttButton, _llmButton;
 
-        private void BuildVoice(StackPanel p)
+        private void BuildAssistant(StackPanel p)
         {
             var a = _h.Window?.Assistant;
             p.Children.Add(PageTitle("語音助理"));
             p.Children.Add(Note("按住說話鍵說話，放開就執行：開程式、放音樂、調音量、計時提醒、查天氣和 AI 額度…。語音辨識在你的電腦上跑（只用 CPU），聽不懂的說法交給 PAIR 叢集或本機小模型，不需要任何雲端帳號。麥克風只有按住時才會打開。"));
             p.Children.Add(Check("啟用語音助理", S.AssistantEnabled, v => { S.AssistantEnabled = v; Changed(); }));
-            p.Children.Add(Check("動態島旁邊顯示對話按鈕（表情圖示）", S.ShowChatButton, v => { S.ShowChatButton = v; Changed(); }));
+            p.Children.Add(PageLink("聽不懂的說法要交給哪個 AI：到「AI 模型」設定 ›", "ai", null));
             var open = MakeButton("回到對話", false);
             open.Click += (s, e) => BackRequested?.Invoke();
             p.Children.Add(open);
@@ -594,8 +699,39 @@ namespace IslandBar
             p.Children.Add(Check("辨識模型一直留在記憶體（反應快一點；不勾的話閒置 10 分鐘會釋放，約 300 MB）", S.AssistantKeepLoaded, v => { S.AssistantKeepLoaded = v; Changed(); }));
             UpdateSttUi();
 
+            // ---- 語音回答 ----
+            p.Children.Add(Heading("語音回答", 20));
+            p.Children.Add(Check("用語音念出回覆（Windows 內建語音）", S.AssistantSpeak, v => { S.AssistantSpeak = v; Changed(); }));
+            p.Children.Add(Check("開始／結束說話時發出提示音", S.AssistantSounds, v => { S.AssistantSounds = v; Changed(); }));
+            var voices = Services.Voice.Speaker.Voices();
+            var voiceBox = new ComboBox { MinWidth = 320, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+            voiceBox.Items.Add(new ComboBoxItem { Content = "自動（優先中文（台灣））", Tag = "" });
+            foreach (var (name, lang) in voices.OrderBy(v => v.lang.StartsWith("zh-TW", StringComparison.OrdinalIgnoreCase) ? 0 : v.lang.StartsWith("zh") ? 1 : 2))
+                voiceBox.Items.Add(new ComboBoxItem { Content = $"{name}（{lang}）", Tag = name });
+            voiceBox.SelectedIndex = Math.Max(0, voiceBox.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => (string)i.Tag == (S.AssistantVoice ?? "")));
+            voiceBox.SelectionChanged += (s, e) => { S.AssistantVoice = (voiceBox.SelectedItem as ComboBoxItem)?.Tag as string ?? ""; Changed(); };
+            p.Children.Add(Labeled("聲音", voiceBox));
+            if (!voices.Any(v => v.lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase)))
+                p.Children.Add(Note("⚠ 這台電腦沒有中文語音：Windows 設定 → 時間與語言 → 語音 → 新增語音 →「中文（台灣）」。"));
+            p.Children.Add(Heading("語速", 8));
+            p.Children.Add(Slider(0.6, 2.0, S.AssistantRate, v => { S.AssistantRate = Math.Round(v, 1); Changed(); }, v => $"{v:0.0}×"));
+            var test = MakeButton("試聽", false);
+            test.Click += (s, e) =>
+            {
+                if (a == null) return;
+                a.ApplySettings();
+                _ = a.Speaker.SpeakAsync("你好，我是 IslandBar 的語音助理。按住說話鍵就可以叫我。");
+            };
+            p.Children.Add(test);
+        }
+
+        private void BuildAi(StackPanel p)
+        {
+            var a = _h.Window?.Assistant;
+            p.Children.Add(PageTitle("AI 模型"));
+            p.Children.Add(Note("語音助理聽不懂的說法、對話、畫面摘要／翻譯，都交給這裡的 AI。全部在你的電腦或 PAIR 叢集上跑，不需要雲端帳號。"));
             // ---- AI 大腦 ----
-            p.Children.Add(Heading("AI 大腦（聽不懂的說法交給它）", 20));
+            p.Children.Add(Heading("AI 大腦", 8));
             _brainStatus = new TextBlock { FontSize = 13, Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0), Text = "目前：偵測中…" };
             p.Children.Add(Segmented(new[] { ("自動（PAIR → 本機）", 0), ("只用 PAIR／Ollama", 1), ("只用本機小模型", 2), ("關閉", 3) },
                 S.AssistantBrain switch { "pair" => 1, "local" => 2, "off" => 3, _ => 0 },
@@ -692,56 +828,16 @@ namespace IslandBar
             p.Children.Add(Note("會從 llama.cpp 官方 GitHub 下載 llama-server（約 24 MB），模型從 Hugging Face 下載。用到時才在背景啟動，閒置 10 分鐘自動關掉、把記憶體還回去。"));
             UpdateLlmUi();
 
+            _ = RefreshBrainStatus();
+        }
+
+        private void BuildScreenAi(StackPanel p)
+        {
             // ---- 畫面重點摘要與翻譯 ----
-            p.Children.Add(Heading("畫面重點摘要與翻譯", 20));
+            p.Children.Add(Heading("畫面重點摘要與翻譯", 24));
             p.Children.Add(Note("按快捷鍵擷取目前的視窗，用 Windows 內建的文字辨識讀出畫面上的字，交給 PAIR 或本機小模型：摘要＝一句話＋幾點重點；翻譯＝自動辨識原文的語言，翻成繁體中文（也可以改成中英互翻或翻成英文）。結果顯示在動態島下方，卡片上可以直接切換摘要／翻譯、複製，或按「追問」帶著畫面內容繼續問；再按一次同一組快捷鍵關掉。只傳辨識出來的文字、不傳圖片；用 PAIR／本機模型時資料不出你的電腦／叢集。"));
             p.Children.Add(Check("開啟畫面摘要與翻譯的快捷鍵", S.ScreenSummaryEnabled, v => { S.ScreenSummaryEnabled = v; Changed(); }));
-            FrameworkElement HotkeyRow(Func<string> get, Action<string> set, Func<string> status)
-            {
-                var row = new WrapPanel();
-                var btn = MakeButton(HotkeyText.Pretty(get()), false);
-                btn.Margin = new Thickness(0, 8, 10, 0);
-                var st = new TextBlock { Foreground = DarkUi.Warn, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
-                bool capturing = false;
-                void ShowStatus() => Dispatcher.BeginInvoke(new Action(async () =>
-                {
-                    await System.Threading.Tasks.Task.Delay(600);   // 設定套用有一點延遲
-                    st.Text = status() ?? "";
-                }));
-                void End(string newKey)
-                {
-                    if (!capturing) return;
-                    capturing = false;
-                    if (newKey != null) { set(newKey); Changed(); }
-                    btn.Content = HotkeyText.Pretty(get());
-                    _h.Window?.SuspendSummaryHotkey(false);
-                    ShowStatus();
-                }
-                btn.Click += (s, e) =>
-                {
-                    capturing = true;
-                    st.Text = "";
-                    btn.Content = "請按新的快捷鍵…（Esc 取消）";
-                    _h.Window?.SuspendSummaryHotkey(true);
-                    btn.Focus();
-                };
-                btn.PreviewKeyDown += (s, e) =>
-                {
-                    if (!capturing) return;
-                    e.Handled = true;
-                    var key = e.Key == Key.System ? e.SystemKey : e.Key;
-                    if (key == Key.Escape) { End(null); return; }
-                    string t = HotkeyText.Format(Keyboard.Modifiers, key);
-                    if (t != null) End(t);   // 還只按著 Ctrl／Alt 時繼續等
-                };
-                btn.LostKeyboardFocus += (s, e) => End(null);
-                row.Children.Add(btn);
-                row.Children.Add(st);
-                ShowStatus();
-                return row;
-            }
-            p.Children.Add(Labeled("摘要重點的快捷鍵（按一下按鈕再按想要的組合）", HotkeyRow(() => S.ScreenSummaryHotkey, v => S.ScreenSummaryHotkey = v, () => _h.Window?.SummaryHotkeyStatus)));
-            p.Children.Add(Labeled("翻譯的快捷鍵", HotkeyRow(() => S.ScreenTranslateHotkey, v => S.ScreenTranslateHotkey = v, () => _h.Window?.TranslateHotkeyStatus)));
+            p.Children.Add(Note("快捷鍵在上面的「快捷鍵一覽」改。"));
             p.Children.Add(Check("有選取文字時，只摘要／翻譯選取的文字（沒選取才看整個視窗）", S.ScreenAiUseSelection, v => { S.ScreenAiUseSelection = v; Changed(); }));
             p.Children.Add(Labeled("翻譯成", Segmented(new[] { ("自動辨識 → 繁體中文", 0), ("中英互翻", 1), ("→ 英文", 2) },
                 S.ScreenTranslateTarget switch { "auto" => 1, "en" => 2, _ => 0 },
@@ -751,7 +847,7 @@ namespace IslandBar
             p.Children.Add(Segmented(new[] { ("自動（PAIR → 本機）", 0), ("只用 PAIR／Ollama", 1), ("只用本機小模型", 2) },
                 S.ScreenSummaryBrain switch { "pair" => 1, "local" => 2, _ => 0 },
                 v => { S.ScreenSummaryBrain = v switch { 1 => "pair", 2 => "local", _ => "auto" }; Changed(); }));
-            p.Children.Add(Note("PAIR／Ollama 的模型、網址、本機小模型跟上面的 AI 大腦共用設定。本機小模型比較慢、能看的字也比較少（摘要看前 2000 字、翻譯看前 1200 字，約十幾秒到一分鐘）；PAIR 快很多、也能看比較長的內容。文字辨識用的是 Windows 的語言套件，中文和英文都看得懂。"));
+            p.Children.Add(Note("用哪個 AI 跟「AI 模型」那頁共用設定。本機小模型比較慢、能看的字也比較少（摘要看前 2000 字、翻譯看前 1200 字，約十幾秒到一分鐘）；PAIR 快很多、也能看比較長的內容。文字辨識用的是 Windows 的語言套件，中文和英文都看得懂。"));
             var sumTryRow = new WrapPanel();
             var trySum = MakeButton("試試摘要（這個設定畫面）", false);
             trySum.Margin = new Thickness(0, 8, 0, 0);
@@ -763,32 +859,51 @@ namespace IslandBar
             sumTryRow.Children.Add(trySum);
             sumTryRow.Children.Add(tryTr);
             p.Children.Add(sumTryRow);
+        }
 
-            // ---- 語音回答 ----
-            p.Children.Add(Heading("語音回答", 20));
-            p.Children.Add(Check("用語音念出回覆（Windows 內建語音）", S.AssistantSpeak, v => { S.AssistantSpeak = v; Changed(); }));
-            p.Children.Add(Check("開始／結束說話時發出提示音", S.AssistantSounds, v => { S.AssistantSounds = v; Changed(); }));
-            var voices = Services.Voice.Speaker.Voices();
-            var voiceBox = new ComboBox { MinWidth = 320, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
-            voiceBox.Items.Add(new ComboBoxItem { Content = "自動（優先中文（台灣））", Tag = "" });
-            foreach (var (name, lang) in voices.OrderBy(v => v.lang.StartsWith("zh-TW", StringComparison.OrdinalIgnoreCase) ? 0 : v.lang.StartsWith("zh") ? 1 : 2))
-                voiceBox.Items.Add(new ComboBoxItem { Content = $"{name}（{lang}）", Tag = name });
-            voiceBox.SelectedIndex = Math.Max(0, voiceBox.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => (string)i.Tag == (S.AssistantVoice ?? "")));
-            voiceBox.SelectionChanged += (s, e) => { S.AssistantVoice = (voiceBox.SelectedItem as ComboBoxItem)?.Tag as string ?? ""; Changed(); };
-            p.Children.Add(Labeled("聲音", voiceBox));
-            if (!voices.Any(v => v.lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase)))
-                p.Children.Add(Note("⚠ 這台電腦沒有中文語音：Windows 設定 → 時間與語言 → 語音 → 新增語音 →「中文（台灣）」。"));
-            p.Children.Add(Heading("語速", 8));
-            p.Children.Add(Slider(0.6, 2.0, S.AssistantRate, v => { S.AssistantRate = Math.Round(v, 1); Changed(); }, v => $"{v:0.0}×"));
-            var test = MakeButton("試聽", false);
-            test.Click += (s, e) =>
+        private FrameworkElement HotkeyRow(Func<string> get, Action<string> set, Func<string> status)
+        {
+            var row = new WrapPanel();
+            var btn = MakeButton(HotkeyText.Pretty(get()), false);
+            btn.Margin = new Thickness(0, 8, 10, 0);
+            var st = new TextBlock { Foreground = DarkUi.Warn, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
+            bool capturing = false;
+            void ShowStatus() => Dispatcher.BeginInvoke(new Action(async () =>
             {
-                if (a == null) return;
-                a.ApplySettings();
-                _ = a.Speaker.SpeakAsync("你好，我是 IslandBar 的語音助理。按住說話鍵就可以叫我。");
+                await System.Threading.Tasks.Task.Delay(600);   // 設定套用有一點延遲
+                st.Text = status() ?? "";
+            }));
+            void End(string newKey)
+            {
+                if (!capturing) return;
+                capturing = false;
+                if (newKey != null) { set(newKey); Changed(); }
+                btn.Content = HotkeyText.Pretty(get());
+                _h.Window?.SuspendSummaryHotkey(false);
+                ShowStatus();
+            }
+            btn.Click += (s, e) =>
+            {
+                capturing = true;
+                st.Text = "";
+                btn.Content = "請按新的快捷鍵…（Esc 取消）";
+                _h.Window?.SuspendSummaryHotkey(true);
+                btn.Focus();
             };
-            p.Children.Add(test);
-            _ = RefreshBrainStatus();
+            btn.PreviewKeyDown += (s, e) =>
+            {
+                if (!capturing) return;
+                e.Handled = true;
+                var key = e.Key == Key.System ? e.SystemKey : e.Key;
+                if (key == Key.Escape) { End(null); return; }
+                string t = HotkeyText.Format(Keyboard.Modifiers, key);
+                if (t != null) End(t);   // 還只按著 Ctrl／Alt 時繼續等
+            };
+            btn.LostKeyboardFocus += (s, e) => End(null);
+            row.Children.Add(btn);
+            row.Children.Add(st);
+            ShowStatus();
+            return row;
         }
 
         private async Task RefreshBrainStatus()
@@ -801,7 +916,7 @@ namespace IslandBar
 
         private void OnVoiceDownload(Services.Voice.VoiceDownloads.Job job)
         {
-            if (_page != "voice") return;
+            if (_page != "assistant" && _page != "ai") return;
             if (job.Key == "stt") UpdateSttUi();
             else UpdateLlmUi();
             if (!job.Running && job.Error == null) { _h.Window?.Assistant?.ApplySettings(); _ = RefreshBrainStatus(); }
@@ -873,7 +988,7 @@ namespace IslandBar
 
         private void BuildGpu(StackPanel p)
         {
-            p.Children.Add(PageTitle("GPU 與 PAIR"));
+            p.Children.Add(Heading("GPU 與 PAIR", 28));
             p.Children.Add(Heading("NVIDIA PAIR"));
             p.Children.Add(Check("NVIDIA PAIR 監控（有安裝 PAIR 的電腦才需要開）", S.PairMonitor, v => _h.SetPair?.Invoke(v)));
             p.Children.Add(Note("顯示叢集裡每台電腦的 VRAM、正在跑的模型，本機開始／結束推論時提示。"));
@@ -969,7 +1084,56 @@ namespace IslandBar
             row.Children.Add(folder);
             p.Children.Add(row);
             p.Children.Add(Note("其他少用的設定可以直接編輯設定資料夾裡的 settings.json，存檔後在系統匣選「重新載入設定」。"));
+        }
 
+        // ================================================================
+        //  快捷鍵與工具
+        // ================================================================
+
+        private void BuildTools(StackPanel p)
+        {
+            p.Children.Add(PageTitle("快捷鍵與工具"));
+            p.Children.Add(Heading("快捷鍵一覽", 4));
+            p.Children.Add(Note("按一下按鈕，再按想要的組合（Esc 取消）。被其他程式佔用時會顯示提醒。"));
+            var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            void Row(string name, string desc, FrameworkElement control)
+            {
+                int r = grid.RowDefinitions.Count;
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var left = new StackPanel { Margin = new Thickness(0, 10, 12, 0) };
+                left.Children.Add(new TextBlock { Text = name, FontSize = 13.5 });
+                left.Children.Add(new TextBlock { Text = desc, Foreground = Dim, FontSize = 11.5, TextWrapping = TextWrapping.Wrap });
+                Grid.SetRow(left, r);
+                grid.Children.Add(left);
+                control.VerticalAlignment = VerticalAlignment.Top;
+                Grid.SetRow(control, r);
+                Grid.SetColumn(control, 1);
+                grid.Children.Add(control);
+            }
+            var talk = new WrapPanel();
+            talk.Children.Add(new Border
+            {
+                Background = Card, CornerRadius = new CornerRadius(8), Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 8, 10, 0),
+                Child = new TextBlock { Text = Services.Voice.PushToTalkKey.KeyName(S.AssistantKey), FontWeight = FontWeights.SemiBold }
+            });
+            var talkLink = PageLink("到「語音助理」換 ›", "assistant", "說話鍵");
+            talkLink.Margin = new Thickness(0, 12, 0, 0);
+            talk.Children.Add(talkLink);
+            Row("說話鍵（按住說話）", "語音助理：按住說、放開就執行", talk);
+            Row("畫面重點摘要", "目前視窗（或選取的文字）的重點", HotkeyRow(() => S.ScreenSummaryHotkey, v => S.ScreenSummaryHotkey = v, () => _h.Window?.SummaryHotkeyStatus));
+            Row("畫面翻譯", "目前視窗（或選取的文字）翻成中文", HotkeyRow(() => S.ScreenTranslateHotkey, v => S.ScreenTranslateHotkey = v, () => _h.Window?.TranslateHotkeyStatus));
+            Row("螢幕識字", "框選畫面上的一塊，把字複製下來", HotkeyRow(() => S.OcrHotkey, v => S.OcrHotkey = v, () => _h.Window?.OcrHotkeyStatus));
+            p.Children.Add(grid);
+            p.Children.Add(Note("動態島上：滾輪＝音量；Ctrl＋滾輪＝大小、Alt＋滾輪＝粗細、Shift＋滾輪＝寬度。把檔案拖到動態島＝格式轉換輪盤（也能暫存、傳到手機）。"));
+
+            BuildScreenAi(p);
+
+            p.Children.Add(Heading("剪貼簿歷史", 24));
+            p.Children.Add(Note("最近複製的 15 筆（文字和圖片），在動態島的「剪貼簿」分頁。只存在記憶體，關掉就清空；密碼管理器複製的不會記。"));
+            p.Children.Add(Check("記錄剪貼簿歷史", S.ClipboardHistory, v => { S.ClipboardHistory = v; Changed(); }));
+            p.Children.Add(Check("點一下直接貼到剛剛在用的程式（右鍵＝只複製；不勾＝點一下只複製）", S.ClipClickPaste, v => { S.ClipClickPaste = v; Changed(); }));
             // ---- 手機傳檔 ----
             p.Children.Add(Heading("手機傳檔", 24));
             p.Children.Add(Note("手機和電腦連同一個 Wi-Fi，在動態島「快速設定 → 手機傳檔」（或系統匣、或把檔案拖到動態島選「手機」）打開 QR code，手機相機掃一下就能互傳照片、檔案和文字，不用線、不用裝 App。只在區域網路裡傳，網址每次都不一樣，10 分鐘沒動作自動關閉。第一次用時 Windows 會問防火牆，請允許「私人網路」。"));
@@ -1003,6 +1167,193 @@ namespace IslandBar
         // ================================================================
         //  小元件
         // ================================================================
+
+        // ================================================================
+        //  搜尋
+        // ================================================================
+
+        private static readonly Dictionary<string, string[]> Synonyms = new Dictionary<string, string[]>
+        {
+            ["熱鍵"] = new[] { "快捷鍵" }, ["計時"] = new[] { "提醒", "專注" }, ["計時器"] = new[] { "提醒", "專注" }, ["電池"] = new[] { "電量" },
+            ["藍牙"] = new[] { "電量", "耳機" }, ["耳機"] = new[] { "電量", "播放裝置" }, ["模型"] = new[] { "AI 大腦", "本機小模型" },
+            ["ollama"] = new[] { "PAIR", "Ollama" }, ["翻譯"] = new[] { "翻譯" }, ["ocr"] = new[] { "螢幕識字", "文字辨識" },
+            ["燈"] = new[] { "燈效" }, ["分頁"] = new[] { "展開時的分頁" }, ["傳檔"] = new[] { "手機傳檔" }, ["手機"] = new[] { "手機傳檔" },
+            ["額度"] = new[] { "AI 額度", "額度" }, ["clipboard"] = new[] { "剪貼簿" }, ["位置"] = new[] { "位置", "螢幕" }
+        };
+
+        public void DebugSearch(string q) => _searchInput.Text = q;
+
+        private void ClearSearch(bool rebuild = true)
+        {
+            _clearingSearch = true;
+            _searchInput.Text = "";
+            _clearingSearch = false;
+            bool was = _searching;
+            _searching = false;
+            if (rebuild && was) ShowSection(_page);
+        }
+
+        /// <summary>把每一頁都建一次（不顯示），記下每個標題底下有哪些字</summary>
+        private void EnsureIndex()
+        {
+            if (_index != null) return;
+            _index = new List<(string, string, string, string)>();
+            string keep = _page;
+            foreach (var (pid, _, title, _) in Pages)
+            {
+                var sp = new StackPanel();
+                try { BuildPage(pid, sp); } catch (Exception ex) { Log.Write("Settings search: " + pid + " " + ex.Message); }
+                string heading = title;
+                foreach (UIElement el in sp.Children)
+                {
+                    if (el is TextBlock tb && tb.FontSize >= 14) { heading = tb.Text; if (tb.FontSize < 20) _index.Add((pid, title, heading, tb.Text)); continue; }
+                    var acc = new List<string>();
+                    Collect(el, acc);
+                    foreach (var t in acc) _index.Add((pid, title, heading, t));
+                }
+            }
+            _page = keep;
+        }
+
+        private static void Collect(object o, List<string> acc)
+        {
+            switch (o)
+            {
+                case string str: if (!string.IsNullOrWhiteSpace(str)) acc.Add(str); return;
+                case TextBox: case ComboBox: return;   // 使用者填的內容不算
+                case TextBlock tb: if (!string.IsNullOrWhiteSpace(tb.Text)) acc.Add(tb.Text); return;
+            }
+            if (o is DependencyObject d) foreach (var c in LogicalTreeHelper.GetChildren(d)) Collect(c, acc);
+        }
+
+        private void ShowSearch(string q)
+        {
+            EnsureIndex();
+            _searching = true;
+            var terms = q.Split(new[] { ' ', '　' }, StringSplitOptions.RemoveEmptyEntries)
+                         .Select(t => new[] { t }.Concat(Synonyms.TryGetValue(t.ToLowerInvariant(), out var syn) ? syn : Array.Empty<string>()).ToArray()).ToList();
+            bool Match(string text) => terms.All(alts => alts.Any(a => text.Contains(a, StringComparison.OrdinalIgnoreCase)));
+            // 同一個標題底下只列一次：標題本身符合優先，不然取第一個符合的句子
+            var hits = _index.Where(x => Match(x.text) || Match(x.heading))
+                             .GroupBy(x => (x.page, x.heading))
+                             .Select(g => g.FirstOrDefault(x => Match(x.text)) is var m && m.text != null ? m : g.First())
+                             .Take(40).ToList();
+
+            var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
+            page.Children.Add(PageTitle($"搜尋「{q}」"));
+            if (hits.Count == 0)
+                page.Children.Add(Note("找不到符合的設定。試試別的字，例如：快捷鍵、電量、PAIR、剪貼簿、提醒、分頁、燈效。"));
+            foreach (var h in hits)
+            {
+                var sp = new StackPanel();
+                sp.Children.Add(new TextBlock { Text = h.title + (h.heading != h.title ? " › " + h.heading : ""), FontWeight = FontWeights.SemiBold, FontSize = 13.5 });
+                if (h.text != h.heading) sp.Children.Add(new TextBlock { Text = Snippet(h.text, terms.SelectMany(t => t).ToArray()), Foreground = Dim, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+                var row = new Border { Child = sp, Background = Card, CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 9, 14, 10), Margin = new Thickness(0, 0, 0, 6), Cursor = Cursors.Hand };
+                row.MouseEnter += (s, e) => row.Background = CardHover;
+                row.MouseLeave += (s, e) => row.Background = Card;
+                var target = h;
+                row.MouseLeftButtonUp += (s, e) =>
+                {
+                    ClearSearch(rebuild: false);
+                    ShowSection(target.page);
+                    if (target.heading != target.title) ScrollToAnchor(target.heading);
+                };
+                page.Children.Add(row);
+            }
+            _scroll.Content = page;
+            _scroll.ScrollToTop();
+        }
+
+        private static string Snippet(string text, string[] words)
+        {
+            text = text.Replace("\n", " ");
+            if (text.Length <= 90) return text;
+            int at = words.Select(w => text.IndexOf(w, StringComparison.OrdinalIgnoreCase)).Where(i => i >= 0).DefaultIfEmpty(0).Min();
+            int start = Math.Max(0, at - 30);
+            string t = text.Substring(start, Math.Min(90, text.Length - start));
+            return (start > 0 ? "…" : "") + t + (start + 90 < text.Length ? "…" : "");
+        }
+
+        // ================================================================
+        //  動態島分頁編輯（勾選＋上下移）
+        // ================================================================
+
+        private FrameworkElement TabEditor()
+        {
+            var box = new StackPanel { Margin = new Thickness(0, 6, 0, 6) };
+            void Build()
+            {
+                box.Children.Clear();
+                var on = (S.IslandTabs ?? new List<string>()).Where(id => MainWindow.TabChoices.Any(t => t.id == id)).Distinct().ToList();
+                if (on.Count == 0) on = MainWindow.DefaultTabs.ToList();
+                var order = on.Concat(MainWindow.TabChoices.Select(t => t.id).Where(id => !on.Contains(id))).ToList();
+                for (int i = 0; i < order.Count; i++)
+                {
+                    string id = order[i];
+                    bool shown = on.Contains(id);
+                    string name = MainWindow.TabChoices.First(t => t.id == id).name;
+                    var row = new Grid { Margin = new Thickness(0, 1, 0, 1), MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    var cb = new CheckBox { Content = new TextBlock { Text = name }, IsChecked = shown, Foreground = shown ? Brushes.White : Dim, VerticalAlignment = VerticalAlignment.Center };
+                    cb.Click += (s, e) =>
+                    {
+                        var list = (S.IslandTabs ?? new List<string>()).ToList();
+                        if (cb.IsChecked == true) { if (!list.Contains(id)) list.Add(id); }
+                        else if (list.Count > 1) list.Remove(id);
+                        S.IslandTabs = list;
+                        Changed();
+                        Build();
+                    };
+                    row.Children.Add(cb);
+                    if (shown)
+                    {
+                        var btns = new StackPanel { Orientation = Orientation.Horizontal };
+                        int idx = on.IndexOf(id);
+                        foreach (var (glyph, delta, tip) in new[] { ("\uE70E", -1, "往前"), ("\uE70D", 1, "往後") })
+                        {
+                            bool can = idx + delta >= 0 && idx + delta < on.Count;
+                            var b = new Border
+                            {
+                                Width = 26, Height = 22, CornerRadius = new CornerRadius(6), Background = can ? Card : Brushes.Transparent, Margin = new Thickness(4, 0, 0, 0),
+                                Cursor = can ? Cursors.Hand : Cursors.Arrow, ToolTip = tip,
+                                Child = new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 10, Foreground = can ? Brushes.White : Card, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                            };
+                            if (can)
+                            {
+                                int d = delta;
+                                b.MouseLeftButtonUp += (s, e) =>
+                                {
+                                    var list = on.ToList();
+                                    (list[idx], list[idx + d]) = (list[idx + d], list[idx]);
+                                    S.IslandTabs = list;
+                                    Changed();
+                                    Build();
+                                };
+                            }
+                            btns.Children.Add(b);
+                        }
+                        Grid.SetColumn(btns, 1);
+                        row.Children.Add(btns);
+                    }
+                    box.Children.Add(row);
+                }
+            }
+            Build();
+            return box;
+        }
+
+        /// <summary>連到另一頁設定的連結</summary>
+        private TextBlock PageLink(string text, string page, string anchor)
+        {
+            var t = DarkUi.LinkButton(text);
+            t.Foreground = Accent;
+            t.FontSize = 12.5;
+            t.Margin = new Thickness(0, 6, 0, 0);
+            t.MouseLeave += (s, e) => t.Foreground = Accent;
+            t.MouseLeftButtonUp += (s, e) => ShowPage(page, anchor);
+            return t;
+        }
 
         private static TextBlock PageTitle(string t) =>
             new TextBlock { Text = t, FontSize = 22, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) };

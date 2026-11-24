@@ -248,6 +248,31 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
         </Style>
 
+        <Style x:Key="SubTab" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource Secondary}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="9" Padding="10,2,10,3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#26FFFFFF" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="StatTile" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource TileBg}" />
             <Setter Property="CornerRadius" Value="12" />
@@ -483,24 +508,22 @@
                                    Margin="10,1,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                     <!-- 右邊 -6：齒輪圖示的右緣跟下面內容的右緣對齊（按鈕本身有留白） -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-6,0">
+                    <StackPanel x:Name="TabBar" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-6,0">
                         <RadioButton x:Name="TabMedia" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE8D6;"
                                      ToolTip="音樂" IsChecked="True" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabCalendar" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE787;"
-                                     ToolTip="日曆與計時器" Checked="Tab_Checked" />
+                                     ToolTip="行程與提醒" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabWeather" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9CA;"
                                      ToolTip="天氣" Checked="Tab_Checked" />
-                        <RadioButton x:Name="TabQuota" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE945;"
-                                     ToolTip="AI 額度與系統資源" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabStats" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9D9;"
-                                     ToolTip="系統資訊" Checked="Tab_Checked" />
+                                     ToolTip="系統（CPU、記憶體、網路、AI 額度、PAIR）" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabClip" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE77F;"
                                      ToolTip="剪貼簿歷史" Checked="Tab_Checked" />
                         <RadioButton x:Name="TabShelf" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE7B8;"
                                      ToolTip="暫存的檔案" Checked="Tab_Checked" Visibility="Collapsed" />
                         <RadioButton x:Name="TabQuick" GroupName="Tabs" Style="{StaticResource TabButton}" Content="&#xE9E9;"
                                      ToolTip="快速設定" Checked="Tab_Checked" />
-                        <Border Width="1" Height="14" Background="{StaticResource TrackBg}" Margin="4,0,4,0" VerticalAlignment="Center" />
+                        <Border x:Name="TabSeparator" Width="1" Height="14" Background="{StaticResource TrackBg}" Margin="4,0,4,0" VerticalAlignment="Center" />
                         <Border x:Name="PageSettingsBtn" Width="26" Height="26" CornerRadius="13" Cursor="Hand"
                                 ToolTip="這一頁的設定" MouseLeftButtonUp="PageSettings_Click">
                             <Border.Style>
@@ -615,57 +638,60 @@
                             <UniformGrid x:Name="CalGrid" Grid.Row="1" Columns="7" Rows="7" Margin="0,2,0,0" />
                         </Grid>
 
-                        <Border Grid.Column="2" Background="{StaticResource TileBg}" CornerRadius="14" Padding="12,10">
+                        <!-- 接下來：今天的行程＋提醒（跟語音、對話視窗的提醒同一份）＋專注模式 -->
+                        <Border Grid.Column="2" Background="{StaticResource TileBg}" CornerRadius="14" Padding="10,7,8,8">
                             <Grid>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="22" />
                                     <RowDefinition Height="*" />
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <Grid>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="12" Foreground="{StaticResource Secondary}" />
-                                        <TextBlock x:Name="TimerTitle" Text="計時器" FontSize="11" Foreground="{StaticResource Secondary}" Margin="6,0,0,0" />
-                                    </StackPanel>
-                                    <Button x:Name="FocusButton" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Height="22" Padding="8,0"
-                                            Background="#1FFFFFFF" Click="Focus_Click" ToolTip="專注 25 分鐘＋休息 5 分鐘；專注時暫停通知、動態島變暗">
-                                        <TextBlock x:Name="FocusButtonText" Text="專注 25" FontSize="10" />
-                                    </Button>
-                                </Grid>
-                                <TextBlock x:Name="TimerText" Grid.Row="1" Text="00:00" FontSize="36" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI Variable Display, Segoe UI"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                <UniformGrid Grid.Row="2" Columns="3" Margin="0,0,0,8">
-                                    <Button Style="{StaticResource IconButton}" Height="26" Margin="2,0" Background="#14FFFFFF" Click="TimerAdd_Click" Tag="1">
-                                        <TextBlock Text="+1 分" FontSize="11" />
-                                    </Button>
-                                    <Button Style="{StaticResource IconButton}" Height="26" Margin="2,0" Background="#14FFFFFF" Click="TimerAdd_Click" Tag="5">
-                                        <TextBlock Text="+5 分" FontSize="11" />
-                                    </Button>
-                                    <Button Style="{StaticResource IconButton}" Height="26" Margin="2,0" Background="#14FFFFFF" Click="TimerAdd_Click" Tag="10">
-                                        <TextBlock Text="+10 分" FontSize="11" />
-                                    </Button>
-                                </UniformGrid>
-                                <Grid Grid.Row="3">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock x:Name="UpcomingGlyph" Style="{StaticResource Glyph}" Text="&#xE823;" FontSize="12" Foreground="{StaticResource Secondary}" />
+                                    <TextBlock x:Name="UpcomingTitle" Text="接下來" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Secondary}" Margin="6,0,0,0" />
+                                </StackPanel>
+                                <Button x:Name="FocusButton" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Height="22" Padding="8,0"
+                                        Background="#1FFFFFFF" Click="Focus_Click" ToolTip="專注 25 分鐘＋休息 5 分鐘；專注時暫停通知、動態島變暗">
+                                    <TextBlock x:Name="FocusButtonText" Text="專注 25" FontSize="10" />
+                                </Button>
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" Focusable="False" Margin="0,4,0,4">
+                                    <StackPanel x:Name="UpcomingList" />
+                                </ScrollViewer>
+                                <Grid Grid.Row="2">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="64" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Button x:Name="TimerStartButton" Style="{StaticResource AccentButton}" Click="TimerStart_Click">
-                                        <TextBlock x:Name="TimerStartText" Text="開始" FontSize="12" />
+                                    <Button Style="{StaticResource IconButton}" Height="24" Margin="0,0,3,0" Background="#14FFFFFF" Click="QuickTimer_Click" Tag="5" ToolTip="5 分鐘後提醒">
+                                        <TextBlock Text="5 分" FontSize="10.5" />
                                     </Button>
-                                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Height="30" Background="#1FFFFFFF" Click="TimerReset_Click">
-                                        <TextBlock Text="重設" FontSize="12" />
+                                    <Button Grid.Column="1" Style="{StaticResource IconButton}" Height="24" Margin="0,0,3,0" Background="#14FFFFFF" Click="QuickTimer_Click" Tag="15" ToolTip="15 分鐘後提醒">
+                                        <TextBlock Text="15 分" FontSize="10.5" />
+                                    </Button>
+                                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Height="24" Margin="0,0,3,0" Background="#14FFFFFF" Click="QuickTimer_Click" Tag="60" ToolTip="1 小時後提醒">
+                                        <TextBlock Text="1 小時" FontSize="10.5" />
+                                    </Button>
+                                    <Button Grid.Column="3" Style="{StaticResource AccentButton}" Height="24" Width="60" Click="AddReminder_Click" ToolTip="新增提醒：寫要提醒什麼、選時間">
+                                        <TextBlock Text="＋ 提醒" FontSize="10.5" />
                                     </Button>
                                 </Grid>
                             </Grid>
                         </Border>
                     </Grid>
 
-                    <!-- == 系統資訊 == -->
-                    <UniformGrid x:Name="PageStats" Grid.Row="1" Columns="3" Rows="2" Margin="-4,6,-4,-4" Visibility="Collapsed">
+                    <!-- == 系統：資源（方塊）／AI 額度與 PAIR（清單），上面的小切換只在有第二個畫面時出現 == -->
+                    <Grid x:Name="PageSystem" Grid.Row="1" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel x:Name="SysSwitch" Orientation="Horizontal" Margin="0,6,0,0" Visibility="Collapsed">
+                            <RadioButton x:Name="SysViewRes" GroupName="SysView" Style="{StaticResource SubTab}" Content="資源" IsChecked="True" Checked="SysView_Checked" />
+                            <RadioButton x:Name="SysViewQuota" GroupName="SysView" Style="{StaticResource SubTab}" Content="AI 額度" Checked="SysView_Checked" />
+                        </StackPanel>
+                    <UniformGrid x:Name="PageStats" Grid.Row="1" Columns="3" Rows="2" Margin="-4,6,-4,-4">
                         <!-- CPU -->
                         <Border Style="{StaticResource StatTile}">
                             <StackPanel>
@@ -760,6 +786,21 @@
                             </StackPanel>
                         </Border>
                     </UniformGrid>
+                    <!-- == AI 額度 == -->
+                    <Grid x:Name="PageQuota" Grid.Row="1" Margin="0,6,0,0" Visibility="Collapsed">
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" Focusable="False">
+                            <StackPanel x:Name="QuotaList" />
+                        </ScrollViewer>
+                        <StackPanel x:Name="QuotaEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE945;" FontSize="28" Foreground="{StaticResource Tertiary}" />
+                            <TextBlock Text="還沒有額度資料" FontSize="13" Foreground="{StaticResource Secondary}" Margin="0,10,0,0" HorizontalAlignment="Center" />
+                            <TextBlock x:Name="QuotaEmptyHint" Text="這台電腦需要安裝並登入 Codex、Claude Code 或 Antigravity" FontSize="11"
+                                       Foreground="{StaticResource Tertiary}" Margin="0,4,0,0" HorizontalAlignment="Center" TextWrapping="Wrap"
+                                       TextAlignment="Center" MaxWidth="400" />
+                        </StackPanel>
+                    </Grid>
+                    </Grid>
+
 
                     <!-- == 天氣 == -->
                     <Grid x:Name="PageWeather" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
@@ -812,20 +853,6 @@
                             </Border>
                         </Grid>
 
-                    </Grid>
-
-                    <!-- == AI 額度 == -->
-                    <Grid x:Name="PageQuota" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
-                        <ScrollViewer VerticalScrollBarVisibility="Hidden" Focusable="False">
-                            <StackPanel x:Name="QuotaList" />
-                        </ScrollViewer>
-                        <StackPanel x:Name="QuotaEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE945;" FontSize="28" Foreground="{StaticResource Tertiary}" />
-                            <TextBlock Text="還沒有額度資料" FontSize="13" Foreground="{StaticResource Secondary}" Margin="0,10,0,0" HorizontalAlignment="Center" />
-                            <TextBlock x:Name="QuotaEmptyHint" Text="這台電腦需要安裝並登入 Codex、Claude Code 或 Antigravity" FontSize="11"
-                                       Foreground="{StaticResource Tertiary}" Margin="0,4,0,0" HorizontalAlignment="Center" TextWrapping="Wrap"
-                                       TextAlignment="Center" MaxWidth="400" />
-                        </StackPanel>
                     </Grid>
 
                     <!-- == 檔案暫存架 == -->

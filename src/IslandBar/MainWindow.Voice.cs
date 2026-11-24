@@ -66,10 +66,12 @@ namespace IslandBar
                 Assistant = new AssistantService(() => _settings, this, Dispatcher);
                 Assistant.StateChanged += OnVoiceState;
                 Assistant.Level += OnVoiceLevel;
+                Assistant.RemindersChanged += () => { BuildUpcoming(); UpdateTimerUi(); };
                 Assistant.ReminderFired += text =>
                 {
                     if (_userHidden || _fullscreenHidden) return;
                     ShowVoice(VoiceState.Reply, GChat, "提醒", "", text, TimeSpan.FromSeconds(8));
+                    Peek(TimeSpan.FromSeconds(8));
                 };
                 Assistant.ApplySettings();
                 StartChatFab();
@@ -305,12 +307,10 @@ namespace IslandBar
 
         public string StartIslandTimer(TimeSpan duration)
         {
-            _timerRemaining = duration;
-            _timerSet = duration;
-            _timerEnd = DateTime.Now + duration;
-            _timerRunning = true;
+            // 計時跟提醒是同一份清單（動態島「接下來」、對話視窗「提醒與計時」都看得到）
+            var r = Assistant?.AddTimer(duration);
             UpdateTimerUi();
-            return $"開始計時 {Commands.Describe(duration)}，時間到會提醒你";
+            return r != null ? $"開始計時 {Commands.Describe(duration)}（{r.Due:HH:mm}），時間到會提醒你" : "沒辦法計時";
         }
 
         private static readonly CultureInfo ZhTwCulture = new CultureInfo("zh-TW");

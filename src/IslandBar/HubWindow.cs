@@ -133,6 +133,9 @@ namespace IslandBar
 
         public void ShowSettingsPage(string page, string anchor) => ShowSettings(page, anchor);
 
+        /// <summary>截圖測試用：在設定裡搜尋</summary>
+        public void DebugSearch(string q) { ShowSettings(); _settings.DebugSearch(q); }
+
         /// <summary>設定頁截圖用</summary>
         public FrameworkElement CurrentContent => (FrameworkElement)_settings ?? _chatMode;
 
@@ -187,7 +190,7 @@ namespace IslandBar
             brainBox.Child = brainSp;
             brainBox.MouseEnter += (s, e) => brainBox.Background = Hover;
             brainBox.MouseLeave += (s, e) => brainBox.Background = Brushes.Transparent;
-            brainBox.MouseLeftButtonUp += (s, e) => ShowSettings("voice", "AI 大腦");
+            brainBox.MouseLeftButtonUp += (s, e) => ShowSettings("ai", "AI 大腦");
             bottom.Children.Add(brainBox);
 
             // 齒輪：展開成完整設定

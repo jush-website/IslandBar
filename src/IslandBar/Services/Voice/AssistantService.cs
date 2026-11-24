@@ -14,9 +14,11 @@ namespace IslandBar.Services.Voice
 
     public sealed class Reminder
     {
-        public Guid Id { get; } = Guid.NewGuid();
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string Text { get; set; } = "";
         public DateTime Due { get; set; }
+        /// <summary>純計時（「計時 10 分鐘」、動態島上的 +10 分）：沒有內容，只說時間到</summary>
+        public bool IsTimer { get; set; }
         internal Timer Timer;
     }
 
@@ -53,6 +55,7 @@ namespace IslandBar.Services.Voice
         private bool _started;
 
         private static string HistoryPath => Path.Combine(Path.GetDirectoryName(AppSettings.FilePath) ?? "", "assistant-history.json");
+        private static string RemindersPath => Path.Combine(Path.GetDirectoryName(AppSettings.FilePath) ?? "", "reminders.json");
 
         public AssistantService(Func<AppSettings> settings, IAssistantHost host, Dispatcher ui)
         {
@@ -74,6 +77,7 @@ namespace IslandBar.Services.Voice
             Key.Cancelled += () => _ui.BeginInvoke(new Action(CancelListening));
             _mic.Level += v => _ui.BeginInvoke(new Action(() => Level?.Invoke(v)), DispatcherPriority.Render);
             LoadHistory();
+            LoadReminders();
         }
 
         public Commands Commands => _cmd;
@@ -291,12 +295,76 @@ namespace IslandBar.Services.Voice
 
         private string AddReminder(TimeSpan after, string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) text = "時間到";
-            var r = new Reminder { Text = text.Trim(), Due = DateTime.Now + after };
-            r.Timer = new Timer(_ => _ui.BeginInvoke(new Action(() => Fire(r))), null, after, Timeout.InfiniteTimeSpan);
+            var r = AddReminderAt(DateTime.Now + after, text);
+            return $"好，{Commands.Describe(after)}後（{r.Due:HH:mm}）提醒你{(r.IsTimer ? "" : "：" + r.Text)}";
+        }
+
+        /// <summary>
+        /// 新增提醒（語音、對話、動態島「接下來」都用這一個，同一份清單）。text 空白＝純計時。
+        /// </summary>
+        public Reminder AddReminderAt(DateTime due, string text, bool save = true)
+        {
+            bool timer = string.IsNullOrWhiteSpace(text) || text.Trim() == "時間到";
+            var r = new Reminder { Text = timer ? "時間到" : text.Trim(), Due = due, IsTimer = timer };
+            Schedule(r);
             Reminders.Add(r);
             RemindersChanged?.Invoke();
-            return $"好，{Commands.Describe(after)}後（{r.Due:HH:mm}）提醒你{(text == "時間到" ? "" : "：" + r.Text)}";
+            if (save) SaveReminders();
+            return r;
+        }
+
+        /// <summary>純計時：時間到只說「時間到」</summary>
+        public Reminder AddTimer(TimeSpan after) => AddReminderAt(DateTime.Now + after, null);
+
+        private void Schedule(Reminder r)
+        {
+            var wait = r.Due - DateTime.Now;
+            if (wait < TimeSpan.FromMilliseconds(200)) wait = TimeSpan.FromMilliseconds(200);
+            r.Timer?.Dispose();
+            r.Timer = new Timer(_ => _ui.BeginInvoke(new Action(() => Fire(r))), null, wait, Timeout.InfiniteTimeSpan);
+        }
+
+        /// <summary>延後（動態島上按「再 5 分」）</summary>
+        public void Snooze(Reminder r, TimeSpan by)
+        {
+            if (!Reminders.Contains(r)) return;
+            r.Due = (r.Due > DateTime.Now ? r.Due : DateTime.Now) + by;
+            Schedule(r);
+            RemindersChanged?.Invoke();
+            SaveReminders();
+        }
+
+        private sealed class SavedReminder { public Guid Id { get; set; } public string Text { get; set; } public DateTime Due { get; set; } public bool IsTimer { get; set; } }
+
+        /// <summary>提醒存檔：IslandBar 重開（例如自動更新）時提醒不會不見</summary>
+        private void SaveReminders()
+        {
+            try
+            {
+                var list = Reminders.Select(r => new SavedReminder { Id = r.Id, Text = r.Text, Due = r.Due, IsTimer = r.IsTimer }).ToList();
+                File.WriteAllText(RemindersPath, JsonSerializer.Serialize(list));
+            }
+            catch (Exception ex) { Log.Write("Reminders: 存檔失敗 " + ex.Message); }
+        }
+
+        private void LoadReminders()
+        {
+            try
+            {
+                if (!File.Exists(RemindersPath)) return;
+                var list = JsonSerializer.Deserialize<List<SavedReminder>>(File.ReadAllText(RemindersPath)) ?? new List<SavedReminder>();
+                var now = DateTime.Now;
+                foreach (var sr in list)
+                {
+                    // 關著的時候過了 30 分鐘以內的：重開後馬上提醒；更早的就算了
+                    if (sr.Due < now - TimeSpan.FromMinutes(30)) continue;
+                    var r = new Reminder { Id = sr.Id, Text = sr.Text ?? "時間到", Due = sr.Due < now ? now + TimeSpan.FromSeconds(5) : sr.Due, IsTimer = sr.IsTimer };
+                    Schedule(r);
+                    Reminders.Add(r);
+                }
+                if (Reminders.Count > 0) RemindersChanged?.Invoke();
+            }
+            catch (Exception ex) { Log.Write("Reminders: 讀檔失敗 " + ex.Message); }
         }
 
         private void Fire(Reminder r)
@@ -304,6 +372,7 @@ namespace IslandBar.Services.Voice
             if (!Reminders.Remove(r)) return;
             r.Timer?.Dispose();
             RemindersChanged?.Invoke();
+            SaveReminders();
             try { SystemSounds.Exclamation.Play(); } catch { }
             string text = r.Text == "時間到" ? "時間到了" : "提醒你：" + r.Text;
             AddTurn(new ChatTurn { Role = "assistant", Text = text, Source = "提醒" });
@@ -316,6 +385,7 @@ namespace IslandBar.Services.Voice
             if (!Reminders.Remove(r)) return;
             r.Timer?.Dispose();
             RemindersChanged?.Invoke();
+            SaveReminders();
         }
 
         private int CancelReminders()
@@ -324,6 +394,7 @@ namespace IslandBar.Services.Voice
             foreach (var r in Reminders) r.Timer?.Dispose();
             Reminders.Clear();
             RemindersChanged?.Invoke();
+            SaveReminders();
             return n;
         }
 

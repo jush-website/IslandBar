@@ -259,11 +259,11 @@ namespace IslandBar
                 {
                     case "clock": Gap(); Section("appearance", "行為", BuildClock); break;
                     case "weather": Gap(); Section("weather", "天氣地區", BuildWeather); break;
-                    case "perf": Gap(); Section("gpu", null, BuildPerf); break;
+                    case "perf": Gap(); Section("system", "GPU 與 PAIR", BuildPerf); break;
                     case "events": Gap(); Section("weather", "行程", BuildEvents); break;
-                    case "quota": if (_main.QuotaItems.Count > 0) { Gap(); Section("compact", "點點顯示的項目", BuildQuota); } break;
-                    case "pair": Gap(); Section("gpu", "NVIDIA PAIR", BuildPair); break;
-                    case "boost": Gap(); Section("boost", null, BuildBoost); break;
+                    case "quota": if (_main.QuotaItems.Count > 0) { Gap(); Section("aitools", null, BuildQuota); } break;
+                    case "pair": Gap(); Section("system", "NVIDIA PAIR", BuildPair); break;
+                    case "boost": Gap(); Section("system", "一鍵加速", BuildBoost); break;
                 }
             }
             if (first)

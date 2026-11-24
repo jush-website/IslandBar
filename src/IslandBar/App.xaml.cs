@@ -178,7 +178,7 @@ namespace IslandBar
             var settings = new Forms.ToolStripMenuItem("設定…") { Font = bold };
             settings.Click += (s, e) => OpenSettings();
 
-            var assistant = new Forms.ToolStripMenuItem("語音助理…");
+            var assistant = new Forms.ToolStripMenuItem("對話與語音助理…");
             assistant.Click += (s, e) => OpenAssistant();
             var openWheel = new Forms.ToolStripMenuItem("格式轉換：選擇檔案…");
             openWheel.Click += (s, e) =>
@@ -188,14 +188,14 @@ namespace IslandBar
             };
             _recentItem = new Forms.ToolStripMenuItem("最近轉換") { Enabled = false };
 
-            var ocr = new Forms.ToolStripMenuItem("螢幕識字（Ctrl+Shift+O）");
+            var ocr = new Forms.ToolStripMenuItem("螢幕識字");
             ocr.Click += (s, e) => _window?.StartScreenOcr();
             var summary = new Forms.ToolStripMenuItem("畫面重點摘要");
             summary.Click += (s, e) => _ = _window?.StartScreenSummaryAsync(true);   // 從選單開：前景是工作列，直接抓整個螢幕
             _focusItem = new Forms.ToolStripMenuItem("專注模式（25 分鐘 + 休息 5 分鐘）");
             _focusItem.Click += (s, e) => _window?.ToggleFocus();
 
-            var accounts = new Forms.ToolStripMenuItem("AI 帳號登入");
+            var accounts = new Forms.ToolStripMenuItem("AI 帳號（登入、重新整理額度）");
             var claudeLogin = new Forms.ToolStripMenuItem("登入 Claude Code…");
             claudeLogin.Click += (s, e) => _window?.RunLoginAction("claude-login");
             var codexLogin = new Forms.ToolStripMenuItem("登入 Codex…");
@@ -243,6 +243,35 @@ namespace IslandBar
                 if (_focusItem != null) _focusItem.Text = _window?.FocusRunning == true ? "結束專注模式" : "專注模式（25 分鐘 + 休息 5 分鐘）";
             };
 
+            // 常用的放第一層；工具、AI 帳號、更新收進子選單
+            var translate = new Forms.ToolStripMenuItem("畫面翻譯");
+            translate.Click += (s, e) => _ = _window?.StartScreenTranslateAsync(true);
+            var phone = new Forms.ToolStripMenuItem("手機傳檔（掃 QR code 互傳）");
+            phone.Click += (s, e) => _window?.OpenPhoneShare();
+            string Hk(string hk, bool on = true) => on && !string.IsNullOrWhiteSpace(hk) ? $"（{hk}）" : "";
+            menu.Opening += (s, e) =>
+            {
+                translate.Text = "畫面翻譯" + Hk(_settings.ScreenTranslateHotkey, _settings.ScreenSummaryEnabled);
+                summary.Text = "畫面重點摘要" + Hk(_settings.ScreenSummaryHotkey, _settings.ScreenSummaryEnabled);
+                ocr.Text = "螢幕識字（框選畫面上的字）" + Hk(_settings.OcrHotkey);
+            };
+
+            var tools = new Forms.ToolStripMenuItem("工具");
+            tools.DropDownItems.Add(summary);
+            tools.DropDownItems.Add(translate);
+            tools.DropDownItems.Add(ocr);
+            tools.DropDownItems.Add(new Forms.ToolStripSeparator());
+            tools.DropDownItems.Add(openWheel);
+            tools.DropDownItems.Add(_recentItem);
+            tools.DropDownItems.Add(new Forms.ToolStripSeparator());
+            tools.DropDownItems.Add(_focusItem);
+            tools.DropDownItems.Add(boost);
+            tools.DropDownItems.Add(windy);
+
+            var maintain = new Forms.ToolStripMenuItem("更新與維護");
+            maintain.DropDownItems.Add(checkUpdate);
+            maintain.DropDownItems.Add(reload);
+
             menu.Items.Add(header);
             menu.Items.Add(claudeLoginTop);
             menu.Items.Add(codexLoginTop);
@@ -250,27 +279,13 @@ namespace IslandBar
             menu.Items.Add(_installUpdateItem);
             menu.Items.Add(settings);
             menu.Items.Add(assistant);
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(openWheel);
-            menu.Items.Add(_recentItem);
-            menu.Items.Add(ocr);
-            menu.Items.Add(summary);
-            var translate = new Forms.ToolStripMenuItem("畫面翻譯");
-            translate.Click += (s, e) => _ = _window?.StartScreenTranslateAsync(true);
-            menu.Items.Add(translate);
-            var phone = new Forms.ToolStripMenuItem("手機傳檔（掃 QR code 互傳）");
-            phone.Click += (s, e) => _window?.OpenPhoneShare();
             menu.Items.Add(phone);
-            menu.Opening += (s, e) => translate.Text = "畫面翻譯" + (_settings.ScreenSummaryEnabled && !string.IsNullOrWhiteSpace(_settings.ScreenTranslateHotkey) ? $"（{_settings.ScreenTranslateHotkey}）" : "");
-            menu.Opening += (s, e) => summary.Text = "畫面重點摘要" + (_settings.ScreenSummaryEnabled && !string.IsNullOrWhiteSpace(_settings.ScreenSummaryHotkey) ? $"（{_settings.ScreenSummaryHotkey}）" : "");
-            menu.Items.Add(_focusItem);
-            menu.Items.Add(boost);
-            menu.Items.Add(windy);
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add(tools);
             menu.Items.Add(accounts);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(toggle);
-            menu.Items.Add(checkUpdate);
-            menu.Items.Add(reload);
+            menu.Items.Add(maintain);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(exit);
 

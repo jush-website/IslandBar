@@ -32,6 +32,8 @@ namespace IslandBar
         /// <summary>設定畫面顯示用：快捷鍵現在有沒有註冊成功</summary>
         public string SummaryHotkeyStatus { get; private set; } = "";
         public string TranslateHotkeyStatus { get; private set; } = "";
+        public string OcrHotkeyStatus { get; private set; } = "";
+        private string _ocrHotkeyOn;
 
         /// <summary>摘要／翻譯用的大腦：跟語音助理共用本機模型與 PAIR 設定，但可以另外選「只用 PAIR／只用本機」</summary>
         private Brain SummaryBrain
@@ -58,6 +60,7 @@ namespace IslandBar
             bool on = _settings.ScreenSummaryEnabled && !_summaryHotkeySuspended;
             SummaryHotkeyStatus = RegisterOne(HotkeySummaryId, on ? _settings.ScreenSummaryHotkey : "", ref _summaryHotkeyOn, SummaryHotkeyStatus);
             TranslateHotkeyStatus = RegisterOne(HotkeyTranslateId, on ? _settings.ScreenTranslateHotkey : "", ref _translateHotkeyOn, TranslateHotkeyStatus);
+            OcrHotkeyStatus = RegisterOne(HotkeyOcrId, _summaryHotkeySuspended ? "" : (_settings.OcrHotkey ?? ""), ref _ocrHotkeyOn, OcrHotkeyStatus);
         }
 
         private string RegisterOne(int id, string want, ref string current, string status)
@@ -78,7 +81,8 @@ namespace IslandBar
         {
             UnregisterHotKey(_hwnd, HotkeySummaryId);
             UnregisterHotKey(_hwnd, HotkeyTranslateId);
-            _summaryHotkeyOn = _translateHotkeyOn = null;
+            UnregisterHotKey(_hwnd, HotkeyOcrId);
+            _summaryHotkeyOn = _translateHotkeyOn = _ocrHotkeyOn = null;
         }
 
         /// <summary>設定畫面在錄新的快捷鍵時先放開，不然按下去會直接觸發</summary>
@@ -270,7 +274,7 @@ namespace IslandBar
                         "local" => "還沒下載本機小模型（設定成只用本機）。",
                         _ => "PAIR／Ollama 沒開，也還沒下載本機小模型。"
                     };
-                    card.SetError("沒有可以用的 AI：" + why, "打開設定", () => { CloseSummaryCard(); SettingsPageRequested?.Invoke("voice", "畫面重點摘要"); });
+                    card.SetError("沒有可以用的 AI：" + why, "打開設定", () => { CloseSummaryCard(); SettingsPageRequested?.Invoke("ai", "AI 大腦"); });
                     return;
                 }
 

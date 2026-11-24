@@ -24,13 +24,13 @@ namespace IslandBar
         /// <summary>目前分頁對應的設定頁與要捲到的標題</summary>
         private (string page, string anchor) CurrentTabSettings()
         {
-            if (TabMedia.IsChecked == true) return ("compact", null);
+            if (TabMedia.IsChecked == true) return ("island", "展開時的分頁");
             if (TabCalendar.IsChecked == true) return ("weather", "行程");
             if (TabWeather.IsChecked == true) return ("weather", "天氣地區");
-            if (TabQuota.IsChecked == true) return ("compact", "點點顯示的項目");
-            if (TabStats.IsChecked == true) return ("gpu", null);
-            if (TabClip.IsChecked == true) return ("notify", "提示");
-            if (TabShelf.IsChecked == true) return ("general", null);
+            if (TabStats.IsChecked == true) return SysViewQuota.IsChecked == true ? ("aitools", null) : ("system", "GPU 與 PAIR");
+            if (TabClip.IsChecked == true) return ("tools", "剪貼簿歷史");
+            if (TabShelf.IsChecked == true) return ("tools", null);
+            if (TabQuick.IsChecked == true) return ("island", "展開時的分頁");
             return ("appearance", null);
         }
 
@@ -312,7 +312,7 @@ namespace IslandBar
             _chatDock = new ChatDock(Assistant, _settings, ChatFabScreenRect);
             _chatDock.CloseRequested += CloseChatDock;
             _chatDock.OpenFullRequested += () => { CloseChatDock(); AssistantWindowRequested?.Invoke(); };
-            _chatDock.SettingsRequested += () => SettingsPageRequested?.Invoke("voice", null);
+            _chatDock.SettingsRequested += () => SettingsPageRequested?.Invoke("assistant", null);
             _chatDock.Closed += (s, e) => { if (_chatDock == s) { _chatDock = null; UpdateChatFab(); } };
             _chatDock.Show();
             _chatDock.Activate();

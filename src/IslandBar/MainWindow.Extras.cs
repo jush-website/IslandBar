@@ -60,8 +60,6 @@ namespace IslandBar
             {
                 _hwndSource = HwndSource.FromHwnd(_hwnd);
                 _hwndSource?.AddHook(WndProc);
-                if (!RegisterHotKey(_hwnd, HotkeyOcrId, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 0x4F)) // O
-                    Log.Write("Ctrl+Shift+O 已被其他程式佔用，螢幕識字請改用系統匣選單");
                 RegisterSummaryHotkey();
                 SelectedText.IgnoreClipboardFor = d => Dispatcher.BeginInvoke(new Action(() => _ignoreClipUntil = DateTime.UtcNow + d));
                 AddClipboardFormatListener(_hwnd);
@@ -93,7 +91,6 @@ namespace IslandBar
                 StopFeatures();
                 _calendar.Stop();
                 _pair?.Stop();
-                UnregisterHotKey(_hwnd, HotkeyOcrId);
                 UnregisterSummaryHotkeys();
                 CloseSummaryCard();
                 RemoveClipboardFormatListener(_hwnd);
@@ -376,6 +373,7 @@ namespace IslandBar
         private void OnCalendarUpdated()
         {
             BuildCalendar();
+            BuildUpcoming();
             UpdateCalendarCountdown();
             if (_calendar.LastError != null) Log.Write("Calendar error: " + _calendar.LastError);
             RaiseDataChanged();
@@ -743,7 +741,7 @@ namespace IslandBar
         private void UpdateFocusUi()
         {
             FocusButtonText.Text = _focusPhase == FocusPhase.None ? "專注 25" : "停止";
-            TimerTitle.Text = _focusPhase switch { FocusPhase.Focus => "專注中", FocusPhase.Break => "休息中", _ => "計時器" };
+            BuildUpcoming();
         }
 
         /// <summary>專注中而且滑鼠不在上面時，動態島變暗</summary>

@@ -191,6 +191,7 @@ namespace IslandBar
             PositionWindow();
             BuildCalendar();
             UpdateTimerUi();
+            ApplyTabOrder();
             UiTick();
             ApplyMode(animate: false);
 
@@ -227,6 +228,7 @@ namespace IslandBar
             ApplyBackground();
             _dotSignature = "#";
             RefreshItems();
+            ApplyTabOrder();
             if (_currentMedia != null) CompactTitle.Visibility = _settings.ShowCompactTitle ? Visibility.Visible : Visibility.Collapsed;
             PositionWindow();
             ApplyMode(animate: false);
@@ -505,6 +507,7 @@ namespace IslandBar
         private void SetMode(IslandMode mode)
         {
             if (_mode == mode) { ApplyMode(true); return; }
+            if (mode == IslandMode.Expanded) PickTabOnExpand();
             _mode = mode;
             ApplyMode(true);
         }
@@ -530,7 +533,7 @@ namespace IslandBar
                     {
                         // 直式窄條：上下各留 10，內容高度依狀態而定
                         double h = 20 + (_currentMedia != null ? 26 : 38);
-                        if (_timerRunning) h += 22;
+                        if (CompactTimer.Visibility == Visibility.Visible) h += 22;
                         if (dots > 0) h += 8 + dots * 10;
                         return new Size(Math.Max(28, t + 6), h + extra);
                     }
@@ -540,7 +543,7 @@ namespace IslandBar
                         double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW + PairCompactWidth(CompactPairMedia) + PairCompactWidth(CompactStatusMedia);
                         return new Size(Math.Max(w, 74) + extra, t);
                     }
-                    double iw = 40 + 42 + (_timerRunning ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0) + PairCompactWidth(CompactPair) + PairCompactWidth(CompactStatus);
+                    double iw = 40 + 42 + (CompactTimer.Visibility == Visibility.Visible ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0) + PairCompactWidth(CompactPair) + PairCompactWidth(CompactStatus);
                     return new Size(Math.Max(iw, 130) + extra, t);
                 }
             }
@@ -794,6 +797,7 @@ namespace IslandBar
             bool hadMedia = _currentMedia != null;
             string oldTitle = _currentMedia?.Title;
             _currentMedia = info;
+            if (hadMedia != (info != null)) ApplyTabOrder();   // 有／沒有在放音樂：音樂分頁換位置
             if (info != null && info.Title != oldTitle && !string.IsNullOrEmpty(info.Title))
                 Peek(TimeSpan.FromSeconds(3)); // 換歌時短暫露出
 
@@ -932,9 +936,8 @@ namespace IslandBar
             if (PageMedia == null) return; // InitializeComponent 期間
             PageMedia.Visibility = TabMedia.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageCalendar.Visibility = TabCalendar.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-            PageStats.Visibility = TabStats.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PageSystem.Visibility = TabStats.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageQuick.Visibility = TabQuick.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-            PageQuota.Visibility = TabQuota.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageClip.Visibility = TabClip.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageWeather.Visibility = TabWeather.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PageShelf.Visibility = TabShelf.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
@@ -942,12 +945,12 @@ namespace IslandBar
             SetPageExtra(TabWeather.IsChecked == true ? WeatherPageExtra : 0);
             if (TabWeather.IsChecked == true) OnWeatherTabShown();
             if (TabClip.IsChecked == true) BuildClipList();
-            if (TabQuota.IsChecked == true) BuildQuotaList();
+            if (TabStats.IsChecked == true) UpdateSysView();
             UpdateQuotaStrip();
 
             if (TabStats.IsChecked == true) UpdateStatsUi();
             if (TabQuick.IsChecked == true) UpdateDarkModeTile();
-            if (TabCalendar.IsChecked == true) BuildCalendar();
+            if (TabCalendar.IsChecked == true) { BuildCalendar(); BuildUpcoming(); }
         }
 
         // ================================================================
@@ -1446,7 +1449,7 @@ namespace IslandBar
             }
             else UpdateDots();
 
-            if (_mode == IslandMode.Expanded && TabQuota.IsChecked == true) BuildQuotaList();
+            if (_mode == IslandMode.Expanded && IsQuotaViewShown) BuildQuotaList();
             UpdateQuotaStrip();
         }
 
@@ -1613,7 +1616,7 @@ namespace IslandBar
             {
                 _quotaSideOn = any;
                 if (_mode == IslandMode.Expanded) ApplyMode(true);
-                if (TabQuota.IsChecked == true) BuildQuotaList();
+                UpdateSysView();
             }
             SetExpandedHeight();
         }
@@ -1687,8 +1690,8 @@ namespace IslandBar
             QuotaList.Children.Clear();
             if (scroller != null) Dispatcher.BeginInvoke(new Action(() => scroller.ScrollToVerticalOffset(offset)), DispatcherPriority.Loaded);
             var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
-            // 左邊已經有 AI 額度欄：這一頁只放 PAIR 和系統資源，不要重複
-            var items = _allItems.Where(i => !hidden.Contains(i.Label) && (!_quotaSideOn || i.Group == "sys")).ToList();
+            // 系統資源在「資源」方塊裡、左邊有 AI 額度欄時也不重複：這裡只放 PAIR 和（沒有左欄時的）AI 額度
+            var items = _quotaSideOn ? new List<QuotaItem>() : _allItems.Where(i => !hidden.Contains(i.Label) && i.Group != "sys").ToList();
             bool showPair = _settings.PairMonitor;
             QuotaEmpty.Visibility = items.Count == 0 && !showPair ? Visibility.Visible : Visibility.Collapsed;
             if (items.Count == 0 && !showPair) return;
@@ -1835,6 +1838,11 @@ namespace IslandBar
                     Child = tb
                 };
                 DecorateCalendarDay(day, cell, tb);
+                if (_calSelected == day && !isToday) { cell.BorderBrush = accent; cell.BorderThickness = new Thickness(1); }
+                var d0 = day;
+                cell.Cursor = Cursors.Hand;
+                cell.Background ??= Brushes.Transparent;
+                cell.MouseLeftButtonUp += (s, e) => { e.Handled = true; SelectCalendarDay(d0); };
                 CalGrid.Children.Add(cell);
             }
         }
@@ -1844,6 +1852,8 @@ namespace IslandBar
         private void CalToday_Click(object sender, RoutedEventArgs e)
         {
             _calMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            _calSelected = null;
+            BuildUpcoming();
             BuildCalendar();
         }
 
@@ -1851,95 +1861,52 @@ namespace IslandBar
         //  計時器
         // ================================================================
 
-        private void TimerAdd_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button b && int.TryParse(b.Tag?.ToString(), out int minutes))
-            {
-                var add = TimeSpan.FromMinutes(minutes);
-                if (_timerRunning)
-                {
-                    _timerEnd += add;
-                }
-                else
-                {
-                    _timerRemaining += add;
-                }
-                _timerSet += add;
-                UpdateTimerUi();
-            }
-        }
-
-        private void TimerStart_Click(object sender, RoutedEventArgs e)
+        /// <summary>每秒：專注模式倒數、提醒倒數（收合時顯示最近的一個）、「接下來」清單的倒數</summary>
+        private void TimerTick()
         {
             if (_timerRunning)
             {
                 _timerRemaining = _timerEnd - DateTime.Now;
-                if (_timerRemaining < TimeSpan.Zero) _timerRemaining = TimeSpan.Zero;
-                _timerRunning = false;
-            }
-            else
-            {
-                if (_timerRemaining <= TimeSpan.Zero) return;
-                _timerEnd = DateTime.Now + _timerRemaining;
-                _timerRunning = true;
-            }
-            UpdateTimerUi();
-            if (_mode == IslandMode.Compact) ApplyMode(true);
-        }
-
-        private void TimerReset_Click(object sender, RoutedEventArgs e)
-        {
-            _timerRunning = false;
-            _timerRemaining = TimeSpan.Zero;
-            _timerSet = TimeSpan.Zero;
-            UpdateTimerUi();
-            if (_mode == IslandMode.Compact) ApplyMode(true);
-        }
-
-        private void TimerTick()
-        {
-            if (!_timerRunning) return;
-            _timerRemaining = _timerEnd - DateTime.Now;
-            if (_timerRemaining <= TimeSpan.Zero)
-            {
-                _timerRemaining = TimeSpan.Zero;
-                _timerRunning = false;
-                _timerSet = TimeSpan.Zero;
-                UpdateTimerUi();
-                if (OnFocusTimerDone()) return; // 專注 / 休息結束
-                try { SystemSounds.Exclamation.Play(); } catch { }
-                if (!_userHidden)
-                    ShowHud(GTimer, null, null, "時間到！", TimeSpan.FromSeconds(5));
-                else if (_mode == IslandMode.Compact) ApplyMode(true);
-                return;
+                if (_timerRemaining <= TimeSpan.Zero)
+                {
+                    _timerRemaining = TimeSpan.Zero;
+                    _timerRunning = false;
+                    _timerSet = TimeSpan.Zero;
+                    UpdateTimerUi();
+                    if (OnFocusTimerDone()) return; // 專注 / 休息結束
+                }
             }
             UpdateTimerUi();
+            TickUpcoming();
         }
 
+        /// <summary>收合時的倒數：專注模式優先，不然顯示一小時內最近的提醒</summary>
         private void UpdateTimerUi()
         {
-            var t = _timerRemaining;
-            if (t < TimeSpan.Zero) t = TimeSpan.Zero;
-            // 無條件進位到秒，避免顯示 00:00 但還沒結束
-            var secs = (int)Math.Ceiling(t.TotalSeconds);
-            string text = secs >= 3600
-                ? $"{secs / 3600}:{secs % 3600 / 60:00}:{secs % 60:00}"
-                : $"{secs / 60:00}:{secs % 60:00}";
-            TimerText.Text = text;
-            TimerStartText.Text = _timerRunning ? "暫停" : "開始";
-
+            string text = null;
             if (_timerRunning)
             {
-                CompactTimer.Text = FocusPrefix() + text;
-                CompactTimer.Visibility = Visibility.Visible;
-                SideTimer.Text = text;
-                SideTimer.Visibility = Visibility.Visible;
+                var t = _timerRemaining < TimeSpan.Zero ? TimeSpan.Zero : _timerRemaining;
+                text = FocusPrefix() + Countdown(t);
             }
-            else
-            {
-                CompactTimer.Visibility = Visibility.Collapsed;
-                SideTimer.Visibility = Visibility.Collapsed;
-            }
+            else if (NextReminder() is Services.Voice.Reminder r && r.Due - DateTime.Now <= TimeSpan.FromHours(1))
+                text = GTimer + " " + Countdown(r.Due - DateTime.Now);
+
+            bool show = text != null;
+            bool changed = (CompactTimer.Visibility == Visibility.Visible) != show;
+            CompactTimer.Text = text ?? "";
+            CompactTimer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            SideTimer.Text = text == null ? "" : text.Substring(text.IndexOf(' ') + 1);
+            SideTimer.Visibility = CompactTimer.Visibility;
+            if (changed && _mode == IslandMode.Compact) ApplyMode(true);
+        }
+
+        /// <summary>倒數文字：無條件進位到秒（避免顯示 00:00 但還沒結束）</summary>
+        private static string Countdown(TimeSpan t)
+        {
+            if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+            var secs = (int)Math.Ceiling(t.TotalSeconds);
+            return secs >= 3600 ? $"{secs / 3600}:{secs % 3600 / 60:00}:{secs % 60:00}" : $"{secs / 60:00}:{secs % 60:00}";
         }
 
         // ================================================================

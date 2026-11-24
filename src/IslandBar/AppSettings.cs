@@ -33,6 +33,8 @@ namespace IslandBar
 
         /// <summary>展開面板的每個分頁底部固定顯示 AI 額度</summary>
         public bool PinQuotaStrip { get; set; } = true;
+        /// <summary>展開時的分頁與順序（media、calendar、weather、system、clip、quick）；暫存架有東西才出現</summary>
+        public List<string> IslandTabs { get; set; } = new List<string> { "media", "calendar", "weather", "system", "clip", "quick" };
 
         /// <summary>收合時顯示 AI 額度點點</summary>
         public bool ShowQuotaDots { get; set; } = true;
@@ -118,6 +120,8 @@ namespace IslandBar
         public string ScreenTranslateHotkey { get; set; } = "Ctrl+Alt+T";
         /// <summary>翻譯成什麼：zh＝自動辨識原文、一律翻成繁體中文（預設）；auto＝中英互翻；en＝翻成英文</summary>
         public string ScreenTranslateTarget { get; set; } = "zh";
+        /// <summary>螢幕識字（框選畫面上的字）的快捷鍵</summary>
+        public string OcrHotkey { get; set; } = "Ctrl+Shift+O";
         /// <summary>手機傳檔：收到的檔案存到哪（空白＝下載\手機傳來）</summary>
         public string PhoneShareFolder { get; set; } = "";
         /// <summary>有選取文字時，只摘要／翻譯選取的文字（沒選取才擷取整個視窗）</summary>
