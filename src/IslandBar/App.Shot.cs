@@ -322,7 +322,8 @@ namespace IslandBar
                     string offerPath = Path.Combine(dir, "電腦給手機.txt");
                     File.WriteAllText(offerPath, "從電腦傳到手機 OK");
                     _window.OfferToPhone(new[] { offerPath, dir });
-                    share.OfferText("電腦剪貼簿的一段文字");
+                    var pc0 = _window.PhoneShareCardWindow;
+                    { var to = share.OfferText("電腦剪貼簿的一段文字"); pc0?.AddOffer(to); }
                     var st = await http.GetStringAsync(bs + "/state");
                     phLog.AppendLine("state: " + st);
                     var first = share.Offers().First(o => !o.IsText);
@@ -338,7 +339,6 @@ namespace IslandBar
                         phLog.AppendLine($"card: visible={pc.IsVisible} at {pc.Left:0},{pc.Top:0} actual {pc.ActualWidth:0.#}x{pc.ActualHeight:0.#} width={pc.Width} sizeToContent={pc.SizeToContent} content {(pc.Content as FrameworkElement)?.ActualWidth:0.#}x{(pc.Content as FrameworkElement)?.ActualHeight:0.#} state={pc.WindowState}");
                         Grab(pc, Path.Combine(dir, "phone-share-card.png"));
                         Save(pc.Content as Visual, Path.Combine(dir, "phone-share-card-render.png"));
-                        File.WriteAllText(Path.Combine(dir, "phone-share-width.txt"), pc.WidthLog);
                     }
                     _window.HidePhoneShareCard();
                     await Task.Delay(400);

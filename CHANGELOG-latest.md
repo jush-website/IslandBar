@@ -10,6 +10,10 @@
 - **islandbar_x.y.z_amd64.deb / _arm64.deb**：Ubuntu／Debian 用 `sudo apt install ./檔名.deb` 安裝。
 - **IslandBar-x.y.z-linux-x64.tar.gz / -linux-arm64.tar.gz**：其他發行版，解壓縮後執行 `./install.sh`（不需要 sudo）。
 
+## v1.16.22
+
+- 修好 v1.16.21「手機傳檔」小卡打開時寬度變成一條細線、看不到 QR code 的問題。
+
 ## v1.16.21 手機傳檔
 
 - **新功能：手機傳檔**。手機和電腦連同一個 Wi-Fi，打開動態島「快速設定 → 手機傳檔」，手機相機掃一下 QR code 就能互傳，不用線、不用裝 App。

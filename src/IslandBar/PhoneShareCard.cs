@@ -32,8 +32,6 @@ namespace IslandBar
         private readonly Rectangle _dropRect;
         private readonly Dictionary<string, ItemRow> _rows = new Dictionary<string, ItemRow>();
         private string _fullUrl = "";
-        /// <summary>除錯：誰改了寬度</summary>
-        public string WidthLog { get; private set; } = "";
 
         public event Action CloseRequested;
         public event Action HideRequested;
@@ -91,7 +89,7 @@ namespace IslandBar
             });
             var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             titles.Children.Add(new TextBlock { Text = "手機傳檔", FontWeight = FontWeights.SemiBold, FontSize = 14 });
-            titles.Children.Add(new TextBlock { Text = "同一個 Wi-Fi，掃 QR code 就能互傳，不用線、不用裝 App", Foreground = Dim, FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            titles.Children.Add(new TextBlock { Text = "同一個 Wi-Fi，掃 QR code 就能互傳", Foreground = Dim, FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis });
             Grid.SetColumn(titles, 1);
             header.Children.Add(titles);
             var btns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
@@ -156,7 +154,7 @@ namespace IslandBar
             var up = Glyph("", 16, Accent);
             up.VerticalAlignment = VerticalAlignment.Center;
             dropRow.Children.Add(up);
-            var dropText = new TextBlock { Text = "把檔案拖到這裡，傳到手機", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 8, 0), TextWrapping = TextWrapping.Wrap };
+            var dropText = new TextBlock { Text = "拖到這裡傳到手機", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 8, 0), TextWrapping = TextWrapping.Wrap };
             Grid.SetColumn(dropText, 1);
             dropRow.Children.Add(dropText);
             var dropBtns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -215,10 +213,6 @@ namespace IslandBar
             KeyDown += (s, e) => { if (e.Key == Key.Escape) HideRequested?.Invoke(); };
             PreviewMouseLeftButtonDown += (s, e) => { if (!IsActive) try { Activate(); } catch { } };
             SizeChanged += (s, e) => Reposition();
-            System.ComponentModel.DependencyPropertyDescriptor.FromProperty(WidthProperty, typeof(Window)).AddValueChanged(this, (s, e) =>
-            {
-                if (WidthLog.Length < 6000) WidthLog += $"Width → {Width}\n{Environment.StackTrace}\n\n";
-            });
             Loaded += (s, e) => { Reposition(); PlayOpen(); };
         }
 
