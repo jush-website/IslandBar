@@ -332,7 +332,13 @@ namespace IslandBar
                     phLog.AppendLine($"missing offer: {(int)gone.StatusCode}");
                     phLog.AppendLine($"client: {share.Client}");
                     await Task.Delay(1500);
-                    if (_window.PhoneShareCardWindow != null) Grab(_window.PhoneShareCardWindow, Path.Combine(dir, "phone-share-card.png"));
+                    var pc = _window.PhoneShareCardWindow;
+                    if (pc != null)
+                    {
+                        phLog.AppendLine($"card: visible={pc.IsVisible} at {pc.Left:0},{pc.Top:0} actual {pc.ActualWidth:0.#}x{pc.ActualHeight:0.#} width={pc.Width} sizeToContent={pc.SizeToContent} content {(pc.Content as FrameworkElement)?.ActualWidth:0.#}x{(pc.Content as FrameworkElement)?.ActualHeight:0.#} state={pc.WindowState}");
+                        Grab(pc, Path.Combine(dir, "phone-share-card.png"));
+                        Save(pc.Content as Visual, Path.Combine(dir, "phone-share-card-render.png"));
+                    }
                     _window.HidePhoneShareCard();
                     await Task.Delay(400);
                     phLog.AppendLine($"after hide: running={share.Running} cardVisible={_window.PhoneShareCardWindow?.IsVisible}");
