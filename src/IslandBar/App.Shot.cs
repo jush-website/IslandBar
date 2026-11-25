@@ -511,8 +511,8 @@ namespace IslandBar
                     }
                     var real = await IslandBar.Services.LyricsService.GetAsync("Bohemian Rhapsody", "Queen", TimeSpan.FromSeconds(354), default);
                     nf.AppendLine($"lrclib live lookup: {(real == null ? "none" : real.Count + " synced lines")}");
-                    var fake = new IslandBar.Services.MediaInfo { Title = "測試歌曲", Artist = "測試歌手", Source = "Spotify", IsPlaying = true, Position = TimeSpan.FromSeconds(3), Duration = TimeSpan.FromSeconds(200), LastUpdated = DateTimeOffset.Now };
-                    _window.DebugLyrics(lrc, fake);
+                    var fakeSong = new IslandBar.Services.MediaInfo { Title = "測試歌曲", Artist = "測試歌手", Source = "Spotify", IsPlaying = true, Position = TimeSpan.FromSeconds(3), Duration = TimeSpan.FromSeconds(200), LastUpdated = DateTimeOffset.Now };
+                    _window.DebugLyrics(lrc, fakeSong);
                     await Task.Delay(500);
                     nf.AppendLine("lyrics: " + _window.DebugLyricState);
                     SetModeCompactForShot();
@@ -552,11 +552,11 @@ namespace IslandBar
                     nf.AppendLine($"recording: {recPath} exists={File.Exists(recPath ?? "")} size={(File.Exists(recPath ?? "") ? new FileInfo(recPath).Length : 0)} frames={rec?.CapturedFrames} dropped={rec?.DroppedFrames} out={rec?.OutputWidth}x{rec?.OutputHeight} audio={rec?.AudioRecorded} audioErr={rec?.AudioError}");
                     if (recPath != null && File.Exists(recPath))
                     {
-                        var comp = new Windows.Media.Editing.MediaComposition();
-                        var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(await Windows.Storage.StorageFile.GetFileFromPathAsync(recPath));
+                        var comp = new global::Windows.Media.Editing.MediaComposition();
+                        var clip = await global::Windows.Media.Editing.MediaClip.CreateFromFileAsync(await global::Windows.Storage.StorageFile.GetFileFromPathAsync(recPath));
                         comp.Clips.Add(clip);
                         nf.AppendLine($"video duration: {clip.OriginalDuration.TotalSeconds:0.0}s");
-                        var thumb = await comp.GetThumbnailAsync(TimeSpan.FromSeconds(2), 640, 360, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+                        var thumb = await comp.GetThumbnailAsync(TimeSpan.FromSeconds(2), 640, 360, global::Windows.Media.Editing.VideoFramePrecision.NearestFrame);
                         using (var ts = thumb.AsStreamForRead())
                         using (var fs = File.Create(Path.Combine(dir, "recording-frame.jpg"))) ts.CopyTo(fs);
                         var gif = await IslandBar.Conversion.GifOps.ToGif(new[] { recPath }, null);
