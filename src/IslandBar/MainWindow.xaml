@@ -560,8 +560,10 @@
                                 <TextBlock x:Name="MediaArtist" Text="" FontSize="13" Foreground="{StaticResource Secondary}"
                                            Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
                                 <TextBlock x:Name="MediaSource" Text="" FontSize="11" Foreground="{StaticResource Tertiary}" Margin="0,3,0,0" />
+                                <TextBlock x:Name="MediaLyric" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,4,0,0"
+                                           TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
 
-                                <Grid x:Name="MediaProgressHost" Margin="0,16,0,0" Height="10" Background="Transparent" Cursor="Hand"
+                                <Grid x:Name="MediaProgressHost" Margin="0,12,0,0" Height="10" Background="Transparent" Cursor="Hand"
                                       MouseLeftButtonDown="MediaProgress_MouseDown">
                                     <Border Height="4" CornerRadius="2" Background="{StaticResource TrackBg}" VerticalAlignment="Center" />
                                     <Border Height="4" CornerRadius="2" Background="White" VerticalAlignment="Center" RenderTransformOrigin="0,0.5">
@@ -897,26 +899,65 @@
                     <!-- == 快速設定 == -->
                     <Grid x:Name="PageQuick" Grid.Row="1" Margin="0,8,0,0" Visibility="Collapsed">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="44" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <Border Background="{StaticResource TileBg}" CornerRadius="12" Padding="6,0,14,0">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="34" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="44" />
-                                </Grid.ColumnDefinitions>
-                                <Button Style="{StaticResource IconButton}" Width="32" Height="32" Click="Mute_Click" ToolTip="靜音">
-                                    <TextBlock x:Name="VolumeGlyph" Style="{StaticResource Glyph}" Text="&#xE767;" FontSize="14" />
-                                </Button>
-                                <Slider x:Name="VolumeSlider" Grid.Column="1" Style="{StaticResource FlatSlider}" Minimum="0" Maximum="100"
-                                        VerticalAlignment="Center" Margin="8,0,8,0" ValueChanged="VolumeSlider_ValueChanged" />
-                                <TextBlock x:Name="VolumeText" Grid.Column="2" Text="0" FontSize="12" FontWeight="SemiBold"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center" />
-                            </Grid>
+                        <!-- 音量、亮度（亮度只有可以調的螢幕才出現）；右邊的 › 打開各程式音量／各螢幕亮度 -->
+                        <Border x:Name="QuickSliders" Background="{StaticResource TileBg}" CornerRadius="12" Padding="6,2,4,2">
+                            <StackPanel>
+                                <Grid Height="34">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="30" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Style="{StaticResource IconButton}" Width="30" Height="30" Click="Mute_Click" ToolTip="靜音">
+                                        <TextBlock x:Name="VolumeGlyph" Style="{StaticResource Glyph}" Text="&#xE767;" FontSize="14" />
+                                    </Button>
+                                    <Slider x:Name="VolumeSlider" Grid.Column="1" Style="{StaticResource FlatSlider}" Minimum="0" Maximum="100"
+                                            VerticalAlignment="Center" Margin="8,0,8,0" ValueChanged="VolumeSlider_ValueChanged" />
+                                    <TextBlock x:Name="VolumeText" Grid.Column="2" Text="0" FontSize="12" FontWeight="SemiBold"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Width="28" Height="28" Click="MixerOpen_Click" ToolTip="各程式音量、切換喇叭／耳機">
+                                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE76C;" FontSize="11" Foreground="{StaticResource Secondary}" />
+                                    </Button>
+                                </Grid>
+                                <Grid x:Name="BrightnessRow" Height="34" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="30" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE706;" FontSize="14" HorizontalAlignment="Center" />
+                                    <Slider x:Name="BrightnessSlider" Grid.Column="1" Style="{StaticResource FlatSlider}" Minimum="0" Maximum="100"
+                                            VerticalAlignment="Center" Margin="8,0,8,0" ValueChanged="BrightnessSlider_ValueChanged" />
+                                    <TextBlock x:Name="BrightnessText" Grid.Column="2" Text="" FontSize="12" FontWeight="SemiBold"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Width="28" Height="28" Click="BrightnessOpen_Click" ToolTip="各螢幕分開調亮度">
+                                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE76C;" FontSize="11" Foreground="{StaticResource Secondary}" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
                         </Border>
-                        <UniformGrid Grid.Row="1" Columns="4" Rows="2" Margin="-4,4,-4,-4">
+                        <!-- 各程式音量／各螢幕亮度（蓋在格子上面，按 ‹ 回來） -->
+                        <Grid x:Name="QuickSub" Grid.Row="1" Margin="0,4,0,0" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="24" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Style="{StaticResource IconButton}" Width="24" Height="24" Click="QuickSubBack_Click" ToolTip="回到快速設定">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE76B;" FontSize="10" />
+                                </Button>
+                                <TextBlock x:Name="QuickSubTitle" Text="" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Secondary}" VerticalAlignment="Center" Margin="4,0,0,0" />
+                            </StackPanel>
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" Focusable="False">
+                                <StackPanel x:Name="QuickSubList" />
+                            </ScrollViewer>
+                        </Grid>
+                        <UniformGrid x:Name="QuickTiles" Grid.Row="1" Columns="4" Rows="2" Margin="-4,4,-4,-4">
                             <Button x:Name="BoostTile" Style="{StaticResource TileButton}" Click="Boost_Click" ToolTip="整理記憶體、清暫存檔（不會動到個人資料）">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Glyph}" Text="&#xEC4A;" FontSize="17" Foreground="#64D2FF" />

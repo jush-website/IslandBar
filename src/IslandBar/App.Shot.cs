@@ -44,7 +44,7 @@ namespace IslandBar
                 OpenSettings("voice", "畫面重點摘要");   // 舊的分頁名稱要能轉到新的地方
                 await Task.Delay(1200);
                 Save(_hub.CurrentContent, Path.Combine(dir, "settings-jump-oldvoice.png"));
-                foreach (var q in new[] { "快捷鍵", "電量", "計時" })
+                foreach (var q in new[] { "快捷鍵", "電量", "計時", "亮度" })
                 {
                     _hub.DebugSearch(q);
                     await Task.Delay(1500);
@@ -488,6 +488,88 @@ namespace IslandBar
                 catch (Exception ex) { cpLog.AppendLine("錯誤：" + ex.Message); }
                 finally { try { foreach (var pr in System.Diagnostics.Process.GetProcessesByName("notepad")) pr.Kill(); } catch { } }
                 File.WriteAllText(Path.Combine(dir, "clip-paste-test.txt"), cpLog.ToString());
+
+                // 新功能：會議連結、麥克風靜音、同步歌詞、各程式音量、亮度、螢幕錄影
+                var nf = new System.Text.StringBuilder();
+                try
+                {
+                    var now = DateTime.Now;
+                    string ics = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nSUMMARY:週會\nDTSTART:" + now.AddMinutes(20).ToString("yyyyMMdd'T'HHmmss") + "\nDTEND:" + now.AddMinutes(80).ToString("yyyyMMdd'T'HHmmss") +
+                                 "\nDESCRIPTION:加入 Google Meet：https://meet.google.com/abc-defg-hij\\n或撥號\nEND:VEVENT\nBEGIN:VEVENT\nUID:b\nSUMMARY:Teams 討論\nDTSTART:" + now.AddHours(3).ToString("yyyyMMdd'T'HHmmss") +
+                                 "\nLOCATION:Microsoft Teams Meeting\nDESCRIPTION:https://teams.microsoft.com/l/meetup-join/19%3ameeting_xyz%40thread.v2/0?context=%7b%7d\nEND:VEVENT\nBEGIN:VEVENT\nUID:c\nSUMMARY:吃飯\nDTSTART:" + now.AddHours(5).ToString("yyyyMMdd'T'HHmmss") + "\nEND:VEVENT\nEND:VCALENDAR";
+                    foreach (var ev in IslandBar.Services.CalendarService.Parse(ics, now.AddDays(-1), now.AddDays(2)))
+                        nf.AppendLine($"event '{ev.Summary}' → {ev.MeetingKind ?? "-"} {ev.MeetingUrl ?? ""}");
+                    nf.AppendLine($"zoom: {IslandBar.Services.MeetingLinks.Find("Join: https://us02web.zoom.us/j/8812345678?pwd=abc. Thanks")}");
+                    nf.AppendLine($"mic: muted={_window.MicMuted} hotkey='{_window.MicMuteHotkeyStatus}' record hotkey='{_window.RecordHotkeyStatus}'");
+
+                    var lrc = IslandBar.Services.LyricsService.Parse("[00:00.50]第一句\n[00:02.00][00:08.00]重複的一句\n[00:04.25]第三句\n[00:06.00]");
+                    nf.AppendLine($"lrc parsed: {lrc.Count} lines; at 3s → #{IslandBar.Services.LyricsService.IndexAt(lrc, TimeSpan.FromSeconds(3))}; at 0.1s → #{IslandBar.Services.LyricsService.IndexAt(lrc, TimeSpan.FromSeconds(0.1))}");
+                    foreach (var (t, a) in new[] { ("Queen - Bohemian Rhapsody (Official Video Remastered)", "Queen Official"), ("告白氣球 Love Confession【官方完整版 MV】", "周杰倫 Jay Chou"), ("Shape of You", "Ed Sheeran - Topic") })
+                    {
+                        var c = IslandBar.Services.LyricsService.Clean(t, a);
+                        nf.AppendLine($"clean '{t}' / '{a}' → '{c.title}' / '{c.artist}'");
+                    }
+                    var real = await IslandBar.Services.LyricsService.GetAsync("Bohemian Rhapsody", "Queen", TimeSpan.FromSeconds(354), default);
+                    nf.AppendLine($"lrclib live lookup: {(real == null ? "none" : real.Count + " synced lines")}");
+                    var fake = new IslandBar.Services.MediaInfo { Title = "測試歌曲", Artist = "測試歌手", Source = "Spotify", IsPlaying = true, Position = TimeSpan.FromSeconds(3), Duration = TimeSpan.FromSeconds(200), LastUpdated = DateTimeOffset.Now };
+                    _window.DebugLyrics(lrc, fake);
+                    await Task.Delay(500);
+                    nf.AppendLine("lyrics: " + _window.DebugLyricState);
+                    SetModeCompactForShot();
+                    await Task.Delay(800);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-lyrics-compact.png"));
+                    _window.DebugExpand("media");
+                    await Task.Delay(1200);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-lyrics-media.png"));
+                    _window.DebugClearMedia();
+
+                    var outs = IslandBar.Services.AudioMixer.Outputs();
+                    var apps = IslandBar.Services.AudioMixer.Apps();
+                    nf.AppendLine($"audio outputs: {outs.Count} ({string.Join(", ", outs.Select(o => o.Name + (o.IsDefault ? "*" : "")))}); apps: {apps.Count}");
+                    var disp = await Task.Run(() => IslandBar.Services.BrightnessService.Displays(true));
+                    nf.AppendLine($"brightness displays: {disp.Count}");
+                    _window.DebugExpand("quick");
+                    await Task.Delay(1500);
+                    nf.AppendLine("quick: " + _window.DebugQuickState);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-quick-new.png"));
+                    _window.DebugQuickSub("mixer");
+                    await Task.Delay(800);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-quick-mixer.png"));
+                    nf.AppendLine("mixer: " + _window.DebugQuickState);
+                    _window.DebugQuickSub(null);
+
+                    // 錄 4 秒（不倒數），檢查檔案、抓一張畫面看方向對不對，再轉成 GIF
+                    var recNotice = new Window { Width = 520, Height = 260, Left = 60, Top = 120, WindowStyle = WindowStyle.None, Topmost = true, Background = Brushes.DarkSlateBlue, ShowActivated = false, Content = new System.Windows.Controls.TextBlock { Text = "錄影測試 ↑ 上面", FontSize = 40, Foreground = Brushes.White, Margin = new Thickness(20) } };
+                    recNotice.Show();
+                    _settings.RecordFolder = Path.Combine(dir, "rec");
+                    await _window.StartRecordingAsync(countdown: false, maxWidthOverride: 1280);
+                    nf.AppendLine($"recording started: {_window.IsRecording}");
+                    for (int i = 0; i < 4; i++) { await Task.Delay(1000); recNotice.Left += 60; }
+                    var rec = _window.DebugRecorder;
+                    Save(_window.RootVisual, Path.Combine(dir, "island-recording.png"));
+                    string recPath = await _window.StopRecordingAsync();
+                    recNotice.Close();
+                    nf.AppendLine($"recording: {recPath} exists={File.Exists(recPath ?? "")} size={(File.Exists(recPath ?? "") ? new FileInfo(recPath).Length : 0)} frames={rec?.CapturedFrames} dropped={rec?.DroppedFrames} out={rec?.OutputWidth}x{rec?.OutputHeight} audio={rec?.AudioRecorded} audioErr={rec?.AudioError}");
+                    if (recPath != null && File.Exists(recPath))
+                    {
+                        var comp = new Windows.Media.Editing.MediaComposition();
+                        var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(await Windows.Storage.StorageFile.GetFileFromPathAsync(recPath));
+                        comp.Clips.Add(clip);
+                        nf.AppendLine($"video duration: {clip.OriginalDuration.TotalSeconds:0.0}s");
+                        var thumb = await comp.GetThumbnailAsync(TimeSpan.FromSeconds(2), 640, 360, Windows.Media.Editing.VideoFramePrecision.NearestFrame);
+                        using (var ts = thumb.AsStreamForRead())
+                        using (var fs = File.Create(Path.Combine(dir, "recording-frame.jpg"))) ts.CopyTo(fs);
+                        var gif = await IslandBar.Conversion.GifOps.ToGif(new[] { recPath }, null);
+                        nf.AppendLine($"gif: {gif.Message} size={new FileInfo(gif.OutputPath).Length}");
+                        var gdec = new GifBitmapDecoder(new Uri(gif.OutputPath), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                        nf.AppendLine($"gif frames: {gdec.Frames.Count}");
+                        File.Copy(gif.OutputPath, Path.Combine(dir, "recording.gif"), true);
+                    }
+                }
+                catch (Exception ex) { nf.AppendLine("錯誤：" + ex); }
+                try { Directory.Delete(Path.Combine(dir, "rec"), true); } catch { }
+                _settings.RecordFolder = "";
+                File.WriteAllText(Path.Combine(dir, "new-features-test.txt"), nf.ToString());
                 try { Directory.Delete(Path.Combine(dir, "phone-recv"), true); File.Delete(Path.Combine(dir, "電腦給手機.txt")); } catch { }
                 _settings.PhoneShareFolder = "";
             }
@@ -528,6 +610,8 @@ namespace IslandBar
         }
 
         /// <summary>抓視窗在螢幕上的真正樣子（看文字清不清楚）</summary>
+        private void SetModeCompactForShot() => _window.DebugCompact();
+
         private static void Grab(Window w, string path)
         {
             try

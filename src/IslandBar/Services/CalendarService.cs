@@ -16,6 +16,43 @@ namespace IslandBar.Services
         public string Summary { get; set; } = "";
         public bool AllDay { get; set; }
         public string Color { get; set; }    // 行程顏色（#RRGGBB），沒有就用預設色
+        /// <summary>線上會議連結（Google Meet、Teams、Zoom、Webex），沒有就是 null</summary>
+        public string MeetingUrl { get; set; }
+        /// <summary>會議是哪一種：Meet、Teams、Zoom、Webex</summary>
+        public string MeetingKind => MeetingLinks.Kind(MeetingUrl);
+    }
+
+    /// <summary>從行程的地點、說明、網址裡找線上會議連結</summary>
+    public static class MeetingLinks
+    {
+        private static readonly System.Text.RegularExpressions.Regex Rx = new System.Text.RegularExpressions.Regex(
+            @"https://(?:meet\.google\.com/[a-z]{3,4}-[a-z]{4}-[a-z]{3,4}" +
+            @"|teams\.microsoft\.com/(?:l/meetup-join|meet)/[^\s""<>\\]+" +
+            @"|teams\.live\.com/meet/[^\s""<>\\]+" +
+            @"|(?:[\w-]+\.)?zoom\.us/(?:j|my|w)/[^\s""<>\\]+" +
+            @"|[\w-]+\.webex\.com/[^\s""<>\\]+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        public static string Find(params string[] texts)
+        {
+            foreach (var t in texts)
+            {
+                if (string.IsNullOrEmpty(t)) continue;
+                var m = Rx.Match(t.Replace("\\n", " ").Replace("\\,", ",").Replace("\\;", ";"));
+                if (m.Success) return m.Value.TrimEnd('.', ',', ';', ')', '>');
+            }
+            return null;
+        }
+
+        public static string Kind(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return null;
+            if (url.Contains("meet.google.com")) return "Google Meet";
+            if (url.Contains("teams.")) return "Teams";
+            if (url.Contains("zoom.us")) return "Zoom";
+            if (url.Contains("webex.com")) return "Webex";
+            return "會議";
+        }
     }
 
     /// <summary>
@@ -86,7 +123,7 @@ namespace IslandBar.Services
 
         private sealed class Raw
         {
-            public string Uid = "", Summary = "", RRule, Status;
+            public string Uid = "", Summary = "", RRule, Status, Location, Description, Url, Conference;
             public DateTime Start, End;
             public bool AllDay, HasEnd;
             public DateTime? RecurrenceId;
@@ -120,6 +157,10 @@ namespace IslandBar.Services
                     case "SUMMARY": cur.Summary = Unescape(value); break;
                     case "RRULE": cur.RRule = value; break;
                     case "STATUS": cur.Status = value.ToUpperInvariant(); break;
+                    case "LOCATION": cur.Location = value; break;
+                    case "DESCRIPTION": cur.Description = value; break;
+                    case "URL": cur.Url = value; break;
+                    case "X-GOOGLE-CONFERENCE": cur.Conference = value; break;
                     case "DTSTART": cur.Start = ParseTime(head, value, out cur.AllDay); break;
                     case "DTEND": cur.End = ParseTime(head, value, out _); cur.HasEnd = true; break;
                     case "RECURRENCE-ID": cur.RecurrenceId = ParseTime(head, value, out _); break;
@@ -137,10 +178,11 @@ namespace IslandBar.Services
                 if (r.Status == "CANCELLED") continue;
                 if (!r.HasEnd) r.End = r.AllDay ? r.Start.AddDays(1) : r.Start.AddHours(1);
                 var dur = r.End - r.Start;
+                string meet = MeetingLinks.Find(r.Conference, r.Location, r.Url, r.Description);
 
                 if (string.IsNullOrEmpty(r.RRule) || r.RecurrenceId.HasValue)
                 {
-                    if (r.End >= from && r.Start <= to) result.Add(new CalEvent { Start = r.Start, End = r.End, Summary = r.Summary, AllDay = r.AllDay });
+                    if (r.End >= from && r.Start <= to) result.Add(new CalEvent { Start = r.Start, End = r.End, Summary = r.Summary, AllDay = r.AllDay, MeetingUrl = meet });
                     continue;
                 }
 
@@ -148,7 +190,7 @@ namespace IslandBar.Services
                 {
                     if (r.ExDates.Any(x => Math.Abs((x - start).TotalMinutes) < 1)) continue;
                     if (overrides.Contains(r.Uid + "|" + start.ToString("s"))) continue;
-                    result.Add(new CalEvent { Start = start, End = start + dur, Summary = r.Summary, AllDay = r.AllDay });
+                    result.Add(new CalEvent { Start = start, End = start + dur, Summary = r.Summary, AllDay = r.AllDay, MeetingUrl = meet });
                 }
             }
             return result.OrderBy(e => e.Start).ToList();

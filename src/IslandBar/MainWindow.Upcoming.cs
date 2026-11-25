@@ -100,8 +100,17 @@ namespace IslandBar
                 sp.Children.Add(new TextBlock { Text = ev.Summary, FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 130 });
                 sp.ToolTip = (ev.AllDay ? "全天" : $"{ev.Start:M/d HH:mm}–{ev.End:HH:mm}") + "  " + ev.Summary;
                 Grid.SetColumn(sp, 1);
-                Grid.SetColumnSpan(sp, 2);
                 row.Children.Add(sp);
+                if (ev.MeetingUrl != null && (!isToday || ev.End > DateTime.Now))
+                {
+                    var url = ev.MeetingUrl;
+                    var join = SmallAction("加入", "加入 " + ev.MeetingKind, () => JoinMeeting(url));
+                    join.Width = 34;
+                    if (join.Child is TextBlock jt) jt.Foreground = Res("Accent");
+                    Grid.SetColumn(join, 2);
+                    row.Children.Add(join);
+                }
+                else Grid.SetColumnSpan(sp, 2);
                 UpcomingList.Children.Add(row);
             }
 

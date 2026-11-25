@@ -74,6 +74,7 @@ namespace IslandBar
             ("ai", "\uE99A", "AI 模型", "AI"),
             ("aitools", "\uE945", "Claude 與 Codex", "AI"),
             ("tools", "\uE765", "快捷鍵與工具", "工具"),
+            ("sound", "\uE767", "聲音與螢幕", "工具"),
             ("system", "\uEC4A", "系統與加速", "工具"),
             ("weather", "\uE9CA", "天氣與行程", "工具"),
             ("widgets", "\uE8A9", "桌面小工具", "工具"),
@@ -226,6 +227,7 @@ namespace IslandBar
                 case "ai": BuildAi(page); break;
                 case "aitools": BuildAiTools(page); break;
                 case "tools": BuildTools(page); break;
+                case "sound": BuildSound(page); break;
                 case "system": BuildSystem(page); break;
                 case "weather": BuildWeather(page); break;
                 case "widgets": BuildWidgets(page); break;
@@ -315,7 +317,9 @@ namespace IslandBar
             p.Children.Add(Heading("收合時", 20));
             p.Children.Add(Check("顯示 AI 額度、系統資源的點點", S.ShowQuotaDots, v => { S.ShowQuotaDots = v; Changed(); }));
             p.Children.Add(Check("播放音樂時顯示歌名", S.ShowCompactTitle, v => { S.ShowCompactTitle = v; Changed(); }));
-            p.Children.Add(Note("計時、提醒、專注模式、下一個行程快到時，收合時也會顯示倒數。"));
+            p.Children.Add(Check("有同步歌詞時，改成跟著唱到哪一句顯示歌詞（音樂分頁也會顯示）", S.ShowLyrics, v => { S.ShowLyrics = v; Changed(); }));
+            p.Children.Add(Note("歌詞從 LRCLIB（lrclib.net，免費的社群歌詞庫）抓，只送歌名、歌手和歌曲長度去查；找不到就照舊顯示歌名。"));
+            p.Children.Add(Note("計時、提醒、專注模式、下一個行程快到、麥克風靜音、錄影中，收合時也會顯示。"));
 
             p.Children.Add(Heading("點點顯示的項目", 18));
             var labels = _h.Window?.AllItemLabels ?? new List<(string group, string label)>();
@@ -1041,6 +1045,17 @@ namespace IslandBar
             row.Children.Add(clear);
             p.Children.Add(row);
             p.Children.Add(err);
+
+            p.Children.Add(Heading("會議", 24));
+            p.Children.Add(Note("行程的地點或說明裡有 Google Meet、Teams、Zoom、Webex 連結時：開始前動態島跳出提醒，點一下就加入；「接下來」清單裡的會議也有「加入」按鈕。"));
+            p.Children.Add(Check("會議開始前提醒，點一下加入", S.MeetingJoinPrompt, v => { S.MeetingJoinPrompt = v; Changed(); }));
+            p.Children.Add(Labeled("提前多久", Segmented(new[] { ("1 分鐘", 1), ("3 分鐘", 3), ("5 分鐘", 5), ("10 分鐘", 10) },
+                S.MeetingLeadMinutes switch { 1 => 0, 3 => 1, 10 => 3, _ => 2 },
+                v => { S.MeetingLeadMinutes = v switch { 0 => 1, 1 => 3, 3 => 10, _ => 5 }; Changed(); })));
+            p.Children.Add(Heading("一鍵靜音麥克風", 16));
+            p.Children.Add(Note($"按 {HotkeyText.Pretty(S.MicMuteHotkey)} 把麥克風靜音（系統層級，Meet、Teams、Zoom、Discord 全部都聽不到），再按一次取消。快捷鍵在「快捷鍵與工具」改。"));
+            p.Children.Add(Check("靜音時，收合的動態島一直顯示紅色「麥克風靜音」", S.MicMuteIndicator, v => { S.MicMuteIndicator = v; Changed(); }));
+            p.Children.Add(PageLink("改快捷鍵 ›", "tools", "快捷鍵一覽"));
         }
 
         // ================================================================
@@ -1125,10 +1140,38 @@ namespace IslandBar
             Row("畫面重點摘要", "目前視窗（或選取的文字）的重點", HotkeyRow(() => S.ScreenSummaryHotkey, v => S.ScreenSummaryHotkey = v, () => _h.Window?.SummaryHotkeyStatus));
             Row("畫面翻譯", "目前視窗（或選取的文字）翻成中文", HotkeyRow(() => S.ScreenTranslateHotkey, v => S.ScreenTranslateHotkey = v, () => _h.Window?.TranslateHotkeyStatus));
             Row("螢幕識字", "框選畫面上的一塊，把字複製下來", HotkeyRow(() => S.OcrHotkey, v => S.OcrHotkey = v, () => _h.Window?.OcrHotkeyStatus));
+            Row("麥克風靜音", "開會時一鍵靜音／取消（所有程式都有效）", HotkeyRow(() => S.MicMuteHotkey, v => S.MicMuteHotkey = v, () => _h.Window?.MicMuteHotkeyStatus));
+            Row("螢幕錄影", "開始（倒數 3 秒）／停止錄影", HotkeyRow(() => S.RecordHotkey, v => S.RecordHotkey = v, () => _h.Window?.RecordHotkeyStatus));
             p.Children.Add(grid);
             p.Children.Add(Note("動態島上：滾輪＝音量；Ctrl＋滾輪＝大小、Alt＋滾輪＝粗細、Shift＋滾輪＝寬度。把檔案拖到動態島＝格式轉換輪盤（也能暫存、傳到手機）。"));
 
             BuildScreenAi(p);
+
+            p.Children.Add(Heading("螢幕錄影", 24));
+            p.Children.Add(Note($"按 {HotkeyText.Pretty(S.RecordHotkey)}（或系統匣 → 工具 → 螢幕錄影）：倒數 3 秒後錄滑鼠所在的螢幕，收合的動態島顯示「● 錄影 00:12」，再按一次停止。存成 MP4；動態島自己不會被錄進去。要做 GIF：把錄好的檔案拖到動態島，輪盤按 Shift 翻到第 2 頁選「GIF」。"));
+            p.Children.Add(Check("同時錄電腦播出來的聲音（影片、會議、遊戲的聲音；不含麥克風）", S.RecordSystemAudio, v => { S.RecordSystemAudio = v; Changed(); }));
+            p.Children.Add(Check("錄滑鼠游標", S.RecordCursor, v => { S.RecordCursor = v; Changed(); }));
+            p.Children.Add(Labeled("每秒張數", Segmented(new[] { ("30（檔案小、順）", 0), ("60（遊戲、捲動更順）", 1) }, S.RecordFps == 60 ? 1 : 0, v => { S.RecordFps = v == 1 ? 60 : 30; Changed(); })));
+            p.Children.Add(Labeled("解析度", Segmented(new[] { ("最多 1080p（建議）", 0), ("原始解析度（2K／4K 很吃電腦）", 1) }, S.RecordFullResolution ? 1 : 0, v => { S.RecordFullResolution = v == 1; Changed(); })));
+            var recFolder = new TextBlock { Foreground = Brushes.White, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 6, 0, 0) };
+            void ShowRecFolder() { string f = string.IsNullOrWhiteSpace(S.RecordFolder) ? Services.ScreenRecorder.DefaultFolder() : S.RecordFolder; recFolder.Text = "存到：" + f; recFolder.ToolTip = f; }
+            ShowRecFolder();
+            p.Children.Add(recFolder);
+            var recRow = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+            var recStart = MakeButton("開始錄影", true);
+            recStart.Click += (s, e) => _h.Window?.ToggleRecording();
+            recRow.Children.Add(recStart);
+            var recOpen = MakeButton("打開資料夾", false);
+            recOpen.Click += (s, e) => { string f = string.IsNullOrWhiteSpace(S.RecordFolder) ? Services.ScreenRecorder.DefaultFolder() : S.RecordFolder; Directory.CreateDirectory(f); OpenFile(f); };
+            recRow.Children.Add(recOpen);
+            var recPick = MakeButton("換資料夾…", false);
+            recPick.Click += (s, e) =>
+            {
+                var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "錄影要存到哪裡" };
+                if (dlg.ShowDialog() == true) { S.RecordFolder = dlg.FolderName; Changed(); ShowRecFolder(); }
+            };
+            recRow.Children.Add(recPick);
+            p.Children.Add(recRow);
 
             p.Children.Add(Heading("剪貼簿歷史", 24));
             p.Children.Add(Note("最近複製的 15 筆（文字和圖片），在動態島的「剪貼簿」分頁。只存在記憶體，關掉就清空；密碼管理器複製的不會記。"));
@@ -1158,6 +1201,50 @@ namespace IslandBar
             p.Children.Add(shareRow);
         }
 
+        // ================================================================
+        //  聲音與螢幕
+        // ================================================================
+
+        private void BuildSound(StackPanel p)
+        {
+            p.Children.Add(PageTitle("聲音與螢幕"));
+            p.Children.Add(Note("動態島「快速設定」分頁：音量旁的 › 打開各程式音量、切換喇叭／耳機；亮度旁的 › 打開各螢幕分開調。"));
+
+            p.Children.Add(Heading("播放裝置", 18));
+            var outs = Services.AudioMixer.Outputs();
+            var outBox = new ComboBox { MinWidth = 320, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+            foreach (var o in outs) outBox.Items.Add(new ComboBoxItem { Content = o.Name, Tag = o.Id });
+            outBox.SelectedIndex = outs.FindIndex(o => o.IsDefault);
+            outBox.SelectionChanged += (s, e) => { if (outBox.SelectedItem is ComboBoxItem it && it.Tag is string id) Services.AudioMixer.SetDefaultOutput(id); };
+            p.Children.Add(outs.Count > 0 ? (UIElement)outBox : Note("沒有找到播放裝置。"));
+            p.Children.Add(Note("換了之後所有程式（一般、多媒體、通話）都改從這裡出聲。"));
+
+            p.Children.Add(Heading("各程式音量", 18));
+            p.Children.Add(Note("在動態島「快速設定 → 音量旁的 ›」調；Spotify、Chrome、Discord 等各自一條，按程式圖示可以單獨靜音。"));
+            var mixer = MakeButton("開啟 Windows 的音量合成器", false);
+            mixer.Click += (s, e) => OpenFile("ms-settings:apps-volume");
+            p.Children.Add(mixer);
+
+            p.Children.Add(Heading("螢幕亮度", 24));
+            p.Children.Add(Check("快速設定顯示亮度滑桿（有可以調的螢幕才會出現）", S.ShowBrightness, v => { S.ShowBrightness = v; Changed(); }));
+            p.Children.Add(Check("用 DDC/CI 調外接螢幕的亮度", S.BrightnessDdc, v => { S.BrightnessDdc = v; Changed(); }));
+            p.Children.Add(Note("筆電內建螢幕直接調；外接螢幕要在螢幕本身的選單（OSD）裡開啟「DDC/CI」。透過某些擴充座、轉接頭、電視可能不支援。"));
+            var list = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+            list.Children.Add(Note("偵測中…"));
+            p.Children.Add(list);
+            _ = Task.Run(() => Services.BrightnessService.Displays(true)).ContinueWith(t => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                list.Children.Clear();
+                var ds = t.Status == TaskStatus.RanToCompletion ? t.Result : new List<Services.DisplayBrightness>();
+                if (ds.Count == 0) { list.Children.Add(Note("現在沒有可以調亮度的螢幕。")); return; }
+                foreach (var d in ds)
+                {
+                    var disp = d;
+                    list.Children.Add(Labeled(d.Name, Slider(0, 100, d.Percent, v => Services.BrightnessService.Set(disp, (int)Math.Round(v)), v => $"{v:0}%")));
+                }
+            })));
+        }
+
         private static void OpenFile(string path)
         {
             try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
@@ -1178,7 +1265,10 @@ namespace IslandBar
             ["藍牙"] = new[] { "電量", "耳機" }, ["耳機"] = new[] { "電量", "播放裝置" }, ["模型"] = new[] { "AI 大腦", "本機小模型" },
             ["ollama"] = new[] { "PAIR", "Ollama" }, ["翻譯"] = new[] { "翻譯" }, ["ocr"] = new[] { "螢幕識字", "文字辨識" },
             ["燈"] = new[] { "燈效" }, ["分頁"] = new[] { "展開時的分頁" }, ["傳檔"] = new[] { "手機傳檔" }, ["手機"] = new[] { "手機傳檔" },
-            ["額度"] = new[] { "AI 額度", "額度" }, ["clipboard"] = new[] { "剪貼簿" }, ["位置"] = new[] { "位置", "螢幕" }
+            ["額度"] = new[] { "AI 額度", "額度" }, ["clipboard"] = new[] { "剪貼簿" }, ["位置"] = new[] { "位置", "螢幕" },
+            ["亮度"] = new[] { "螢幕亮度" }, ["音量"] = new[] { "各程式音量", "播放裝置" }, ["喇叭"] = new[] { "播放裝置" },
+            ["錄影"] = new[] { "螢幕錄影" }, ["錄螢幕"] = new[] { "螢幕錄影" }, ["gif"] = new[] { "GIF" }, ["歌詞"] = new[] { "同步歌詞", "歌詞" },
+            ["會議"] = new[] { "會議", "麥克風靜音" }, ["靜音"] = new[] { "麥克風靜音", "靜音" }, ["meet"] = new[] { "會議" }, ["zoom"] = new[] { "會議" }
         };
 
         public void DebugSearch(string q) => _searchInput.Text = q;

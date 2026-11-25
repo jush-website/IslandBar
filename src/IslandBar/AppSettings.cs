@@ -44,6 +44,8 @@ namespace IslandBar
 
         /// <summary>收合時顯示歌名（關掉就只剩封面，比較不擋路）</summary>
         public bool ShowCompactTitle { get; set; } = true;
+        /// <summary>有同步歌詞時（LRCLIB），收合的動態島改顯示目前唱到的那一句</summary>
+        public bool ShowLyrics { get; set; } = true;
 
         /// <summary>整體大小（文字與圖示一起縮放），1.0 = 100%，範圍 0.7 ~ 1.6</summary>
         public double Scale { get; set; } = 1.0;
@@ -122,6 +124,24 @@ namespace IslandBar
         public string ScreenTranslateTarget { get; set; } = "zh";
         /// <summary>螢幕識字（框選畫面上的字）的快捷鍵</summary>
         public string OcrHotkey { get; set; } = "Ctrl+Shift+O";
+        /// <summary>一鍵把麥克風靜音／取消的快捷鍵（系統層級，所有會議程式都有效）</summary>
+        public string MicMuteHotkey { get; set; } = "Ctrl+Alt+M";
+        /// <summary>麥克風靜音時，收合的動態島顯示紅色「麥克風靜音」</summary>
+        public bool MicMuteIndicator { get; set; } = true;
+        /// <summary>螢幕錄影：快捷鍵、聲音、游標、幀率、解析度、存放位置（空白＝影片\IslandBar 錄影）</summary>
+        public string RecordHotkey { get; set; } = "Ctrl+Alt+R";
+        public bool RecordSystemAudio { get; set; } = true;
+        public bool RecordCursor { get; set; } = true;
+        public int RecordFps { get; set; } = 30;
+        public bool RecordFullResolution { get; set; } = false;
+        public string RecordFolder { get; set; } = "";
+        /// <summary>快速設定顯示亮度滑桿（有可以調的螢幕才會出現）</summary>
+        public bool ShowBrightness { get; set; } = true;
+        /// <summary>用 DDC/CI 調外接螢幕亮度</summary>
+        public bool BrightnessDdc { get; set; } = true;
+        /// <summary>行程有 Meet／Teams／Zoom 連結：開始前提醒並可以點一下加入</summary>
+        public bool MeetingJoinPrompt { get; set; } = true;
+        public int MeetingLeadMinutes { get; set; } = 5;
         /// <summary>手機傳檔：收到的檔案存到哪（空白＝下載\手機傳來）</summary>
         public string PhoneShareFolder { get; set; } = "";
         /// <summary>有選取文字時，只摘要／翻譯選取的文字（沒選取才擷取整個視窗）</summary>

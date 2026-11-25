@@ -49,6 +49,7 @@ namespace IslandBar
         /// <summary>展開時：選著音樂但沒有在放，就改到第一個別的分頁（不要每次都看到空白的音樂頁）</summary>
         private void PickTabOnExpand()
         {
+            if (TabQuick.IsChecked == true) OnQuickTabShown();
             if (TabMedia.IsChecked != true || _currentMedia != null) return;
             var first = TabBar.Children.OfType<RadioButton>().FirstOrDefault(r => r != TabMedia && r != TabShelf && r.Visibility == Visibility.Visible);
             if (first != null) first.IsChecked = true;

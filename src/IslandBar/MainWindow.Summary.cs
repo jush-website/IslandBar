@@ -61,6 +61,8 @@ namespace IslandBar
             SummaryHotkeyStatus = RegisterOne(HotkeySummaryId, on ? _settings.ScreenSummaryHotkey : "", ref _summaryHotkeyOn, SummaryHotkeyStatus);
             TranslateHotkeyStatus = RegisterOne(HotkeyTranslateId, on ? _settings.ScreenTranslateHotkey : "", ref _translateHotkeyOn, TranslateHotkeyStatus);
             OcrHotkeyStatus = RegisterOne(HotkeyOcrId, _summaryHotkeySuspended ? "" : (_settings.OcrHotkey ?? ""), ref _ocrHotkeyOn, OcrHotkeyStatus);
+            MicMuteHotkeyStatus = RegisterOne(HotkeyMicMuteId, _summaryHotkeySuspended ? "" : (_settings.MicMuteHotkey ?? ""), ref _micHotkeyOn, MicMuteHotkeyStatus);
+            RecordHotkeyStatus = RegisterOne(HotkeyRecordId, _summaryHotkeySuspended ? "" : (_settings.RecordHotkey ?? ""), ref _recordHotkeyOn, RecordHotkeyStatus);
         }
 
         private string RegisterOne(int id, string want, ref string current, string status)
@@ -82,7 +84,9 @@ namespace IslandBar
             UnregisterHotKey(_hwnd, HotkeySummaryId);
             UnregisterHotKey(_hwnd, HotkeyTranslateId);
             UnregisterHotKey(_hwnd, HotkeyOcrId);
-            _summaryHotkeyOn = _translateHotkeyOn = _ocrHotkeyOn = null;
+            UnregisterHotKey(_hwnd, HotkeyMicMuteId);
+            UnregisterHotKey(_hwnd, HotkeyRecordId);
+            _summaryHotkeyOn = _translateHotkeyOn = _ocrHotkeyOn = _micHotkeyOn = _recordHotkeyOn = null;
         }
 
         /// <summary>設定畫面在錄新的快捷鍵時先放開，不然按下去會直接觸發</summary>

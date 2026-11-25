@@ -230,6 +230,7 @@ namespace IslandBar
             RefreshItems();
             ApplyTabOrder();
             if (_currentMedia != null) CompactTitle.Visibility = _settings.ShowCompactTitle ? Visibility.Visible : Visibility.Collapsed;
+            if (_currentMedia != null) UpdateLyricsTrack(_currentMedia);
             PositionWindow();
             ApplyMode(animate: false);
             if (!_settings.AutoHide) SetEdgeHidden(false, animate: true);
@@ -540,7 +541,7 @@ namespace IslandBar
                     double dotsW = dots > 0 ? 10 + dots * 10 : 0;
                     if (_currentMedia != null)
                     {
-                        double w = 28 + 22 + (_settings.ShowCompactTitle ? 150 : 0) + dotsW + PairCompactWidth(CompactPairMedia) + PairCompactWidth(CompactStatusMedia);
+                        double w = 28 + 22 + (_settings.ShowCompactTitle ? CompactTitle.Width + 10 : 0) + dotsW + PairCompactWidth(CompactPairMedia) + PairCompactWidth(CompactStatusMedia);
                         return new Size(Math.Max(w, 74) + extra, t);
                     }
                     double iw = 40 + 42 + (CompactTimer.Visibility == Visibility.Visible ? 80 : 0) + dotsW + (CompactEvent.Visibility == Visibility.Visible ? 130 : 0) + PairCompactWidth(CompactPair) + PairCompactWidth(CompactStatus);
@@ -821,7 +822,7 @@ namespace IslandBar
                 MediaContent.Visibility = Visibility.Visible;
                 NoMediaPanel.Visibility = Visibility.Collapsed;
 
-                CompactTitle.Text = string.IsNullOrEmpty(info.Artist) ? info.Title : info.Title + "  ·  " + info.Artist;
+                if (!LyricsActive) CompactTitle.Text = TitleText(info);
                 MediaTitle.Text = string.IsNullOrEmpty(info.Title) ? "未知標題" : info.Title;
                 MediaArtist.Text = info.Artist;
                 MediaSource.Text = info.Source;
@@ -852,6 +853,7 @@ namespace IslandBar
                 UpdateMediaProgress();
             }
 
+            UpdateLyricsTrack(info);
             if (_mode == IslandMode.Compact && hadMedia != (info != null))
                 ApplyMode(true);
         }
@@ -949,7 +951,7 @@ namespace IslandBar
             UpdateQuotaStrip();
 
             if (TabStats.IsChecked == true) UpdateStatsUi();
-            if (TabQuick.IsChecked == true) UpdateDarkModeTile();
+            if (TabQuick.IsChecked == true) { UpdateDarkModeTile(); OnQuickTabShown(); }
             if (TabCalendar.IsChecked == true) { BuildCalendar(); BuildUpcoming(); }
         }
 

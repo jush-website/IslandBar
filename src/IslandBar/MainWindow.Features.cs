@@ -75,6 +75,8 @@ namespace IslandBar
             ApplyMode(true);
         }
 
+        public void DebugCompact() { _collapseDelay.Stop(); SetMode(IslandMode.Compact); }
+
         public void DebugTestRgb()
         {
             SetMode(IslandMode.Compact);
@@ -188,6 +190,8 @@ namespace IslandBar
             var parts = new List<(string text, Color color)>();
             if (!_net.State.Online) parts.Add(("⚠ 沒有網路", Color.FromRgb(0xFF, 0x45, 0x3A)));
             int shelf = _settings.ShelfFiles?.Count ?? 0;
+            if (_recording != null) parts.Insert(0, ("● 錄影 " + RecordingElapsedText, Color.FromRgb(0xFF, 0x45, 0x3A)));
+            if (_micMuted && _settings.MicMuteIndicator) parts.Insert(0, ("麥克風靜音", Color.FromRgb(0xFF, 0x6B, 0x6B)));
             if (shelf > 0) parts.Add(($"暫存 {shelf}", Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)));
 
             string sig = string.Join("|", parts.Select(p => p.text));

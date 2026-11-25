@@ -135,6 +135,7 @@ namespace IslandBar.Conversion
                         A("截封面", "JPG", 0xE722, (f, p) => MediaOps.Thumbnail(f, p)),
                     }, new List<WheelAction>
                     {
+                        A("GIF", "動圖（前 30 秒）", 0xE786, (f, p) => GifOps.ToGif(f, p)),
                         A("壓縮", "較小檔案", 0xE73F, (f, p) => MediaOps.CompressVideo(f, p)),
                         A("靜音", "移除聲音", 0xE74F, (f, p) => MediaOps.Mute(f, p)),
                         A("WMV", "舊相容", 0xE714, (f, p) => MediaOps.ToWmv(f, p)),

@@ -260,6 +260,17 @@ namespace IslandBar
             tools.DropDownItems.Add(summary);
             tools.DropDownItems.Add(translate);
             tools.DropDownItems.Add(ocr);
+            var record = new Forms.ToolStripMenuItem("螢幕錄影");
+            record.Click += (s, e) => _window?.ToggleRecording();
+            tools.DropDownItems.Add(record);
+            var micMute = new Forms.ToolStripMenuItem("麥克風靜音");
+            micMute.Click += (s, e) => _window?.ToggleMicMute();
+            tools.DropDownItems.Add(micMute);
+            menu.Opening += (s, e) =>
+            {
+                record.Text = (_window?.IsRecording == true ? "停止錄影" : "螢幕錄影") + Hk(_settings.RecordHotkey);
+                micMute.Text = (_window?.MicMuted == true ? "取消麥克風靜音" : "麥克風靜音") + Hk(_settings.MicMuteHotkey);
+            };
             tools.DropDownItems.Add(new Forms.ToolStripSeparator());
             tools.DropDownItems.Add(openWheel);
             tools.DropDownItems.Add(_recentItem);

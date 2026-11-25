@@ -127,6 +127,16 @@ namespace IslandBar
                 ToggleScreenTranslate();
                 handled = true;
             }
+            else if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyMicMuteId)
+            {
+                ToggleMicMute();
+                handled = true;
+            }
+            else if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyRecordId)
+            {
+                ToggleRecording();
+                handled = true;
+            }
             else if (msg == WM_CLIPBOARDUPDATE)
             {
                 // 剪貼簿擁有者可能還沒放開，稍等一下再讀
@@ -391,10 +401,13 @@ namespace IslandBar
                 else if (mins <= 30) text = $"{Math.Ceiling(mins)} 分後 {ev.Summary}";
 
                 string key = ev.Summary + ev.Start.ToString("s");
-                if (mins <= 10 && mins > 9 && _calNotified.Add(key + "-10"))
-                    CalendarReminder($"10 分鐘後：{ev.Summary}（{ev.Start:HH:mm}）");
+                int lead = Math.Clamp(_settings.MeetingLeadMinutes, 1, 30);
+                // 有會議連結：提前 N 分鐘提醒（點一下加入）；一般行程：前 10 分鐘
+                int before = ev.MeetingUrl != null && _settings.MeetingJoinPrompt ? lead : 10;
+                if (mins <= before && mins > before - 1 && _calNotified.Add(key + "-" + before))
+                    MeetingReminder(ev, $"{before} 分鐘後（{ev.Start:HH:mm}）");
                 if (mins <= 0 && mins > -1 && _calNotified.Add(key + "-0"))
-                    CalendarReminder($"現在：{ev.Summary}");
+                    MeetingReminder(ev, "現在");
             }
 
             bool show = text != null;
