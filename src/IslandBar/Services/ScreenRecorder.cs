@@ -158,7 +158,8 @@ namespace IslandBar.Services
         {
             IntPtr screen = GetDC(IntPtr.Zero);
             IntPtr mem = CreateCompatibleDC(screen);
-            var bmi = new BITMAPINFO { biSize = 40, biWidth = _outW, biHeight = -_outH, biPlanes = 1, biBitCount = 32 };
+            // 由下往上的點陣圖：Windows 的編碼器把未壓縮的 RGB 當成「最後一行在最前面」，這樣錄出來才不會上下顛倒
+            var bmi = new BITMAPINFO { biSize = 40, biWidth = _outW, biHeight = _outH, biPlanes = 1, biBitCount = 32 };
             IntPtr dib = CreateDIBSection(screen, ref bmi, 0, out IntPtr bits, IntPtr.Zero, 0);
             IntPtr old = SelectObject(mem, dib);
             if (_scale < 1) { SetStretchBltMode(mem, 4 /* HALFTONE */); SetBrushOrgEx(mem, 0, 0, IntPtr.Zero); }
