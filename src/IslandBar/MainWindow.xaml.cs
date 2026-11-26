@@ -1218,7 +1218,7 @@ namespace IslandBar
                 // IslandBar 自己的其他視窗（設定、對話小窗、新增提醒…）
                 NativeMethods.GetWindowThreadProcessId(fg, out uint pid);
                 if (pid == (uint)Environment.ProcessId) return null;
-                why = cls + " / " + ProcessName(pid);
+                why = cls + " / " + FsProcessName(pid);
 
                 // 先看前景視窗在哪個螢幕：不是動態島的螢幕就不用藏
                 IntPtr mon = NativeMethods.MonitorFromWindow(fg, NativeMethods.MONITOR_DEFAULTTONEAREST);
@@ -1247,13 +1247,13 @@ namespace IslandBar
             }
         }
 
-        private static readonly Dictionary<uint, string> _procNames = new Dictionary<uint, string>();
-        private static string ProcessName(uint pid)
+        private static readonly Dictionary<uint, string> _fsProcNames = new Dictionary<uint, string>();
+        private static string FsProcessName(uint pid)
         {
-            if (_procNames.TryGetValue(pid, out var n)) return n;
+            if (_fsProcNames.TryGetValue(pid, out var n)) return n;
             try { using var p = System.Diagnostics.Process.GetProcessById((int)pid); n = p.ProcessName; } catch { n = "?"; }
-            if (_procNames.Count > 200) _procNames.Clear();
-            _procNames[pid] = n;
+            if (_fsProcNames.Count > 200) _fsProcNames.Clear();
+            _fsProcNames[pid] = n;
             return n;
         }
 
