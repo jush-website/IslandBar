@@ -67,6 +67,7 @@ namespace IslandBar
                 case "quick": TabQuick.IsChecked = true; break;
                 case "media": TabMedia.IsChecked = true; break;
                 case "quota": TabStats.IsChecked = true; SysViewQuota.IsChecked = true; break;
+                case "energy": TabStats.IsChecked = true; SysViewEnergy.IsChecked = true; break;
                 case "calendar": TabCalendar.IsChecked = true; break;
                 case "weather": TabWeather.IsChecked = true; break;
                 case "clip": TabClip.IsChecked = true; break;

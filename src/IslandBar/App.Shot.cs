@@ -615,6 +615,45 @@ namespace IslandBar
                 }
                 catch (Exception ex) { vt.AppendLine("錯誤：" + ex); }
                 File.WriteAllText(Path.Combine(dir, "voice-rules-test.txt"), vt.ToString());
+
+                // ---- 耗電量 ----
+                var et = new System.Text.StringBuilder();
+                try
+                {
+                    var en = _window.Energy;
+                    et.AppendLine($"CPU：{en.CpuName}，估 {en.CpuTdp} W");
+                    foreach (var n in new[] { "AMD Ryzen 5 8600G w/ Radeon 760M Graphics", "AMD Ryzen 7 7800X3D 8-Core Processor", "AMD Ryzen 9 7945HX", "AMD Ryzen 7 5800U", "AMD Ryzen AI 9 HX 370",
+                                              "13th Gen Intel(R) Core(TM) i7-13700K", "12th Gen Intel(R) Core(TM) i5-1240P", "Intel(R) Core(TM) Ultra 7 155H", "Intel(R) Core(TM) i5-10400", "AMD EPYC 7763 64-Core Processor" })
+                        et.AppendLine($"  {n} → {Services.EnergyService.GuessTdp(n)} W");
+                    et.AppendLine($"現在：{en.TotalW:0.0} W（{en.SourceText}）CPU {en.CpuW:0.0} 顯示卡 {en.GpuW:0.0} 其他 {en.OtherW:0.0} 螢幕 {en.MonitorW:0}");
+                    et.AppendLine($"今天 {en.KwhOn(DateTime.Today):0.0000} 度，{en.HoursOn(DateTime.Today) * 3600:0} 秒");
+                    foreach (var m in new[] { 1, 7 })
+                    {
+                        var d = new DateTime(2026, m, 15);
+                        et.AppendLine($"{m} 月每度（級距 121–330）：{Services.EnergyService.PricePerKwh(new AppSettings(), d)}");
+                    }
+                    et.AppendLine($"自訂 5 元：{Services.EnergyService.PricePerKwh(new AppSettings { EnergyCustomPrice = 5 }, DateTime.Now)}");
+                    et.AppendLine("級距：" + string.Join("、", Enumerable.Range(0, 6).Select(Services.EnergyService.TierLabel)));
+                    _window.DebugEnergy();
+                    await Task.Delay(1500);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-energy.png"));
+                    et.AppendLine($"本月 {en.MonthKwh(DateTime.Now.Year, DateTime.Now.Month):0.00} 度，預估 {en.ProjectedMonthKwh(DateTime.Now):0.00} 度");
+                    et.AppendLine("語音：" + _window.EnergySummary());
+                    var host2 = new FakeHost();
+                    var cmd2 = new Services.Voice.Commands(host2, (t, x) => "", () => 0);
+                    foreach (var p in new[] { "這個月用了多少電", "電腦現在幾瓦", "電費多少", "電池還有多少電" })
+                    {
+                        host2.Calls.Clear();
+                        var r = await cmd2.TryRulesAsync(p);
+                        et.AppendLine($"{p} → [{string.Join(",", host2.Calls)}]");
+                    }
+                    _window.DebugCollapse();
+                    OpenSettings("system", "耗電量與電費");
+                    await Task.Delay(1500);
+                    Save(_hub.CurrentContent, Path.Combine(dir, "settings-energy.png"));
+                }
+                catch (Exception ex) { et.AppendLine("錯誤：" + ex); }
+                File.WriteAllText(Path.Combine(dir, "energy-test.txt"), et.ToString());
                 try { Directory.Delete(Path.Combine(dir, "phone-recv"), true); File.Delete(Path.Combine(dir, "電腦給手機.txt")); } catch { }
                 _settings.PhoneShareFolder = "";
             }

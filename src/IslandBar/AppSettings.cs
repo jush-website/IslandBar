@@ -47,6 +47,18 @@ namespace IslandBar
         /// <summary>有同步歌詞時（LRCLIB），收合的動態島改顯示目前唱到的那一句</summary>
         public bool ShowLyrics { get; set; } = true;
 
+        // ---- 耗電量與電費 ----
+        /// <summary>動態島「系統」分頁裡的「耗電」</summary>
+        public bool ShowEnergy { get; set; } = true;
+        /// <summary>家裡每月用電落在台電哪個級距（0＝120 度以下 … 5＝1000 度以上），用來算每度電價</summary>
+        public int EnergyTier { get; set; } = 1;
+        /// <summary>自訂每度電價（例如房東收每度 5 元）；0＝用台電級距</summary>
+        public double EnergyCustomPrice { get; set; } = 0;
+        /// <summary>螢幕的瓦數（另外插電的螢幕要自己加；0＝不算）</summary>
+        public int EnergyMonitorWatts { get; set; } = 0;
+        /// <summary>用插座電表校正後的倍率（只影響估算的部分）</summary>
+        public double EnergyCalibration { get; set; } = 1.0;
+
         /// <summary>整體大小（文字與圖示一起縮放），1.0 = 100%，範圍 0.7 ~ 1.6</summary>
         public double Scale { get; set; } = 1.0;
 

@@ -683,7 +683,7 @@
                         </Border>
                     </Grid>
 
-                    <!-- == 系統：資源（方塊）／AI 額度與 PAIR（清單），上面的小切換只在有第二個畫面時出現 == -->
+                    <!-- == 系統：資源（方塊）／AI 額度與 PAIR（清單）／耗電，上面的小切換只在有第二個畫面時出現 == -->
                     <Grid x:Name="PageSystem" Grid.Row="1" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -692,6 +692,7 @@
                         <StackPanel x:Name="SysSwitch" Orientation="Horizontal" Margin="0,6,0,0" Visibility="Collapsed">
                             <RadioButton x:Name="SysViewRes" GroupName="SysView" Style="{StaticResource SubTab}" Content="資源" IsChecked="True" Checked="SysView_Checked" />
                             <RadioButton x:Name="SysViewQuota" GroupName="SysView" Style="{StaticResource SubTab}" Content="AI 額度" Checked="SysView_Checked" />
+                            <RadioButton x:Name="SysViewEnergy" GroupName="SysView" Style="{StaticResource SubTab}" Content="耗電" Checked="SysView_Checked" />
                         </StackPanel>
                     <UniformGrid x:Name="PageStats" Grid.Row="1" Columns="3" Rows="2" Margin="-4,6,-4,-4">
                         <!-- CPU -->
@@ -788,6 +789,8 @@
                             </StackPanel>
                         </Border>
                     </UniformGrid>
+                    <!-- == 耗電：現在幾瓦、今天／本月幾度、電費（MainWindow.Energy.cs 用程式碼排） == -->
+                    <Grid x:Name="PageEnergy" Grid.Row="1" Margin="0,6,0,0" Visibility="Collapsed" />
                     <!-- == AI 額度 == -->
                     <Grid x:Name="PageQuota" Grid.Row="1" Margin="0,6,0,0" Visibility="Collapsed">
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" Focusable="False">

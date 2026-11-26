@@ -59,21 +59,30 @@ namespace IslandBar
 
         private void SysView_Checked(object sender, RoutedEventArgs e) => UpdateSysView();
 
-        /// <summary>系統分頁：有 PAIR、或 AI 額度沒放在左欄時，才出現「AI 額度」小切換</summary>
+        private bool IsEnergyViewShown => TabStats.IsChecked == true && SysViewEnergy.IsChecked == true && _settings.ShowEnergy;
+
+        /// <summary>系統分頁：資源／AI 額度（有 PAIR、或 AI 額度沒放在左欄時）／耗電（設定裡可以關），有第二個畫面才出現小切換</summary>
         private void UpdateSysView()
         {
             if (SysSwitch == null || PageStats == null) return;
             var hidden = new HashSet<string>(_settings.HiddenItems ?? new List<string>());
             bool quotaItems = !_quotaSideOn && _allItems.Any(i => i.Group != "sys" && !hidden.Contains(i.Label));
             bool pair = _settings.PairMonitor;
-            bool second = quotaItems || pair;
+            bool hasQuota = quotaItems || pair;
+            bool hasEnergy = _settings.ShowEnergy;
             SysViewQuota.Content = quotaItems && pair ? "AI 額度與 PAIR" : pair ? "PAIR" : "AI 額度";
-            SysSwitch.Visibility = second ? Visibility.Visible : Visibility.Collapsed;
-            if (!second && SysViewQuota.IsChecked == true) SysViewRes.IsChecked = true;
-            bool quota = second && SysViewQuota.IsChecked == true;
-            PageStats.Visibility = quota ? Visibility.Collapsed : Visibility.Visible;
+            SysViewQuota.Visibility = hasQuota ? Visibility.Visible : Visibility.Collapsed;
+            SysViewEnergy.Visibility = hasEnergy ? Visibility.Visible : Visibility.Collapsed;
+            SysSwitch.Visibility = hasQuota || hasEnergy ? Visibility.Visible : Visibility.Collapsed;
+            if ((!hasQuota && SysViewQuota.IsChecked == true) || (!hasEnergy && SysViewEnergy.IsChecked == true)) SysViewRes.IsChecked = true;
+            bool quota = hasQuota && SysViewQuota.IsChecked == true;
+            bool energy = hasEnergy && SysViewEnergy.IsChecked == true;
+            PageStats.Visibility = quota || energy ? Visibility.Collapsed : Visibility.Visible;
             PageQuota.Visibility = quota ? Visibility.Visible : Visibility.Collapsed;
-            if (quota) BuildQuotaList(); else if (TabStats.IsChecked == true) UpdateStatsUi();
+            PageEnergy.Visibility = energy ? Visibility.Visible : Visibility.Collapsed;
+            if (quota) BuildQuotaList();
+            else if (energy) UpdateEnergyUi(true);
+            else if (TabStats.IsChecked == true) UpdateStatsUi();
         }
     }
 }

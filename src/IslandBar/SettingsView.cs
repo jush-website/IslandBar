@@ -548,7 +548,107 @@ namespace IslandBar
         {
             p.Children.Add(PageTitle("系統與加速"));
             BuildBoost(p);
+            BuildEnergy(p);
             BuildGpu(p);
+        }
+
+        private void BuildEnergy(StackPanel p)
+        {
+            var en = _h.Window?.Energy;
+            p.Children.Add(Heading("耗電量與電費", 24));
+            p.Children.Add(Note("動態島展開 → 系統 →「耗電」：電腦現在幾瓦、今天和這個月用了幾度電、大概多少電費、照這樣整個月會用多少。能量測的就量測（筆電用電池時、NVIDIA 顯示卡、有提供功率資訊的 CPU），量不到的依 CPU 型號和使用率估算；只算開機的時間。"));
+            p.Children.Add(Check("在動態島「系統」分頁顯示「耗電」", S.ShowEnergy, v => { S.ShowEnergy = v; Changed(); }));
+
+            var live = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), MaxWidth = 700, HorizontalAlignment = HorizontalAlignment.Left };
+            void Refresh()
+            {
+                if (en == null) { live.Text = "讀不到耗電資訊"; return; }
+                var now = DateTime.Now;
+                double price = Services.EnergyService.PricePerKwh(S, now);
+                double month = en.MonthKwh(now.Year, now.Month);
+                live.Text = (en.HasSample ? $"現在約 {en.TotalW:0} W（{en.SourceText}）" : "讀取中…") +
+                            $"\n這個月 {month:0.00} 度，約 NT${month * price:0.#}（每度 {price:0.##} 元{(Services.EnergyService.IsSummer(now) && S.EnergyCustomPrice <= 0 ? "，夏月價格" : "")}）" +
+                            (string.IsNullOrEmpty(en.CpuName) ? "" : $"\nCPU：{en.CpuName}（{(en.CpuMeasured ? "功率是量出來的" : $"約 {en.CpuTdp:0} W 等級，依使用率估算")}）");
+            }
+            Refresh();
+            var liveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            liveTimer.Tick += (s, e) => Refresh();
+            live.Loaded += (s, e) => liveTimer.Start();
+            live.Unloaded += (s, e) => liveTimer.Stop();
+            p.Children.Add(live);
+
+            // ---- 電價 ----
+            p.Children.Add(Heading("電價", 16));
+            p.Children.Add(Note("台電住宅電價（2026 年 4 月 1 日起）是累進的：家裡每個月用電落在哪一級，電腦多用的電就是那一級的價格。夏月（6～9 月）會自動換成夏月價格。租屋處房東自己訂每度多少，就選「自訂」。"));
+            var tiers = Services.EnergyService.TaipowerTiers;
+            var opts = Enumerable.Range(0, tiers.Length).Select(i => ($"{Services.EnergyService.TierLabel(i)}（{tiers[i].normal:0.00}／夏 {tiers[i].summer:0.00}）", i)).ToList();
+            opts.Add(("自訂", -1));
+            var custom = new TextBox { Text = S.EnergyCustomPrice > 0 ? S.EnergyCustomPrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "", MinWidth = 90, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 6, 8, 0), VerticalContentAlignment = VerticalAlignment.Center };
+            var customRow = new WrapPanel { Visibility = S.EnergyCustomPrice > 0 ? Visibility.Visible : Visibility.Collapsed };
+            customRow.Children.Add(new TextBlock { Text = "每度", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 8, 0) });
+            customRow.Children.Add(custom);
+            customRow.Children.Add(new TextBlock { Text = "元", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) });
+            void SaveCustom()
+            {
+                if (double.TryParse(custom.Text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0 && v < 100)
+                { S.EnergyCustomPrice = Math.Round(v, 2); S.Save(); Refresh(); }
+            }
+            custom.LostFocus += (s, e) => SaveCustom();
+            custom.KeyDown += (s, e) => { if (e.Key == Key.Enter) SaveCustom(); };
+            p.Children.Add(Segmented(opts, S.EnergyCustomPrice > 0 ? -1 : Math.Clamp(S.EnergyTier, 0, tiers.Length - 1), v =>
+            {
+                if (v < 0) { customRow.Visibility = Visibility.Visible; custom.Focus(); SaveCustom(); return; }
+                customRow.Visibility = Visibility.Collapsed;
+                S.EnergyTier = v; S.EnergyCustomPrice = 0; S.Save(); Refresh();
+            }));
+            p.Children.Add(customRow);
+
+            // ---- 螢幕 ----
+            p.Children.Add(Heading("螢幕", 16));
+            p.Children.Add(Note("桌機的螢幕是另外插電的，要算進去就填大概幾瓦（24 吋約 15～25 W、27 吋約 20～35 W，螢幕背面的貼紙或說明書有寫）。閒置超過 10 分鐘當作螢幕已經關了。筆電內建螢幕已經算在裡面。"));
+            p.Children.Add(Slider(0, 80, S.EnergyMonitorWatts, v => { S.EnergyMonitorWatts = (int)Math.Round(v); S.Save(); }, v => v < 0.5 ? "不算" : $"{v:0} W"));
+
+            // ---- 校正 ----
+            p.Children.Add(Heading("用插座電表校正", 16));
+            p.Children.Add(Note("估算一定有誤差。如果有插座型電表（量電器的那種），在電腦閒著的時候看一下幾瓦，填進來按「校正」，之後的估算就會照比例調整（螢幕要另外插、不要接在同一個電表上）。"));
+            var calRow = new WrapPanel();
+            var meter = new TextBox { MinWidth = 90, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 8, 8, 0), VerticalContentAlignment = VerticalAlignment.Center };
+            var calBtn = MakeButton("校正", false);
+            var calReset = MakeButton("恢復預設", false);
+            var calText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 0, 0), Foreground = Dim, TextWrapping = TextWrapping.Wrap };
+            void CalText() => calText.Text = Math.Abs(S.EnergyCalibration - 1) < 0.01 ? "目前沒有校正" : $"目前校正倍率 ×{S.EnergyCalibration:0.00}";
+            CalText();
+            calBtn.Click += (s, e) =>
+            {
+                if (en == null) return;
+                if (!double.TryParse(meter.Text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double w) || w <= 0 || w > 3000)
+                { calText.Text = "請填電表上的瓦數，例如 65"; return; }
+                if (en.SystemMeasured) { calText.Text = "這台電腦的功率是直接量出來的，不需要校正"; return; }
+                S.EnergyCalibration = Math.Round(en.CalibrationFor(w, S), 3);
+                S.Save();
+                CalText();
+                Refresh();
+            };
+            calReset.Click += (s, e) => { S.EnergyCalibration = 1.0; S.Save(); CalText(); Refresh(); };
+            calRow.Children.Add(new TextBlock { Text = "電表上的瓦數", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 8, 0) });
+            calRow.Children.Add(meter);
+            calRow.Children.Add(calBtn);
+            calRow.Children.Add(calReset);
+            p.Children.Add(calRow);
+            p.Children.Add(calText);
+
+            // ---- 清除 ----
+            var reset = MakeButton("清除耗電紀錄", false);
+            bool armed = false;
+            reset.Click += (s, e) =>
+            {
+                if (!armed) { armed = true; reset.Content = "再按一次確定清除（每天的紀錄都會刪掉）"; return; }
+                en?.Reset();
+                armed = false;
+                reset.Content = "已清除";
+                Refresh();
+            };
+            p.Children.Add(reset);
         }
 
         private void BuildBoost(StackPanel p)
@@ -1314,7 +1414,9 @@ namespace IslandBar
             ["錄影"] = new[] { "螢幕錄影" }, ["錄螢幕"] = new[] { "螢幕錄影" }, ["gif"] = new[] { "GIF" }, ["歌詞"] = new[] { "同步歌詞", "歌詞" },
             ["會議"] = new[] { "會議", "麥克風靜音" }, ["靜音"] = new[] { "麥克風靜音", "靜音" }, ["meet"] = new[] { "會議" }, ["zoom"] = new[] { "會議" },
             ["語音"] = new[] { "語音助理", "自我檢查" }, ["沒反應"] = new[] { "自我檢查" }, ["排查"] = new[] { "自我檢查" }, ["診斷"] = new[] { "自我檢查", "診斷" },
-            ["麥克風"] = new[] { "麥克風", "自我檢查" }, ["遠端"] = new[] { "自我檢查" }
+            ["麥克風"] = new[] { "麥克風", "自我檢查" }, ["遠端"] = new[] { "自我檢查" },
+            ["耗電"] = new[] { "耗電量與電費" }, ["電費"] = new[] { "耗電量與電費", "電價" }, ["用電"] = new[] { "耗電量與電費" }, ["功耗"] = new[] { "耗電量與電費" },
+            ["瓦"] = new[] { "耗電量與電費" }, ["度"] = new[] { "耗電量與電費" }, ["電價"] = new[] { "電價" }
         };
 
         public void DebugSearch(string q) => _searchInput.Text = q;

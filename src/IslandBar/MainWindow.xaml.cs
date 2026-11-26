@@ -45,6 +45,8 @@ namespace IslandBar
         private readonly WeatherService _weather = new WeatherService();
         private readonly QuotaService _quota = new QuotaService();
         private readonly GpuService _gpu = new GpuService();
+        private readonly EnergyService _energy = new EnergyService();
+        public EnergyService Energy => _energy;
         private QuotaSnapshot _quotaSnap = new QuotaSnapshot();
         private int _dotCount;
 
@@ -81,6 +83,7 @@ namespace IslandBar
         public MainWindow(AppSettings settings)
         {
             _settings = settings;
+            _energy.Settings = () => _settings;
             InitializeComponent();
             Island.SizeChanged += (s, e) => UpdateIslandClip();
 
@@ -229,6 +232,7 @@ namespace IslandBar
             _dotSignature = "#";
             RefreshItems();
             ApplyTabOrder();
+            UpdateSysView();
             if (_currentMedia != null) CompactTitle.Visibility = _settings.ShowCompactTitle ? Visibility.Visible : Visibility.Collapsed;
             if (_currentMedia != null) UpdateLyricsTrack(_currentMedia);
             PositionWindow();
@@ -261,6 +265,7 @@ namespace IslandBar
             _audio.Dispose();
             _quota.Stop();
             _gpu.Stop();
+            try { _energy.Save(); } catch { }
             StopExtras();
             Close();
         }
@@ -991,11 +996,23 @@ namespace IslandBar
             if (!_statsSampling)
             {
                 _statsSampling = true;
-                try { await System.Threading.Tasks.Task.Run(() => _stats.Update()); }
+                try
+                {
+                    await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        _stats.Update();
+                        // 耗電：每秒累計（不管有沒有打開「耗電」畫面，月用量才算得準）
+                        try { _energy.Sample(_stats.CpuPercent, _gpu.Usage, _gpu.PowerW, _gpu.VramShared, _stats.HasBattery, _stats.IsCharging); }
+                        catch (Exception ex) { Log.Error("Energy.Sample", ex); }
+                    });
+                }
                 catch (Exception ex) { Log.Error("Stats.Update", ex); }
                 finally { _statsSampling = false; }
             }
-            if (_mode == IslandMode.Expanded && TabStats.IsChecked == true) UpdateStatsUi();
+            if (_mode == IslandMode.Expanded && TabStats.IsChecked == true)
+            {
+                if (IsEnergyViewShown) UpdateEnergyUi(false); else UpdateStatsUi();
+            }
             RefreshItems(); // 系統資源點點每秒更新
             ExtrasTick();
         }
