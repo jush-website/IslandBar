@@ -570,6 +570,51 @@ namespace IslandBar
                 try { Directory.Delete(Path.Combine(dir, "rec"), true); } catch { }
                 _settings.RecordFolder = "";
                 File.WriteAllText(Path.Combine(dir, "new-features-test.txt"), nf.ToString());
+
+                // ---- 語音指令：瀏覽器說法、AI 沒動手時照字面開、自我檢查 ----
+                var vt = new System.Text.StringBuilder();
+                try
+                {
+                    var host = new FakeHost();
+                    var cmd = new Services.Voice.Commands(host, (t, x) => "提醒 " + x, () => 0) { Nicknames = () => "賴=LINE" };
+                    foreach (var p in new[]
+                    {
+                        "呼叫瀏覽器開啟youtube", "呼叫瀏覽器開啟 YouTube", "用 Chrome 打開 YouTube", "用chrome開youtube", "幫我用 Google Chrome 開 YouTube",
+                        "用 Edge 開 GitHub", "打開瀏覽器到 YouTube", "打開瀏覽器 YouTube", "打開瀏覽器", "開啟 Edge 瀏覽器", "在瀏覽器上搜尋貓咪", "請用瀏覽器幫我開啟 youtube 好嗎",
+                        "打開 YouTube 搜尋 lofi", "去 YouTube 看周杰倫", "把 YouTube 打開", "YouTube 開起來", "我要看 YouTube", "上臉書", "我要打開 YouTube",
+                        "Open YouTube", "打開 YouTube 首頁", "打開 YouTube Music", "我想聽周杰倫", "播放周杰倫", "打開記事本", "叫出記事本", "把聲音打開",
+                        "瀏覽器設定", "看書", "YouTube 搜尋 lofi", "搜尋台北美食", "用 Google 搜尋貓咪", "現在幾點"
+                    })
+                    {
+                        host.Calls.Clear();
+                        Services.Voice.Commands.LastLaunched = null;
+                        var r = await cmd.TryRulesAsync(p);
+                        vt.AppendLine(r == null ? $"{p} → （交給 AI）" : $"{p} → {r.Reply}" + (r.Actions.Count > 0 ? $"  <{string.Join(",", r.Actions)}>" : "") +
+                            (host.Calls.Count > 0 ? $"  [{string.Join(",", host.Calls)}]" : "") + (Services.Voice.Commands.LastLaunched != null ? "  ⇒ " + Services.Voice.Commands.LastLaunched : ""));
+                    }
+                    vt.AppendLine("\n== AI 沒動手時照字面開");
+                    foreach (var p in new[] { "我想要你幫我用瀏覽器看一下 YouTube 上的影片", "可以幫我叫出 YouTube 嗎謝謝", "用 Chrome 幫我開一下 GitHub 的網站", "幫我開賴", "今天天氣如何", "台灣最高的山是哪一座" })
+                    {
+                        Services.Voice.Commands.LastLaunched = null;
+                        var r = cmd.TryOpenFallback(p);
+                        vt.AppendLine($"{p} → " + (r == null ? "（不處理）" : r.Reply + "  ⇒ " + Services.Voice.Commands.LastLaunched));
+                    }
+                    vt.AppendLine("\n== 環境");
+                    vt.AppendLine($"遠端桌面={Services.Voice.VoiceDiag.IsRemoteSession}，麥克風={Services.Voice.MicRecorder.Devices().Count} 個");
+                    vt.AppendLine("沒有麥克風的提示：" + Services.Voice.VoiceDiag.NoMicHint());
+                    vt.AppendLine("靜音的提示：" + Services.Voice.VoiceDiag.SilentHint("Remote Audio"));
+                    vt.AppendLine("\n== 自我檢查");
+                    var diag = await Services.Voice.VoiceDiag.RunAsync(_window.Assistant, _settings, null, System.Threading.CancellationToken.None);
+                    foreach (var l in diag) vt.AppendLine((l.Ok == true ? "✓ " : l.Ok == false ? "✗ " : "• ") + l.Text);
+                    _window.DebugVoice("error-silent");
+                    await Task.Delay(900);
+                    Save(_window.IslandVisual, Path.Combine(dir, "island-voice-error.png"));
+                    _window.DebugVoice("error-model");
+                    await Task.Delay(900);
+                    Save(_window.IslandVisual, Path.Combine(dir, "island-voice-error-model.png"));
+                }
+                catch (Exception ex) { vt.AppendLine("錯誤：" + ex); }
+                File.WriteAllText(Path.Combine(dir, "voice-rules-test.txt"), vt.ToString());
                 try { Directory.Delete(Path.Combine(dir, "phone-recv"), true); File.Delete(Path.Combine(dir, "電腦給手機.txt")); } catch { }
                 _settings.PhoneShareFolder = "";
             }

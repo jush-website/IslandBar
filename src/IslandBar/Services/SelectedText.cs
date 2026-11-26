@@ -162,7 +162,7 @@ namespace IslandBar.Services
         private static void SendCopy(bool insert)
         {
             var inputs = new List<INPUT>();
-            void Key(ushort vk, bool up, bool ext = false) => inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, dwFlags = (up ? 2u : 0u) | (ext ? 1u : 0u) } });
+            void Key(ushort vk, bool up, bool ext = false) => inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, dwFlags = (up ? 2u : 0u) | (ext ? 1u : 0u), dwExtraInfo = Services.Voice.PushToTalkKey.OwnInputMarker } });
             ushort k = insert ? (ushort)0x2D : (ushort)0x43;
             Key(0x11, false);
             Key(k, false, insert);

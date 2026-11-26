@@ -612,6 +612,50 @@ namespace IslandBar
             open.Click += (s, e) => BackRequested?.Invoke();
             p.Children.Add(open);
 
+            // ---- 自我檢查 ----
+            p.Children.Add(Heading("自我檢查", 20));
+            p.Children.Add(Note("說了沒反應、打不開程式？按這裡一項一項檢查：說話鍵、辨識模型、麥克風（會錄 2 秒，請對麥克風說幾個字）、AI 大腦、常用說法。"));
+            var diagList = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var diagBtn = MakeButton("開始檢查", true);
+            var tryYt = MakeButton("試著打開 YouTube", false);
+            var diagRow = new WrapPanel();
+            diagRow.Children.Add(diagBtn);
+            diagRow.Children.Add(tryYt);
+            p.Children.Add(diagRow);
+            p.Children.Add(diagList);
+            void DiagLine(Services.Voice.VoiceDiag.Line l)
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 3, 0, 0), MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+                var mark = new TextBlock { Text = l.Ok == true ? "✓" : l.Ok == false ? "✗" : "•", Width = 18, FontWeight = FontWeights.SemiBold, Foreground = l.Ok == true ? Good : l.Ok == false ? Bad : Dim };
+                DockPanel.SetDock(mark, Dock.Left);
+                row.Children.Add(mark);
+                row.Children.Add(new TextBlock { Text = l.Text, TextWrapping = TextWrapping.Wrap, FontSize = 12.5, Foreground = l.Ok == false ? Brushes.White : Dim });
+                diagList.Children.Add(row);
+            }
+            diagBtn.Click += async (s, e) =>
+            {
+                diagBtn.IsEnabled = false;
+                diagBtn.Content = "檢查中…（請對麥克風說幾個字）";
+                diagList.Children.Clear();
+                try
+                {
+                    a?.ApplySettings();
+                    var lines = await Services.Voice.VoiceDiag.RunAsync(a, S, DiagLine, System.Threading.CancellationToken.None);
+                    int bad = lines.Count(l => l.Ok == false);
+                    DiagLine(new Services.Voice.VoiceDiag.Line(bad == 0 ? "都沒問題。如果還是沒反應，按住說話鍵說「打開記事本」，再按一次檢查看看說話鍵有沒有收到。" : $"有 {bad} 項要處理（紅叉）", bad == 0 ? true : (bool?)null));
+                }
+                catch (Exception ex) { DiagLine(new Services.Voice.VoiceDiag.Line("檢查到一半出錯：" + ex.Message, false)); }
+                diagBtn.Content = "再檢查一次";
+                diagBtn.IsEnabled = true;
+            };
+            tryYt.Click += (s, e) =>
+            {
+                if (a == null) return;
+                var r = a.Commands.Open("youtube");
+                diagList.Children.Clear();
+                DiagLine(new Services.Voice.VoiceDiag.Line(r.Ok ? "已用預設瀏覽器打開 YouTube：開得起來，語音說「打開 YouTube」也會一樣" : r.Reply + "（預設瀏覽器有問題：Windows 設定 → 應用程式 → 預設應用程式）", r.Ok));
+            };
+
             // ---- 說話鍵 ----
             p.Children.Add(Heading("說話鍵", 20));
             var keyRow = new WrapPanel();
@@ -1268,7 +1312,9 @@ namespace IslandBar
             ["額度"] = new[] { "AI 額度", "額度" }, ["clipboard"] = new[] { "剪貼簿" }, ["位置"] = new[] { "位置", "螢幕" },
             ["亮度"] = new[] { "螢幕亮度" }, ["音量"] = new[] { "各程式音量", "播放裝置" }, ["喇叭"] = new[] { "播放裝置" },
             ["錄影"] = new[] { "螢幕錄影" }, ["錄螢幕"] = new[] { "螢幕錄影" }, ["gif"] = new[] { "GIF" }, ["歌詞"] = new[] { "同步歌詞", "歌詞" },
-            ["會議"] = new[] { "會議", "麥克風靜音" }, ["靜音"] = new[] { "麥克風靜音", "靜音" }, ["meet"] = new[] { "會議" }, ["zoom"] = new[] { "會議" }
+            ["會議"] = new[] { "會議", "麥克風靜音" }, ["靜音"] = new[] { "麥克風靜音", "靜音" }, ["meet"] = new[] { "會議" }, ["zoom"] = new[] { "會議" },
+            ["語音"] = new[] { "語音助理", "自我檢查" }, ["沒反應"] = new[] { "自我檢查" }, ["排查"] = new[] { "自我檢查" }, ["診斷"] = new[] { "自我檢查", "診斷" },
+            ["麥克風"] = new[] { "麥克風", "自我檢查" }, ["遠端"] = new[] { "自我檢查" }
         };
 
         public void DebugSearch(string q) => _searchInput.Text = q;

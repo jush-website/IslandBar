@@ -127,7 +127,8 @@ namespace IslandBar.Services.Voice
             Speaker.Stop();
             if (!ModelStore.SttReady)
             {
-                SetState(VoiceState.Error, null, "要先下載語音辨識模型（" + ModelStore.SttSizeText + "）：點這裡開設定");
+                Log.Write("Voice: 按了說話鍵，但還沒下載語音辨識模型");
+                SetState(VoiceState.Error, null, "要先下載語音辨識模型（" + ModelStore.SttSizeText + "）：點這裡下載");
                 return;
             }
             if (_s.AssistantSounds) Beep(true);
@@ -138,9 +139,11 @@ namespace IslandBar.Services.Voice
             catch (Exception ex)
             {
                 Log.Error("Voice.Mic", ex);
-                SetState(VoiceState.Error, null, "打不開麥克風：" + ex.Message);
+                bool none = MicRecorder.Devices().Count == 0;
+                SetState(VoiceState.Error, null, none ? VoiceDiag.NoMicHint() : "打不開麥克風：" + ex.Message);
                 return;
             }
+            Log.Write($"Voice: 開始聽（{_mic.DeviceName}，{_mic.SampleRate} Hz{(VoiceDiag.IsRemoteSession ? "，遠端桌面" : "")}）");
             _listenStart = DateTime.UtcNow;
             _ = Stt.PreloadAsync();
             // 這次開機用過本機模型：趁使用者在說話時先把模型叫起來
@@ -164,7 +167,15 @@ namespace IslandBar.Services.Voice
             double secs = samples.Length / (double)Math.Max(1, rate);
             if (secs < 0.35)
             {
+                Log.Write($"Voice: 放開得太快（{secs:0.00} 秒），不辨識");
                 SetState(VoiceState.Idle);
+                return;
+            }
+            float peak = VoiceDiag.Peak(samples);
+            Log.Write($"Voice: 錄到 {secs:0.0} 秒，最大音量 {peak * 100:0.00}%");
+            if (peak < VoiceDiag.SilentPeak)
+            {
+                SetState(VoiceState.Error, null, VoiceDiag.SilentHint(_mic.DeviceName));
                 return;
             }
             SetState(VoiceState.Recognizing);
@@ -178,6 +189,7 @@ namespace IslandBar.Services.Voice
             }
             if (string.IsNullOrWhiteSpace(text) || text.Trim('。', '，', '？', '！', '.', ' ').Length == 0)
             {
+                Log.Write("Voice: 辨識不出字");
                 SetState(VoiceState.Error, null, "沒聽清楚，再說一次？");
                 return;
             }
@@ -204,16 +216,19 @@ namespace IslandBar.Services.Voice
             try
             {
                 r = await _cmd.TryRulesAsync(text);
-                if (r == null)
+                if (r != null) Log.Write("Voice: 基本指令 → " + (r.Actions.Count > 0 ? string.Join("、", r.Actions) : "回覆"));
+                else
                 {
                     var brain = await Brain.FindAsync(true, cts.Token);
                     if (brain == null)
                     {
-                        r = new CommandResult
+                        r = _cmd.TryOpenFallback(text);
+                        Log.Write(r != null ? "Voice: 沒有 AI，照字面打開 → " + string.Join("、", r.Actions) : "Voice: 基本指令聽不懂，也沒有 AI 大腦");
+                        r ??= new CommandResult
                         {
                             Reply = _s.AssistantBrain == "off"
                                 ? "這句我聽不懂。AI 大腦關著，只能用基本指令，例如「打開記事本」「下一首」「計時五分鐘」。"
-                                : "這句需要 AI 才聽得懂，但 PAIR／Ollama 沒開，也還沒下載本機小模型（設定 → 語音助理）。",
+                                : "這句需要 AI 才聽得懂，但找不到 AI 大腦（OpenJarvis、PAIR／Ollama 都沒開，也還沒下載本機小模型）。可以換個說法，例如「打開 YouTube」「用 Chrome 開 YouTube」。",
                             Ok = false
                         };
                     }
@@ -222,11 +237,36 @@ namespace IslandBar.Services.Voice
                         if (brain.Local && !LocalLlm.Running) SetState(VoiceState.Thinking, text, "啟動本機模型…");
                         source = brain.Label;
                         LastBrainLabel = brain.Label;
-                        r = await Brain.AskAsync(text, prior, brain, cts.Token);
+                        Log.Write("Voice: 交給 AI（" + brain.Label + "）");
+                        try { r = await Brain.AskAsync(text, prior, brain, cts.Token); }
+                        catch (OperationCanceledException) when (cts.IsCancellationRequested) { throw; }
+                        catch (Exception ex)
+                        {
+                            // AI 出錯（例如 OpenJarvis 開著但後面的模型沒開），這句又明顯是要開網站／程式：照字面開
+                            var fb0 = _cmd.TryOpenFallback(text);
+                            if (fb0 == null) throw;
+                            Log.Error("Voice.Brain", ex);
+                            r = fb0;
+                            source = "基本指令";
+                        }
+                        // 小模型常常嘴上說「幫你打開了」卻沒真的呼叫工具
+                        if (r.Actions.Count == 0 && _cmd.TryOpenFallback(text) is CommandResult fb)
+                        {
+                            Log.Write("Voice: AI 只回話沒動手，照字面打開 → " + string.Join("、", fb.Actions));
+                            r = fb;
+                            source = "基本指令";
+                        }
+                        else Log.Write("Voice: AI 做了 " + (r.Actions.Count > 0 ? string.Join("、", r.Actions) : "（只回話）"));
                     }
                 }
             }
-            catch (OperationCanceledException) { return; }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested) { return; }
+            catch (OperationCanceledException)
+            {
+                // 不是使用者取消，是等太久（HttpClient 逾時）
+                Log.Write("Voice: AI 大腦太久沒回應（" + source + "）");
+                r = new CommandResult { Reply = "AI 大腦（" + source + "）太久沒回應，再說一次試試；開程式、網站可以直接說「打開 YouTube」。", Ok = false };
+            }
             catch (Exception ex)
             {
                 Log.Error("Voice.Handle", ex);

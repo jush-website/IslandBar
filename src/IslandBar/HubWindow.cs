@@ -361,12 +361,13 @@ namespace IslandBar
         {
             var sp = new StackPanel { Margin = new Thickness(26, 18, 26, 18) };
             sp.Children.Add(new TextBlock { Text = "能說什麼", FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-            sp.Children.Add(new TextBlock { Text = "下面這些不用 AI 也聽得懂（反應最快）；其他的說法會交給 AI 大腦（PAIR／Ollama 或本機小模型）。點一下可以直接試。", Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+            sp.Children.Add(new TextBlock { Text = "下面這些不用 AI 也聽得懂（反應最快）；其他的說法會交給 AI 大腦（OpenJarvis、PAIR／Ollama 或本機小模型）。點一下可以直接試。說了沒反應：設定 → 語音助理 → 自我檢查。", Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
             foreach (var (title, items) in new[]
             {
                 ("音樂", new[] { "播放 周杰倫", "暫停", "下一首", "上一首", "現在在放什麼歌" }),
                 ("音量", new[] { "音量調到 30", "大聲一點", "小聲一點", "靜音", "取消靜音" }),
                 ("打開（電腦上所有的程式都可以）", new[] { "打開賴", "打開 Spotify", "打開記事本", "打開下載資料夾", "打開藍牙設定", "打開 YouTube", "打開 github.com" }),
+                ("瀏覽器", new[] { "呼叫瀏覽器開啟 YouTube", "用 Chrome 打開 YouTube", "在瀏覽器上搜尋 IslandBar", "打開 YouTube 搜尋 lofi" }),
                 ("搜尋", new[] { "搜尋 台北天氣", "YouTube 搜尋 lofi" }),
                 ("計時、提醒", new[] { "計時 5 分鐘", "10 分鐘後提醒我關火", "取消提醒" }),
                 ("查詢", new[] { "現在幾點", "今天星期幾", "明天會下雨嗎", "我的 AI 額度", "電腦狀態", "顯卡溫度", "PAIR 叢集" }),

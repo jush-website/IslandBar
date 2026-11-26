@@ -120,8 +120,10 @@ namespace IslandBar
                     break;
                 }
                 case VoiceState.Error:
-                    if (reply.Contains("下載語音辨識模型")) _voiceErrorAction = "voice";
-                    ShowVoice(st, GWarn, "", "", reply, TimeSpan.FromSeconds(_voiceErrorAction != null ? 7 : 4));
+                    if (reply.Contains("下載語音辨識模型")) _voiceErrorAction = "download-stt";
+                    else if (reply.Contains("隱私權設定")) _voiceErrorAction = "ms-settings:privacy-microphone";
+                    // 長的說明（怎麼修麥克風）要給夠時間看完；滑鼠移上去會一直留著
+                    ShowVoice(st, GWarn, "", "", reply, TimeSpan.FromSeconds(Math.Clamp(3 + reply.Length * 0.12, _voiceErrorAction != null ? 7 : 4, 14)));
                     break;
             }
         }
@@ -208,7 +210,19 @@ namespace IslandBar
             string action = _voiceErrorAction;
             _voiceHide.Stop();
             if (!VoiceBusy) { _voiceState = VoiceState.Idle; SetMode(IslandMode.Compact); }
-            if (action != null) SettingsPageRequested?.Invoke(action, null);
+            if (action == "download-stt")
+            {
+                // 直接開始下載，再打開設定頁看進度
+                var job = VoiceDownloads.Get("stt");
+                if (job == null || !job.Running) VoiceDownloads.Start("stt", (prog, ct) => ModelStore.DownloadSttAsync(prog, ct));
+                SettingsPageRequested?.Invoke("assistant", "語音辨識");
+            }
+            else if (action != null && action.StartsWith("ms-settings:"))
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(action) { UseShellExecute = true }); }
+                catch (Exception ex) { Log.Error("Voice.OpenSettings", ex); }
+            }
+            else if (action != null) SettingsPageRequested?.Invoke(action, null);
             else AssistantWindowRequested?.Invoke();
         }
 
@@ -224,6 +238,8 @@ namespace IslandBar
                     _voiceAnim.Stop();
                     break;
                 case "think": OnVoiceState(VoiceState.Thinking, "幫我打開 Spotify 播 AC/DC", ""); _voiceAnim.Stop(); break;
+                case "error-silent": OnVoiceState(VoiceState.Error, "", VoiceDiag.SilentHint("Remote Audio")); break;
+                case "error-model": OnVoiceState(VoiceState.Error, "", "要先下載語音辨識模型（" + ModelStore.SttSizeText + "）：點這裡下載"); break;
                 default: OnVoiceState(VoiceState.Reply, "明天會下雨嗎", "台北明天多雲時陰，降雨機率 60%，出門記得帶把傘。氣溫 18 到 23 度。"); break;
             }
         }

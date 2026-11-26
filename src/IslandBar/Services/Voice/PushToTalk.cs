@@ -17,6 +17,8 @@ namespace IslandBar.Services.Voice
     public sealed class PushToTalkKey : IDisposable
     {
         public const int VK_XBUTTON1 = 0x05, VK_XBUTTON2 = 0x06, VK_ESCAPE = 0x1B;
+        /// <summary>IslandBar 自己用 SendInput 送的按鍵（貼上、複製）帶這個記號，hook 看到就略過</summary>
+        public static readonly IntPtr OwnInputMarker = (IntPtr)0x1B4D0001;
 
         /// <summary>按住夠久、確定要說話（在 hook 執行緒上觸發，請自己切回 UI）</summary>
         public event Action Pressed;
@@ -38,6 +40,12 @@ namespace IslandBar.Services.Voice
         private IntPtr _kbHook, _mouseHook;
         private LowLevelProc _kbProc, _mouseProc;
         private bool _down, _active, _spoiled;
+        private bool _loggedInjected;
+
+        /// <summary>最近一次收到說話鍵按下（不管按多久）；自我檢查用，看按鍵有沒有傳到 IslandBar</summary>
+        public DateTime LastKeySeen { get; private set; }
+        /// <summary>hook 有沒有掛上</summary>
+        public bool HookOk => _kbHook != IntPtr.Zero;
         private Timer _holdTimer;
         private int _downSeq;
 
@@ -54,6 +62,7 @@ namespace IslandBar.Services.Voice
                 _kbHook = SetWindowsHookEx(WH_KEYBOARD_LL, _kbProc, mod, 0);
                 _mouseHook = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, mod, 0);
                 if (_kbHook == IntPtr.Zero) Log.Write("PushToTalk: 鍵盤 hook 失敗 " + Marshal.GetLastWin32Error());
+                else Log.Write("PushToTalk: 說話鍵 " + KeyName(Key) + " 待命");
                 ready.Set();
                 while (GetMessage(out MSG msg, IntPtr.Zero, 0, 0) > 0)
                 {
@@ -88,9 +97,15 @@ namespace IslandBar.Services.Voice
                 int msg = (int)wParam;
                 bool isDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
                 bool isUp = msg == WM_KEYUP || msg == WM_SYSKEYUP;
-                bool injected = (k.flags & 0x10) != 0;
-                if (!injected)
+                // 遠端桌面、TeamViewer、AnyDesk、Parsec、PowerToys 改鍵送來的按鍵會標成「模擬的」：一樣要認，只略過 IslandBar 自己送的
+                bool own = k.extra == OwnInputMarker;
+                if (!own)
                 {
+                    if (vk == Key && isDown)
+                    {
+                        LastKeySeen = DateTime.Now;
+                        if ((k.flags & 0x10) != 0 && !_loggedInjected) { _loggedInjected = true; Log.Write("PushToTalk: 說話鍵是模擬輸入（遠端操作或改鍵程式），照樣使用"); }
+                    }
                     if (Capturing && isDown)
                     {
                         Capturing = false;
@@ -123,9 +138,10 @@ namespace IslandBar.Services.Voice
                 {
                     var m = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
                     int which = (int)(m.mouseData >> 16) == 1 ? VK_XBUTTON1 : VK_XBUTTON2;
-                    bool injected = (m.flags & 1) != 0;
-                    if (!injected)
+                    bool own = m.extra == OwnInputMarker;
+                    if (!own)
                     {
+                        if (which == Key && msg == WM_XBUTTONDOWN) LastKeySeen = DateTime.Now;
                         if (Capturing && msg == WM_XBUTTONDOWN)
                         {
                             Capturing = false;

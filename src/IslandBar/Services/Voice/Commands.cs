@@ -53,16 +53,60 @@ namespace IslandBar.Services.Voice
         private static string Norm(string s) =>
             Regex.Replace((s ?? "").ToLowerInvariant(), @"[\s，。、！？!?,.「」『』""'：:；;～~…]+", "");
 
+        private static string StripPolite(string t)
+        {
+            t = Regex.Replace(t, @"^(嘿|hey|hi|哈囉|你好|請|幫我|幫忙|麻煩你?|可以|可不可以|能不能|能否|拜託|那|好)+", "");
+            // 「我要打開…」「我想用 Chrome…」（「我想聽…」留給放音樂）
+            t = Regex.Replace(t, @"^(我要|我想要?|想要?)(?=" + OpenVerbs + @"|看|上|逛|滑|用|在|搜尋|搜|查|找)", "");
+            return Regex.Replace(t, @"(一下|好嗎|好不好|可以嗎|謝謝|吧|啦|喔|哦|呢|嗎)+$", "");
+        }
+
+        // 「呼叫瀏覽器開啟 YouTube」「用 Chrome 開 YouTube」「在瀏覽器上搜尋貓咪」：先把「用哪個瀏覽器」拿掉，剩下的照一般說法處理
+        private static readonly Regex BrowserPrefix = new Regex(
+            @"^(?<v>呼叫|叫出?|用|使用|透過|拿|在|開|打開|開啟|啟動)?(預設的?)?(?<b>googlechrome|chrome|谷歌瀏覽器|edge|firefox|火狐|瀏覽器|browser)(瀏覽器)?(?<c>(來|去|幫我|然後|並且?|再|上面?|裡面?|中|到|進入|前往|連到|連上)*)");
+        private static readonly Regex BrowserPrefixRaw = new Regex(
+            @"^.*?(chrome|edge|firefox|火狐|瀏覽器|browser)(\s*瀏覽器)?[\s，,]*((來|去|幫我|然後|並且?|再|上面?|裡面?|中|到|進入|前往|連到|連上)[\s，,]*)*", RegexOptions.IgnoreCase);
+        private const string OpenVerbs = @"打開|開啟|啟動|執行|呼叫|叫出|開|open|launch|start|進入|去|到|前往";
+        private const string OpenSuffixes = @"網站|網頁|程式|軟體|app|應用程式|首頁|主頁|官網|頁面|瀏覽器";
+
+        /// <summary>這句話指定要用哪個瀏覽器開網址（「用 Chrome 開 YouTube」）；沒指定＝預設瀏覽器</summary>
+        private string _browser;
+
         /// <summary>試著用固定規則處理；處理不了傳回 null（交給 AI）</summary>
         public async Task<CommandResult> TryRulesAsync(string text)
+        {
+            _browser = null;
+            try { return await RulesAsync(text); }
+            finally { _browser = null; }
+        }
+
+        private async Task<CommandResult> RulesAsync(string text)
         {
             string t = Norm(text);
             if (t.Length == 0) return null;
             // 句首客套話
-            t = Regex.Replace(t, @"^(嘿|hey|hi|哈囉|你好|請|幫我|麻煩|可以|可不可以|能不能|拜託|那|好)+", "");
-            t = Regex.Replace(t, @"(一下|好嗎|好不好|可以嗎|謝謝|吧|啦|喔|哦|呢|嗎)+$", "");
+            t = StripPolite(t);
             if (t.Length == 0) return null;
             Match m;
+
+            // ---- 指定瀏覽器 ----
+            var bm = BrowserPrefix.Match(t);
+            if (bm.Success && bm.Length < t.Length)
+            {
+                string rest = StripPolite(t.Substring(bm.Length));
+                bool verb = Regex.IsMatch(rest, @"^(" + OpenVerbs + @"|搜尋|搜索|搜|查|找|google|谷歌|search|播放|播|放|看|上)");
+                bool lead = bm.Groups["v"].Success || bm.Groups["c"].Value.Length > 0;
+                // 只剩「打開」兩個字（「瀏覽器打開」）＝打開瀏覽器本身，交給下面一般的說法
+                if (rest.Length > 0 && (verb || lead) && !Regex.IsMatch(rest, @"^(" + OpenVerbs + @"|開起來|叫出來)$"))
+                {
+                    _browser = bm.Groups["b"].Value;
+                    var rm = BrowserPrefixRaw.Match(text ?? "");
+                    string rawRest = rm.Success ? StripPoliteRaw(text.Substring(rm.Length)) : rest;
+                    if (!verb) { rest = "打開" + rest; rawRest = "打開 " + rawRest; }   // 「打開瀏覽器到 YouTube」
+                    t = rest;
+                    text = rawRest;
+                }
+            }
 
             // ---- 音樂 ----
             if (Regex.IsMatch(t, @"^(下一首|下一曲|跳過|換一首|切歌|next|nextsong|skip)(歌)?$")) return await Media("next");
@@ -74,7 +118,7 @@ namespace IslandBar.Services.Voice
             // ---- 音量 ----
             m = Regex.Match(t, @"音量(調到|調成|設成|設為|設定為|開到|轉到|改成|到|為)?(\d{1,3}|[零一二兩三四五六七八九十百]+)");
             if (m.Success) { int? v = ParseNumber(m.Groups[2].Value); if (v.HasValue) return Done(_host.SetVolume(Math.Clamp(v.Value, 0, 100), null)); }
-            if (Regex.IsMatch(t, @"^(取消靜音|解除靜音|打開聲音|開聲音|unmute)$")) return Done(_host.SetVolume(null, "unmute"));
+            if (Regex.IsMatch(t, @"^(取消靜音|解除靜音|打開聲音|開聲音|unmute)$|^(把)?聲音(打開|開起來)$")) return Done(_host.SetVolume(null, "unmute"));
             if (Regex.IsMatch(t, @"^(靜音|關掉聲音|關聲音|mute)$")) return Done(_host.SetVolume(null, "mute"));
             if (Regex.IsMatch(t, @"(大聲|音量(調|開|轉)?(大|高)|聲音(調|開|轉)?(大|高)|volumeup)")) return Done(_host.SetVolume(null, "up"));
             if (Regex.IsMatch(t, @"(小聲|音量(調|關|轉)?(小|低)|聲音(調|關|轉)?(小|低)|volumedown)")) return Done(_host.SetVolume(null, "down"));
@@ -104,20 +148,73 @@ namespace IslandBar.Services.Voice
             if (Regex.IsMatch(t, @"^(鎖定|鎖住|鎖)(電腦|螢幕)$|^lock(pc|screen|computer)?$")) return LockPc();
 
             // ---- 搜尋 ----
-            m = Regex.Match(t, @"^(在)?(youtube|油管|yt)(上)?(搜尋|搜|找|查|播放|播)?(.+)$");
-            if (m.Success && m.Groups[5].Value.Length > 0) return WebSearch(RawAfter(text, @"(在\s*)?(youtube|油管|yt)\s*(上)?\s*(搜尋|搜|找|查|播放|播)?", null) ?? m.Groups[5].Value, "youtube");
+            const string yt = @"(youtube|油管|yt|優兔|u2b)(?!music)";
+            // 「打開 YouTube 搜尋周杰倫」「去 YouTube 看貓咪」
+            m = Regex.Match(t, @"^(" + OpenVerbs + @"|上)" + yt + @"(上|裡|裡面|然後)?(搜尋|搜|找|查|播放|播|看|聽)(.+)$");
+            if (m.Success && m.Groups[5].Value.Length > 0) return WebSearch(RawAfter(text, @"(搜尋|搜|找|查|播放|播|看|聽)", null) ?? m.Groups[5].Value, "youtube");
+            m = Regex.Match(t, @"^(在)?" + yt + @"(上|裡|裡面)?(搜尋|搜|找|查|播放|播)?(?!(打開|開啟|開起來|叫出來|啟動|開)$)(.+)$");
+            if (m.Success && m.Groups[6].Value.Length > 0) return WebSearch(RawAfter(text, @"(在\s*)?(youtube|油管|yt|優兔|u2b)\s*(上|裡|裡面)?\s*(搜尋|搜|找|查|播放|播)?", null) ?? m.Groups[6].Value, "youtube");
+            m = Regex.Match(t, @"^((" + OpenVerbs + @"|上|用)(google|谷歌)|google|谷歌)(上)?(搜尋|搜|找|查)(.+)$");
+            if (m.Success && m.Groups[6].Value.Length > 0) return WebSearch(RawAfter(text, @"(搜尋|搜|找|查)", null) ?? m.Groups[6].Value, "google");
             m = Regex.Match(t, @"^(google|谷歌|搜尋|搜索|查一下|查查|查|找一下|search)(一下)?(.+)$");
             if (m.Success && m.Groups[3].Value.Length > 0) return WebSearch(RawAfter(text, @"(google|谷歌|搜尋|搜索|查一下|查查|查|找一下|search)(一下)?", null) ?? m.Groups[3].Value, "google");
 
             // ---- 打開程式、網站 ----
-            m = Regex.Match(t, @"^(打開|開啟|啟動|執行|開|open|launch|start|進入|去)(.+?)(網站|網頁|程式|軟體|app|應用程式)?$");
+            m = Regex.Match(t, @"^(" + OpenVerbs + @")(.+?)(" + OpenSuffixes + @")?$");
             if (m.Success && m.Groups[2].Value.Length > 0)
             {
-                var r = Open(RawAfter(text, @"打開|開啟|啟動|執行|開|open|launch|start|進入|去", @"網站|網頁|程式|軟體|app|應用程式") ?? m.Groups[2].Value);
+                var r = Open(RawAfter(text, OpenVerbs, OpenSuffixes) ?? m.Groups[2].Value);
                 if (r.Ok) return r;
                 return null;   // 讓 AI 再試著理解
             }
+            // 「把 YouTube 打開」「YouTube 開起來」
+            m = Regex.Match(t, @"^(把|將)?(.+?)(打開|開啟|開起來|叫出來|啟動|開)$");
+            if (m.Success && m.Groups[2].Value.Length > 0)
+            {
+                var r = Open(m.Groups[2].Value, fuzzy: !string.IsNullOrEmpty(m.Groups[1].Value));
+                if (r.Ok) return r;
+                return null;
+            }
+            // 「我要看 YouTube」「上臉書」：只認得內建的網站／程式和自訂叫法，不去猜（「看書」不會開到奇怪的程式）
+            m = Regex.Match(t, @"^(看|上|逛|滑)(.+?)(" + OpenSuffixes + @")?$");
+            if (m.Success && m.Groups[2].Value.Length > 0)
+            {
+                var r = Open(m.Groups[2].Value, fuzzy: false);
+                if (r.Ok) return r;
+            }
             return null;
+        }
+
+        /// <summary>
+        /// AI 回了話卻沒真的動手（小模型常這樣：嘴上說「幫你打開 YouTube 了」但沒呼叫工具），而這句話明顯是要開某個網站／程式：
+        /// 直接照字面開。只認內建清單的網站和自訂叫法，避免誤開。沒把握傳回 null。
+        /// </summary>
+        public CommandResult TryOpenFallback(string text)
+        {
+            string t = Norm(text);
+            if (t.Length == 0) return null;
+            string browser = null;
+            var bm = Regex.Match(t, @"(googlechrome|chrome|谷歌瀏覽器|edge|firefox|火狐)");
+            if (bm.Success) browser = bm.Value;
+            var names = new List<string>();
+            foreach (var (n, _, _) in Known) names.AddRange(n.Select(Norm));
+            names.AddRange(AppCatalog.ParseNicknames(Nicknames?.Invoke()).Keys);
+            string best = null;
+            foreach (var name in names.Distinct())
+            {
+                bool cjk = Regex.IsMatch(name, @"\p{IsCJKUnifiedIdeographs}");
+                if (cjk ? name.Length < 2 : name.Length < 3) continue;
+                if (!Regex.IsMatch(t, @"(" + OpenVerbs + @"|上|看|叫出?)[^。]{0,8}?" + Regex.Escape(name))) continue;
+                if (best == null || name.Length > best.Length) best = name;
+            }
+            if (best == null) return null;
+            _browser = browser;
+            try
+            {
+                var r = Open(best, fuzzy: false);
+                return r.Ok ? r : null;
+            }
+            finally { _browser = null; }
         }
 
         /// <summary>從原本的句子（保留大小寫、網址的點）取出動詞後面的東西</summary>
@@ -132,6 +229,9 @@ namespace IslandBar.Services.Voice
             rest = rest.Trim();
             return rest.Length > 0 ? rest : null;
         }
+
+        private static string StripPoliteRaw(string s) =>
+            Regex.Replace((s ?? "").Trim(), @"^((請|幫我|幫忙|麻煩你?|然後|並且?|再)\s*)+", "", RegexOptions.IgnoreCase);
 
         private static string Clean(string s) => Regex.Replace(s ?? "", @"^(要|去|記得|該)+", "").Trim();
 
@@ -204,9 +304,9 @@ namespace IslandBar.Services.Voice
 
         private static readonly (string[] names, string target, string label)[] Known =
         {
-            (new[] { "youtube", "油管", "yt" }, "https://www.youtube.com", "YouTube"),
+            (new[] { "youtube", "油管", "yt", "優兔", "u2b", "youtube網站" }, "https://www.youtube.com", "YouTube"),
             (new[] { "youtubemusic", "ytmusic" }, "https://music.youtube.com", "YouTube Music"),
-            (new[] { "google", "谷歌", "瀏覽器", "browser", "網路" }, "https://www.google.com", "瀏覽器"),
+            (new[] { "google", "谷歌", "瀏覽器", "browser", "網路", "預設瀏覽器" }, "https://www.google.com", "瀏覽器"),
             (new[] { "gmail", "信箱", "郵件", "電子郵件", "email" }, "https://mail.google.com", "Gmail"),
             (new[] { "google地圖", "地圖", "googlemap", "googlemaps", "maps" }, "https://maps.google.com", "Google 地圖"),
             (new[] { "google翻譯", "翻譯", "translate" }, "https://translate.google.com", "Google 翻譯"),
@@ -258,7 +358,10 @@ namespace IslandBar.Services.Voice
         /// <summary>使用者自訂的叫法（「賴=LINE, 小黑=Steam」）</summary>
         public Func<string> Nicknames { get; set; } = () => "";
 
-        public CommandResult Open(string what)
+        public CommandResult Open(string what) => Open(what, fuzzy: true);
+
+        /// <summary>fuzzy=false：只認網址、內建清單、自訂叫法和名字完全一樣的程式</summary>
+        public CommandResult Open(string what, bool fuzzy)
         {
             string raw = (what ?? "").Trim();
             string n = Norm(raw);
@@ -295,6 +398,7 @@ namespace IslandBar.Services.Voice
 
             // 3. 電腦上所有的應用程式（含 Microsoft Store App），名字可以只說一部分、說錯一點
             var app = AppCatalog.Find(raw, Nicknames?.Invoke());
+            if (app != null && !fuzzy && app.Norm != n && Norm(Regex.Replace(app.Name, @"[（(].*?[)）]", "")) != n) app = null;
             if (app != null)
             {
                 bool ok = TryLaunch(app.Launch);
@@ -316,13 +420,43 @@ namespace IslandBar.Services.Voice
             catch { return false; }
         }
 
-        private static void Launch(string target) => TryLaunch(target);
+        private void Launch(string target) => TryLaunch(target);
 
         /// <summary>測試用：不真的打開程式（CI 截圖／自我測試）</summary>
         public static bool DryRun { get; set; }
-        public static string LastLaunched { get; private set; }
+        public static string LastLaunched { get; internal set; }
 
-        private static bool TryLaunch(string target)
+        /// <summary>網址照這句話指定的瀏覽器開（沒指定就用預設瀏覽器）</summary>
+        private bool TryLaunch(string target)
+        {
+            if (!string.IsNullOrEmpty(_browser) && Regex.IsMatch(target, @"^https?://", RegexOptions.IgnoreCase))
+                return TryLaunchIn(_browser, target);
+            return TryLaunchCore(target);
+        }
+
+        private static bool TryLaunchIn(string browser, string url)
+        {
+            string b = browser ?? "";
+            if (b.Contains("edge")) return TryLaunchCore("microsoft-edge:" + url);
+            string exe = b.Contains("firefox") || b.Contains("火狐") ? "firefox.exe"
+                       : b.Contains("chrome") || b.Contains("谷歌") ? "chrome.exe" : null;
+            if (exe == null) return TryLaunchCore(url);   // 「瀏覽器」＝預設瀏覽器
+            LastLaunched = exe + " " + url;
+            if (DryRun) { Log.Write("Voice（測試）: 打開 " + exe + " " + url); return true; }
+            try
+            {
+                Process.Start(new ProcessStartInfo(exe, "\"" + url + "\"") { UseShellExecute = true });
+                Log.Write("Voice: 用 " + exe + " 開啟 " + SafeTarget(url));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"Voice: {exe} 打不開（{ex.Message}），改用預設瀏覽器");
+                return TryLaunchCore(url);
+            }
+        }
+
+        private static bool TryLaunchCore(string target)
         {
             LastLaunched = target;
             if (DryRun) { Log.Write("Voice（測試）: 打開 " + target); return true; }
@@ -332,14 +466,19 @@ namespace IslandBar.Services.Voice
                     Process.Start(new ProcessStartInfo("explorer.exe", target) { UseShellExecute = true });
                 else
                     Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+                Log.Write("Voice: 開啟 " + SafeTarget(target));
                 return true;
             }
             catch (Exception ex)
             {
-                Log.Write($"Voice: 打不開 {target}：{ex.Message}");
+                Log.Write($"Voice: 打不開 {SafeTarget(target)}：{ex.Message}");
                 return false;
             }
         }
+
+        /// <summary>寫進紀錄的目標：網址只留網站名稱（搜尋的字不寫進去）</summary>
+        private static string SafeTarget(string target) =>
+            Uri.TryCreate(target, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https") ? u.Scheme + "://" + u.Host + (u.Query.Length > 0 ? "/…" : "") : target;
 
         [DllImport("user32.dll")] private static extern bool LockWorkStation();
 

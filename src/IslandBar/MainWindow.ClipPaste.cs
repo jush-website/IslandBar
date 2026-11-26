@@ -77,7 +77,7 @@ namespace IslandBar
         private static void SendPaste(bool shiftInsert)
         {
             var list = new List<INPUT>();
-            void Key(ushort vk, bool up, bool ext = false) => list.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, dwFlags = (up ? 2u : 0u) | (ext ? 1u : 0u) } });
+            void Key(ushort vk, bool up, bool ext = false) => list.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, dwFlags = (up ? 2u : 0u) | (ext ? 1u : 0u), dwExtraInfo = Services.Voice.PushToTalkKey.OwnInputMarker } });
             ushort mod = shiftInsert ? (ushort)0x10 : (ushort)0x11;
             ushort key = shiftInsert ? (ushort)0x2D : (ushort)0x56;
             Key(mod, false);
