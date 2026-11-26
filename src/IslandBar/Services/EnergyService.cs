@@ -50,7 +50,10 @@ namespace IslandBar.Services
         /// <summary>「實測（電池放電）」「估算（CPU 實測）」之類，顯示用</summary>
         public string SourceText { get; private set; } = "估算";
         public string CpuName { get; }
+        /// <summary>從型號猜的 TDP；0＝型號不認得（估算時桌機用 65 W、筆電用 28 W）</summary>
         public double CpuTdp { get; }
+        /// <summary>給人看的 CPU 估算說明</summary>
+        public string CpuEstimateText => CpuTdp > 0 ? $"約 {CpuTdp:0} W 等級" : "型號不在清單裡，用一般電腦的數字";
         public bool HasSample { get; private set; }
 
         /// <summary>設定：螢幕瓦數、校正倍率、桌機／筆電（由電池判斷）</summary>
@@ -239,7 +242,7 @@ namespace IslandBar.Services
         {
             if (i <= 0) return "120 度以下";
             int lo = TaipowerTiers[i - 1].upTo + 1;
-            return i >= TaipowerTiers.Length - 1 ? $"{lo - 1} 度以上" : $"{lo}–{TaipowerTiers[i].upTo} 度";
+            return i >= TaipowerTiers.Length - 1 ? $"{lo} 度以上" : $"{lo}–{TaipowerTiers[i].upTo} 度";
         }
 
         /// <summary>這台電腦每度電算多少錢：自訂價格優先，不然用「家裡每月用電落在哪個級距」的價格</summary>

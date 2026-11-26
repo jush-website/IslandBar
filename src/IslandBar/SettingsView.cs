@@ -568,7 +568,7 @@ namespace IslandBar
                 double month = en.MonthKwh(now.Year, now.Month);
                 live.Text = (en.HasSample ? $"現在約 {en.TotalW:0} W（{en.SourceText}）" : "讀取中…") +
                             $"\n這個月 {month:0.00} 度，約 NT${month * price:0.#}（每度 {price:0.##} 元{(Services.EnergyService.IsSummer(now) && S.EnergyCustomPrice <= 0 ? "，夏月價格" : "")}）" +
-                            (string.IsNullOrEmpty(en.CpuName) ? "" : $"\nCPU：{en.CpuName}（{(en.CpuMeasured ? "功率是量出來的" : $"約 {en.CpuTdp:0} W 等級，依使用率估算")}）");
+                            (string.IsNullOrEmpty(en.CpuName) ? "" : $"\nCPU：{en.CpuName}（{(en.CpuMeasured ? "功率是量出來的" : en.CpuEstimateText + "，依使用率估算")}）");
             }
             Refresh();
             var liveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };

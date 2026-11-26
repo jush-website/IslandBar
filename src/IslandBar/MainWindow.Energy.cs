@@ -115,7 +115,7 @@ namespace IslandBar
             if (e.MonitorW > 0) parts.Add($"螢幕 {e.MonitorW:0}");
             _enBreak.Text = parts.Count > 0 ? string.Join(" · ", parts) + " W" : "";
             _enSource.ToolTip = e.SystemMeasured ? "整台電腦的功率是量出來的" :
-                $"CPU「{e.CpuName}」大約 {e.CpuTdp:0} W 等級，依使用率估算；主機板、記憶體、硬碟、風扇抓固定值，再算上電源供應器的損耗。\n用插座電表量一次就能校正：設定 → 系統與加速 → 耗電量與電費。";
+                $"CPU「{e.CpuName}」{e.CpuEstimateText}，依使用率估算；主機板、記憶體、硬碟、風扇抓固定值，再算上電源供應器的損耗。\n用插座電表量一次就能校正：設定 → 系統與加速 → 耗電量與電費。";
 
             double today = e.KwhOn(now.Date);
             double month = e.MonthKwh(now.Year, now.Month);
