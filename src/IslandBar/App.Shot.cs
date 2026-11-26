@@ -682,6 +682,30 @@ namespace IslandBar
                 }
                 catch (Exception ex) { et.AppendLine("錯誤：" + ex); }
                 File.WriteAllText(Path.Combine(dir, "energy-test.txt"), et.ToString());
+
+                // ---- 全螢幕判斷：蓋滿螢幕的無邊框視窗＝全螢幕；最大化的無標題列視窗＝不是 ----
+                var ft = new System.Text.StringBuilder();
+                try
+                {
+                    var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                    foreach (var (name, maximize) in new[] { ("borderless-cover", false), ("maximized-nocaption", true) })
+                    {
+                        var w = new Window { WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, Background = Brushes.DimGray, ShowInTaskbar = false, Left = 0, Top = 0,
+                                             Width = b.Width / Services.Monitors.Scale, Height = b.Height / Services.Monitors.Scale, Title = "fs-test" };
+                        w.Show();
+                        if (maximize) w.WindowState = WindowState.Maximized;
+                        w.Activate();
+                        await Task.Delay(700);
+                        ft.AppendLine($"{name}: {_window.DebugFullscreenCheck()}");
+                        await Task.Delay(2600);
+                        ft.AppendLine($"  hidden after 2.6s: {_window.DebugFullscreenHidden}");
+                        w.Close();
+                        await Task.Delay(2600);
+                        ft.AppendLine($"  after close: {_window.DebugFullscreenCheck()} hidden={_window.DebugFullscreenHidden}");
+                    }
+                }
+                catch (Exception ex) { ft.AppendLine("錯誤：" + ex); }
+                File.WriteAllText(Path.Combine(dir, "fullscreen-test.txt"), ft.ToString());
                 try { Directory.Delete(Path.Combine(dir, "phone-recv"), true); File.Delete(Path.Combine(dir, "電腦給手機.txt")); } catch { }
                 _settings.PhoneShareFolder = "";
             }

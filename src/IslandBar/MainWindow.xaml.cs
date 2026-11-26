@@ -1139,7 +1139,19 @@ namespace IslandBar
         private void WatchTick()
         {
             TrackForeground();   // 剪貼簿「點一下貼上」要知道貼到哪個程式
-            bool fs = _forceFullscreen || (_settings.HideOnFullscreen && IsForegroundFullscreen());
+            bool fs;
+            if (_forceFullscreen) fs = true;
+            else if (!_settings.HideOnFullscreen) fs = false;
+            else
+            {
+                var r = CheckFullscreen(out string why);
+                // 開始功能表、Alt+Tab、通知中心這類系統畫面：維持原狀（不要因為按一下 Win 鍵就閃一下）
+                if (r == null) fs = _fullscreenHidden;
+                // 要藏起來馬上藏；要再出現等連續兩次（約 2 秒）都不是全螢幕，跳出一下通知、輸入法不會讓它閃出來
+                else if (r == true) { fs = true; _notFullscreenTicks = 0; }
+                else fs = _fullscreenHidden && ++_notFullscreenTicks < 2;
+                if (fs != _fullscreenHidden) Log.Write(fs ? "Fullscreen: 隱藏（" + why + "）" : "Fullscreen: 顯示（" + why + "）");
+            }
             if (fs != _fullscreenHidden)
             {
                 _fullscreenHidden = fs;
@@ -1174,46 +1186,80 @@ namespace IslandBar
             UpdateChatFab();   // 全螢幕、隱藏動態島時，旁邊的笑臉按鈕也一起收起來（對話小窗也會先藏起來）
         }
 
-        /// <summary>
-        /// 全螢幕的程式是不是在「動態島所在的那個螢幕」上：每個螢幕分開判斷，
-        /// 副螢幕上的動態島不會因為主螢幕在玩遊戲、看全螢幕影片就跟著藏起來（反過來也一樣）。
-        /// </summary>
-        private bool IsForegroundFullscreen()
+        private int _notFullscreenTicks;
+
+        /// <summary>系統自己的畫面（開始功能表、搜尋、Alt+Tab、工作檢視、通知中心、鎖定畫面…）：有些會蓋滿整個螢幕，但不是全螢幕程式</summary>
+        private static readonly HashSet<string> ShellOverlayClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
+            "Windows.UI.Core.CoreWindow", "XamlExplorerHostIslandWindow", "MultitaskingViewFrame", "TaskSwitcherWnd", "ForegroundStaging",
+            "LockScreenBackstopFrame", "Shell_LightDismissOverlay", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland",
+            "Shell_InputSwitchTopLevelWindow", "SnipOverlayRootWindow", "Microsoft.UI.Content.PopupWindowSiteBridge", "#32768", "tooltips_class32"
+        };
+
+        /// <summary>
+        /// 前景的程式是不是在「動態島所在的那個螢幕」上全螢幕：每個螢幕分開判斷，
+        /// 副螢幕上的動態島不會因為主螢幕在玩遊戲、看全螢幕影片就跟著藏起來（反過來也一樣）。
+        /// 傳回 null＝看不出來（系統畫面、讀不到），維持原狀。
+        /// 只看視窗有沒有蓋滿整個螢幕（不再用 Windows 的「全螢幕狀態」：別的螢幕在玩遊戲時它也會說是）。
+        /// </summary>
+        private bool? CheckFullscreen(out string why)
+        {
+            why = "";
             try
             {
                 IntPtr fg = NativeMethods.GetForegroundWindow();
-                if (fg == IntPtr.Zero || fg == _hwnd) return false;
+                if (fg == IntPtr.Zero) { why = "沒有前景視窗"; return null; }
+                if (fg == _hwnd) { why = "動態島"; return null; }
 
-                string cls = NativeMethods.GetClassName(fg);
-                if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
-                    return false;
+                string cls = NativeMethods.GetClassName(fg) ?? "";
+                why = cls;
+                if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd") return false;
+                if (ShellOverlayClasses.Contains(cls)) return null;
+                // IslandBar 自己的其他視窗（設定、對話小窗、新增提醒…）
+                NativeMethods.GetWindowThreadProcessId(fg, out uint pid);
+                if (pid == (uint)Environment.ProcessId) return null;
+                why = cls + " / " + ProcessName(pid);
 
                 // 先看前景視窗在哪個螢幕：不是動態島的螢幕就不用藏
                 IntPtr mon = NativeMethods.MonitorFromWindow(fg, NativeMethods.MONITOR_DEFAULTTONEAREST);
-                if (mon != IslandMonitorHandle()) return false;
+                if (mon != IslandMonitorHandle()) { why += "（在別的螢幕）"; return false; }
 
-                // 系統回報的全螢幕狀態（D3D 遊戲 / 全螢幕程式 / 簡報模式）——上面已經確定是同一個螢幕
-                if (NativeMethods.SHQueryUserNotificationState(out int quns) == 0 && (quns == 2 || quns == 3 || quns == 4))
-                    return true;
+                // 簡報模式（Windows 的「展示模式」）
+                if (NativeMethods.SHQueryUserNotificationState(out int quns) == 0 && quns == 4) { why += "（簡報模式）"; return true; }
 
-                // 最大化的一般視窗（有標題列）不算全螢幕——工作列自動隱藏時它也會蓋滿整個螢幕
-                if (NativeMethods.IsZoomed(fg) && (NativeMethods.GetWindowLong(fg, NativeMethods.GWL_STYLE) & NativeMethods.WS_CAPTION) == NativeMethods.WS_CAPTION)
-                    return false;
+                // 最大化的視窗都不算全螢幕：工作列自動隱藏時它會蓋滿整個螢幕，沒有標題列的程式（VS Code、Spotify…）以前會被誤判
+                if (NativeMethods.IsZoomed(fg)) { why += "（最大化）"; return false; }
+                if (NativeMethods.IsIconic(fg) || !NativeMethods.IsWindowVisible(fg)) return false;
 
-                if (!NativeMethods.GetWindowRect(fg, out var wr)) return false;
-
+                if (!NativeMethods.GetWindowRect(fg, out var wr)) return null;
                 var mi = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
-                if (!NativeMethods.GetMonitorInfo(mon, ref mi)) return false;
+                if (!NativeMethods.GetMonitorInfo(mon, ref mi)) return null;
 
-                return wr.Left <= mi.rcMonitor.Left && wr.Top <= mi.rcMonitor.Top &&
-                       wr.Right >= mi.rcMonitor.Right && wr.Bottom >= mi.rcMonitor.Bottom;
+                bool covers = wr.Left <= mi.rcMonitor.Left && wr.Top <= mi.rcMonitor.Top &&
+                              wr.Right >= mi.rcMonitor.Right && wr.Bottom >= mi.rcMonitor.Bottom;
+                why += covers ? "（蓋滿螢幕）" : "";
+                return covers;
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                why = ex.Message;
+                return null;
             }
         }
+
+        private static readonly Dictionary<uint, string> _procNames = new Dictionary<uint, string>();
+        private static string ProcessName(uint pid)
+        {
+            if (_procNames.TryGetValue(pid, out var n)) return n;
+            try { using var p = System.Diagnostics.Process.GetProcessById((int)pid); n = p.ProcessName; } catch { n = "?"; }
+            if (_procNames.Count > 200) _procNames.Clear();
+            _procNames[pid] = n;
+            return n;
+        }
+
+        public bool DebugFullscreenHidden => _fullscreenHidden;
+        /// <summary>測試用</summary>
+        public string DebugFullscreenCheck() { var r = CheckFullscreen(out string why); return (r?.ToString() ?? "null") + " " + why; }
 
         private IntPtr _islandMon;
         private DateTime _islandMonAt;

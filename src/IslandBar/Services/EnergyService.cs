@@ -67,7 +67,7 @@ namespace IslandBar.Services
         private double? _batteryW, _meterW, _raplW;
         private bool _dirty;
         private PerformanceCounter[] _meterCounters, _raplCounters;
-        private bool _countersTried;
+        private bool _countersTried, _loggedReading;
 
         public static string FilePath => Path.Combine(Path.GetDirectoryName(AppSettings.FilePath) ?? "", "energy.json");
 
@@ -263,18 +263,20 @@ namespace IslandBar.Services
             if (!_countersTried)
             {
                 _countersTried = true;
-                _meterCounters = OpenCounters("Power Meter", n => true, out string meterInfo);
-                _raplCounters = OpenCounters("Energy Meter", n => Regex.IsMatch(n, @"pkg|package", RegexOptions.IgnoreCase), out string raplInfo);
+                _meterCounters = OpenCounters("Power Meter", n => true, true, out string meterInfo);
+                // Energy Meter 的 _Total 是 PKG＋PP0＋DRAM 加起來（PP0 是 PKG 的一部分，會重複算）：只拿封裝和記憶體
+                _raplCounters = OpenCounters("Energy Meter", n => Regex.IsMatch(n, @"pkg|package|dram", RegexOptions.IgnoreCase), false, out string raplInfo);
                 Log.Write($"Energy: CPU「{CpuName}」估 {CpuTdp:0} W；Power Meter {meterInfo}；Energy Meter {raplInfo}");
             }
             _meterW = ReadMilliwatts(_meterCounters);
             _raplW = ReadMilliwatts(_raplCounters);
+            if (!_loggedReading && (_raplW.HasValue || _meterW.HasValue)) { _loggedReading = true; Log.Write($"Energy: 讀到 Power Meter {_meterW?.ToString("0.0") ?? "-"} W，RAPL（封裝＋記憶體）{_raplW?.ToString("0.0") ?? "-"} W"); }
             if (_meterW is <= 1 or > 3000) _meterW = null;
             if (_raplW is <= 0.5 or > 1000) _raplW = null;
         }
 
         /// <summary>打開某個效能計數器分類裡每個執行個體的「Power」（毫瓦）</summary>
-        private static PerformanceCounter[] OpenCounters(string category, Func<string, bool> pick, out string info)
+        private static PerformanceCounter[] OpenCounters(string category, Func<string, bool> pick, bool useTotal, out string info)
         {
             info = "沒有";
             try
@@ -284,7 +286,7 @@ namespace IslandBar.Services
                 var names = cat.GetInstanceNames();
                 info = names.Length == 0 ? "沒有執行個體" : string.Join(",", names.Take(8));
                 // 有 _Total 就只看 _Total，避免重複加
-                var chosen = names.Contains("_Total") ? new[] { "_Total" } : names.Where(pick).ToArray();
+                var chosen = useTotal && names.Contains("_Total") ? new[] { "_Total" } : names.Where(n => n != "_Total" && pick(n)).ToArray();
                 var list = new List<PerformanceCounter>();
                 foreach (var n in chosen)
                 {
