@@ -52,8 +52,9 @@ namespace IslandBar.Services
 
         public static double? DiscreteGpuTdp(string name)
         {
+            string n = Regex.Replace(name ?? "", @"\((TM|R)\)", "", RegexOptions.IgnoreCase);   // 「Arc(TM) B580」→「Arc B580」
             foreach (var (p, w) in GpuTdp)
-                if (Regex.IsMatch(name ?? "", p, RegexOptions.IgnoreCase)) return w;
+                if (Regex.IsMatch(n, p, RegexOptions.IgnoreCase)) return w;
             return null;
         }
 
