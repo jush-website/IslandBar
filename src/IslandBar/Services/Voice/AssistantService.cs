@@ -71,7 +71,6 @@ namespace IslandBar.Services.Voice
                 Mode = () => _s.AssistantBrain,
                 Ports = () => _s.PairProxyPorts,
                 PreferredModel = () => _s.AssistantModel,
-                OpenJarvisUrl = () => _s.OpenJarvisEnabled ? _s.OpenJarvisUrl : "",
                 CustomUrl = () => _s.AssistantLlmUrl
             };
             Key.Pressed += () => _ui.BeginInvoke(new Action(BeginListening));
@@ -230,7 +229,7 @@ namespace IslandBar.Services.Voice
                         {
                             Reply = _s.AssistantBrain == "off"
                                 ? "這句我聽不懂。AI 大腦關著，只能用基本指令，例如「打開記事本」「下一首」「計時五分鐘」。"
-                                : "這句需要 AI 才聽得懂，但找不到 AI 大腦（OpenJarvis、PAIR／Ollama 都沒開，也還沒下載本機小模型）。可以換個說法，例如「打開 YouTube」「用 Chrome 開 YouTube」。",
+                                : "這句需要 AI 才聽得懂，但找不到 AI 大腦（PAIR／Ollama 沒開，也還沒下載本機小模型）。可以換個說法，例如「打開 YouTube」「用 Chrome 開 YouTube」。",
                             Ok = false
                         };
                     }
@@ -244,7 +243,7 @@ namespace IslandBar.Services.Voice
                         catch (OperationCanceledException) when (cts.IsCancellationRequested) { throw; }
                         catch (Exception ex)
                         {
-                            // AI 出錯（例如 OpenJarvis 開著但後面的模型沒開），這句又明顯是要開網站／程式：照字面開
+                            // AI 出錯（例如 Ollama 開著但模型載入失敗），這句又明顯是要開網站／程式：照字面開
                             var fb0 = _cmd.TryOpenFallback(text);
                             if (fb0 == null) throw;
                             Log.Error("Voice.Brain", ex);

@@ -46,7 +46,6 @@ namespace IslandBar
                         Mode = () => _settings.ScreenSummaryBrain is "pair" or "local" ? _settings.ScreenSummaryBrain : "auto",
                         Ports = () => _settings.PairProxyPorts,
                         PreferredModel = () => _settings.AssistantModel,
-                        OpenJarvisUrl = () => _settings.OpenJarvisEnabled ? _settings.OpenJarvisUrl : "",
                         CustomUrl = () => _settings.AssistantLlmUrl
                     };
                 return _summaryBrain;

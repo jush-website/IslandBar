@@ -126,7 +126,7 @@ namespace IslandBar.Services.Voice
             try
             {
                 var brain = await a.Brain.FindAsync(true, ct, fresh: true);
-                Add(brain != null ? "AI 大腦：" + brain.Label : "沒有找到 AI 大腦：只能用基本指令（打開程式、放音樂、計時…），其他說法需要 OpenJarvis、PAIR／Ollama 或本機小模型", brain != null ? true : (bool?)null);
+                Add(brain != null ? "AI 大腦：" + brain.Label : "沒有找到 AI 大腦：只能用基本指令（打開程式、放音樂、計時…），其他說法需要 PAIR／Ollama 或本機小模型", brain != null ? true : (bool?)null);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { Add("找 AI 大腦時出錯：" + ex.Message, null); }

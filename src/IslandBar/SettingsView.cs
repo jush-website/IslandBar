@@ -89,7 +89,7 @@ namespace IslandBar
             {
                 case "voice":
                     if (anchor.StartsWith("畫面重點摘要")) return ("tools", "畫面重點摘要");
-                    if (anchor.StartsWith("AI 大腦") || anchor.StartsWith("本機小模型") || anchor.StartsWith("OpenJarvis")) return ("ai", anchor);
+                    if (anchor.StartsWith("AI 大腦") || anchor.StartsWith("本機小模型")) return ("ai", anchor);
                     return ("assistant", anchor);
                 case "compact": return ("island", anchor);
                 case "notify":
@@ -970,49 +970,6 @@ namespace IslandBar
             var url = new TextBox { Text = S.AssistantLlmUrl ?? "", Padding = new Thickness(6, 4, 6, 4), MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 320 };
             url.LostFocus += (s, e) => { S.AssistantLlmUrl = url.Text.Trim(); S.Save(); _ = RefreshBrainStatus(); };
             p.Children.Add(Labeled("其他電腦上的 Ollama／LM Studio 網址（選填，例如 http://192.168.1.20:11434）", url));
-
-            // ---- OpenJarvis ----
-            p.Children.Add(Heading("OpenJarvis（選用）", 16));
-            p.Children.Add(Note("OpenJarvis 是史丹佛做的開源本機 AI 框架（有自己的記憶、技能、模型路由，底下一樣用 Ollama）。裝好之後，它的 jarvis serve 開著時，AI 大腦和畫面摘要／翻譯會優先交給它；沒開就照原本的 PAIR → 本機順序。"));
-            var ojStatus = new TextBlock { FontSize = 13, Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), Text = "OpenJarvis：檢查中…" };
-            async Task RefreshOj()
-            {
-                bool installed = Services.OpenJarvisLauncher.Installed;
-                bool running = await Services.OpenJarvisLauncher.IsRunningAsync(S.OpenJarvisUrl);
-                var models = running ? await Services.Voice.Brain.ListModelsAsync(Services.Voice.Brain.NormalizeUrl(S.OpenJarvisUrl), default, Services.Voice.Brain.OpenJarvisKey()) : new List<string>();
-                ojStatus.Text = running ? $"OpenJarvis：執行中（{models.Count} 個模型{(models.Count > 0 ? "，預設 " + models[0] : "")}）{(Services.OpenJarvisLauncher.StartedByUs ? "，由 IslandBar 啟動" : "")}"
-                              : installed ? "OpenJarvis：已安裝，但 jarvis serve 沒有開"
-                              : "OpenJarvis：沒有安裝（照下面的連結安裝；Windows 用 PowerShell 一行指令）";
-                ojStatus.Foreground = running ? Accent : Dim;
-            }
-            p.Children.Add(Check("OpenJarvis 開著時優先用它", S.OpenJarvisEnabled, v => { S.OpenJarvisEnabled = v; Changed(); _ = RefreshBrainStatus(); }));
-            p.Children.Add(Check("IslandBar 啟動時在背景執行 jarvis serve（關掉 IslandBar 時一起關）", S.OpenJarvisAutoStart, v => { S.OpenJarvisAutoStart = v; Changed(); }));
-            p.Children.Add(ojStatus);
-            var ojRow = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-            var ojStart = MakeButton("立即啟動 jarvis serve", true);
-            ojStart.Click += async (s, e) =>
-            {
-                ojStart.IsEnabled = false;
-                ojStatus.Text = "OpenJarvis：啟動中（第一次比較久，最多一分半）…";
-                string err = await Services.OpenJarvisLauncher.StartAsync(S.OpenJarvisUrl);
-                ojStart.IsEnabled = true;
-                if (err != null) { ojStatus.Text = "OpenJarvis：" + err; ojStatus.Foreground = DarkUi.Warn; return; }
-                await RefreshOj();
-                _ = RefreshBrainStatus();
-            };
-            ojRow.Children.Add(ojStart);
-            var ojInstall = MakeButton("安裝說明", false);
-            ojInstall.Click += (s, e) => OpenFile("https://github.com/open-jarvis/OpenJarvis#installation");
-            ojRow.Children.Add(ojInstall);
-            var ojLog = MakeButton("啟動記錄", false);
-            ojLog.Click += (s, e) => { if (File.Exists(Services.OpenJarvisLauncher.LogPath)) OpenFile(Services.OpenJarvisLauncher.LogPath); else ojStatus.Text = "OpenJarvis：還沒有啟動記錄"; };
-            ojRow.Children.Add(ojLog);
-            p.Children.Add(ojRow);
-            var ojUrl = new TextBox { Text = S.OpenJarvisUrl ?? "", Padding = new Thickness(6, 4, 6, 4), MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 320 };
-            ojUrl.LostFocus += (s, e) => { S.OpenJarvisUrl = string.IsNullOrWhiteSpace(ojUrl.Text) ? Services.OpenJarvisLauncher.DefaultUrl : ojUrl.Text.Trim(); S.Save(); _ = RefreshOj(); _ = RefreshBrainStatus(); };
-            p.Children.Add(Labeled("OpenJarvis 網址（預設 http://127.0.0.1:8000）", ojUrl));
-            p.Children.Add(Note("OpenJarvis 有設 API 金鑰的話，IslandBar 會讀 OPENJARVIS_API_KEY 環境變數，不會另外存。"));
-            _ = RefreshOj();
 
             p.Children.Add(Heading("本機小模型（沒有 PAIR 時用，只用 CPU）", 16));
             p.Children.Add(Segmented(Services.Voice.ModelStore.LocalModels.Select((m, i) => ($"{m.Name}（{m.SizeText}）", i)),

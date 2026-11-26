@@ -33,9 +33,8 @@ namespace IslandBar.Services.Voice
         public string Model { get; set; }
         public string Label { get; set; }
         public bool Local { get; set; }
-        /// <summary>OpenJarvis 有設 API 金鑰（OPENJARVIS_API_KEY 環境變數）時帶上</summary>
+        /// <summary>伺服器要 API 金鑰時帶上（目前都不用）</summary>
         public string ApiKey { get; set; }
-        public bool OpenJarvis { get; set; }
     }
 
     /// <summary>
@@ -49,8 +48,6 @@ namespace IslandBar.Services.Voice
         public Func<int[]> Ports { get; set; } = () => new[] { 11434, 1234, 8080 };
         public Func<string> PreferredModel { get; set; } = () => "";
         public Func<string> CustomUrl { get; set; } = () => "";
-        /// <summary>OpenJarvis 的網址（jarvis serve，預設 http://127.0.0.1:8000）；空白＝不用</summary>
-        public Func<string> OpenJarvisUrl { get; set; } = () => "";
         public LocalLlm Local { get; }
         /// <summary>測試用：把 AI 的原始回應寫進記錄檔</summary>
         public static bool Debug { get; set; }
@@ -80,9 +77,6 @@ namespace IslandBar.Services.Voice
 
             if (mode == "auto" || mode == "pair")
             {
-                // OpenJarvis（史丹佛的本機 AI 框架）開著就優先用：它有自己的記憶、模型路由，底下一樣是 Ollama
-                var oj = await FindOpenJarvisAsync(ct);
-                if (oj != null) { _cached = oj; _cachedAt = DateTime.UtcNow; return oj; }
                 var urls = new List<string>();
                 string custom = (CustomUrl() ?? "").Trim().TrimEnd('/');
                 if (custom.Length > 0) urls.Add(custom.EndsWith("/v1") ? custom[..^3] : custom);
@@ -148,36 +142,10 @@ namespace IslandBar.Services.Voice
             catch (Exception ex) { Log.Write("Voice: 預熱本機模型失敗：" + ex.Message); }
         }
 
-        /// <summary>OpenJarvis 的 jarvis serve 有開、而且有模型 → 用它（沒開傳回 null）</summary>
-        public async Task<BrainInfo> FindOpenJarvisAsync(CancellationToken ct)
-        {
-            string url = NormalizeUrl(OpenJarvisUrl?.Invoke());
-            if (url.Length == 0) return null;
-            string key = OpenJarvisKey();
-            var models = await ListModelsAsync(url, ct, key);
-            if (models.Count == 0) return null;
-            string preferred = PreferredModel();
-            string model = models.FirstOrDefault(m => m.Equals(preferred ?? "", StringComparison.OrdinalIgnoreCase))
-                           ?? models.FirstOrDefault(m => !Regex.IsMatch(m, "embed|bge|rerank|whisper|tts|clip|nomic", RegexOptions.IgnoreCase));   // OpenJarvis 把它設定的預設模型排第一
-            if (model == null) return null;
-            return new BrainInfo { BaseUrl = url, Model = model, Label = "OpenJarvis · " + model, ApiKey = key, OpenJarvis = true };
-        }
-
         public static string NormalizeUrl(string url)
         {
             url = (url ?? "").Trim().TrimEnd('/');
             return url.EndsWith("/v1") ? url[..^3] : url;
-        }
-
-        /// <summary>OpenJarvis 的 API 金鑰：只讀環境變數（使用者自己在 OpenJarvis 那邊設的），IslandBar 不另外存</summary>
-        public static string OpenJarvisKey()
-        {
-            try
-            {
-                return Environment.GetEnvironmentVariable("OPENJARVIS_API_KEY")
-                       ?? Environment.GetEnvironmentVariable("OPENJARVIS_API_KEY", EnvironmentVariableTarget.User) ?? "";
-            }
-            catch { return ""; }
         }
 
         private static void Auth(HttpRequestMessage req, BrainInfo b)

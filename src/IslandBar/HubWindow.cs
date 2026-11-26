@@ -361,7 +361,7 @@ namespace IslandBar
         {
             var sp = new StackPanel { Margin = new Thickness(26, 18, 26, 18) };
             sp.Children.Add(new TextBlock { Text = "能說什麼", FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-            sp.Children.Add(new TextBlock { Text = "下面這些不用 AI 也聽得懂（反應最快）；其他的說法會交給 AI 大腦（OpenJarvis、PAIR／Ollama 或本機小模型）。點一下可以直接試。說了沒反應：設定 → 語音助理 → 自我檢查。", Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+            sp.Children.Add(new TextBlock { Text = "下面這些不用 AI 也聽得懂（反應最快）；其他的說法會交給 AI 大腦（PAIR／Ollama 或本機小模型）。點一下可以直接試。說了沒反應：設定 → 語音助理 → 自我檢查。", Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
             foreach (var (title, items) in new[]
             {
                 ("音樂", new[] { "播放 周杰倫", "暫停", "下一首", "上一首", "現在在放什麼歌" }),
