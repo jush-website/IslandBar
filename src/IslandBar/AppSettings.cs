@@ -56,6 +56,8 @@ namespace IslandBar
         public double EnergyCustomPrice { get; set; } = 0;
         /// <summary>螢幕的瓦數（另外插電的螢幕要自己加；0＝不算）</summary>
         public int EnergyMonitorWatts { get; set; } = 0;
+        /// <summary>螢幕耗電自動偵測（看螢幕的實際尺寸）；關掉就用上面手動填的瓦數</summary>
+        public bool EnergyMonitorAuto { get; set; } = true;
         /// <summary>用插座電表校正後的倍率（只影響估算的部分）</summary>
         public double EnergyCalibration { get; set; } = 1.0;
 

@@ -654,6 +654,10 @@ namespace IslandBar
                                               "13th Gen Intel(R) Core(TM) i7-13700K", "12th Gen Intel(R) Core(TM) i5-1240P", "Intel(R) Core(TM) Ultra 7 155H", "Intel(R) Core(TM) i5-10400", "AMD EPYC 7763 64-Core Processor" })
                         et.AppendLine($"  {n} → {Services.EnergyService.GuessTdp(n)} W");
                     et.AppendLine($"現在：{en.TotalW:0.0} W（{en.SourceText}）CPU {en.CpuW:0.0} 顯示卡 {en.GpuW:0.0} 其他 {en.OtherW:0.0} 螢幕 {en.MonitorW:0}");
+                    et.AppendLine($"偵測：{en.Hardware.ChassisText}，{en.Hardware.Devices.Count} 個裝置");
+                    foreach (var d in en.Hardware.Devices) et.AppendLine($"  {d.Kind} {d.Name} {d.IdleW:0.#}~{d.MaxW:0.#} W {d.Note}");
+                    foreach (var g in new[] { "NVIDIA GeForce RTX 4090", "NVIDIA GeForce RTX 5070 Ti", "AMD Radeon RX 7800 XT", "Intel(R) Arc(TM) B580 Graphics", "NVIDIA GeForce GTX 1650", "Some Unknown GPU" })
+                        et.AppendLine($"  gpu tdp {g} → {Services.EnergyDevices.DiscreteGpuTdp(g)?.ToString() ?? "?"}");
                     et.AppendLine($"今天 {en.KwhOn(DateTime.Today):0.0000} 度，{en.HoursOn(DateTime.Today) * 3600:0} 秒");
                     foreach (var m in new[] { 1, 7 })
                     {

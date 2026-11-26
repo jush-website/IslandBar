@@ -1187,6 +1187,7 @@ namespace IslandBar
         }
 
         private int _notFullscreenTicks;
+        private IntPtr _fsLoggedHwnd;
 
         /// <summary>系統自己的畫面（開始功能表、搜尋、Alt+Tab、工作檢視、通知中心、鎖定畫面…）：有些會蓋滿整個螢幕，但不是全螢幕程式</summary>
         private static readonly HashSet<string> ShellOverlayClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -1203,6 +1204,16 @@ namespace IslandBar
         /// 只看視窗有沒有蓋滿整個螢幕（不再用 Windows 的「全螢幕狀態」：別的螢幕在玩遊戲時它也會說是）。
         /// </summary>
         private bool? CheckFullscreen(out string why)
+        {
+            // 全部用實體像素來比（IslandBar 是「系統 DPI」程式：螢幕縮放不一樣、或遠端桌面換了解析度時，
+            // 視窗位置會被 Windows 換算過，跟螢幕範圍、DWM 外框對不起來）
+            IntPtr oldCtx = IntPtr.Zero;
+            try { oldCtx = NativeMethods.SetThreadDpiAwarenessContext((IntPtr)(-4) /* PER_MONITOR_AWARE_V2 */); } catch { }
+            try { return CheckFullscreenCore(out why); }
+            finally { if (oldCtx != IntPtr.Zero) try { NativeMethods.SetThreadDpiAwarenessContext(oldCtx); } catch { } }
+        }
+
+        private bool? CheckFullscreenCore(out string why)
         {
             why = "";
             try
@@ -1227,17 +1238,27 @@ namespace IslandBar
                 // 簡報模式（Windows 的「展示模式」）
                 if (NativeMethods.SHQueryUserNotificationState(out int quns) == 0 && quns == 4) { why += "（簡報模式）"; return true; }
 
-                // 最大化的視窗都不算全螢幕：工作列自動隱藏時它會蓋滿整個螢幕，沒有標題列的程式（VS Code、Spotify…）以前會被誤判
-                if (NativeMethods.IsZoomed(fg)) { why += "（最大化）"; return false; }
                 if (NativeMethods.IsIconic(fg) || !NativeMethods.IsWindowVisible(fg)) return false;
 
+                // 看「看得到的」視窗範圍（DWM 的外框，不含 Windows 10/11 視窗四周看不見的 8 像素拉動邊框）：
+                // 最大化的一般視窗＝工作區（工作列自動隱藏時也會留 1~2 像素），不會蓋滿；
+                // 瀏覽器全螢幕影片、遊戲（就算底下還是「最大化」狀態）會剛好蓋滿整個螢幕
                 if (!NativeMethods.GetWindowRect(fg, out var wr)) return null;
+                if (NativeMethods.DwmGetWindowAttribute(fg, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, out NativeMethods.RECT vis, System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.RECT>()) == 0
+                    && vis.Right > vis.Left && vis.Bottom > vis.Top)
+                    wr = vis;
                 var mi = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
                 if (!NativeMethods.GetMonitorInfo(mon, ref mi)) return null;
 
                 bool covers = wr.Left <= mi.rcMonitor.Left && wr.Top <= mi.rcMonitor.Top &&
                               wr.Right >= mi.rcMonitor.Right && wr.Bottom >= mi.rcMonitor.Bottom;
-                why += covers ? "（蓋滿螢幕）" : "";
+                why += $"（{wr.Right - wr.Left}×{wr.Bottom - wr.Top}，螢幕 {mi.rcMonitor.Right - mi.rcMonitor.Left}×{mi.rcMonitor.Bottom - mi.rcMonitor.Top}{(NativeMethods.IsZoomed(fg) ? "，最大化" : "")}）";
+                // 大小幾乎蓋滿卻差一點點的：寫進紀錄，之後好查（每個視窗只寫一次）
+                if (!covers && fg != _fsLoggedHwnd && (wr.Right - wr.Left) >= (mi.rcMonitor.Right - mi.rcMonitor.Left) * 0.95 && (wr.Bottom - wr.Top) >= (mi.rcMonitor.Bottom - mi.rcMonitor.Top) * 0.9)
+                {
+                    _fsLoggedHwnd = fg;
+                    Log.Write("Fullscreen: 不算全螢幕 " + why + $" 視窗 {wr.Left},{wr.Top}-{wr.Right},{wr.Bottom} 螢幕 {mi.rcMonitor.Left},{mi.rcMonitor.Top}-{mi.rcMonitor.Right},{mi.rcMonitor.Bottom}");
+                }
                 return covers;
             }
             catch (Exception ex)
@@ -1264,22 +1285,12 @@ namespace IslandBar
         private IntPtr _islandMon;
         private DateTime _islandMonAt;
 
-        /// <summary>動態島現在在哪個螢幕（看動態島本身的中心點，不是整個視窗；幾秒重算一次，拖到別的螢幕也跟得上）</summary>
+        /// <summary>動態島現在在哪個螢幕（用視窗本身判斷，跟 DPI 無關；幾秒重算一次，拖到別的螢幕也跟得上）</summary>
         private IntPtr IslandMonitorHandle()
         {
             if (_islandMon != IntPtr.Zero && (DateTime.UtcNow - _islandMonAt).TotalSeconds < 2) return _islandMon;
-            IntPtr h = IntPtr.Zero;
-            try
-            {
-                if (Island.IsLoaded && Island.ActualWidth > 0 && PresentationSource.FromVisual(Island) != null)
-                {
-                    var c = Island.PointToScreen(new Point(Island.ActualWidth / 2, Math.Min(Island.ActualHeight, 40) / 2));   // 實體像素
-                    h = NativeMethods.MonitorFromPoint(new NativeMethods.POINT { X = (int)c.X, Y = (int)c.Y }, NativeMethods.MONITOR_DEFAULTTONEAREST);
-                }
-            }
-            catch { h = IntPtr.Zero; }
+            IntPtr h = _hwnd != IntPtr.Zero ? NativeMethods.MonitorFromWindow(_hwnd, NativeMethods.MONITOR_DEFAULTTONEAREST) : IntPtr.Zero;
             if (h == IntPtr.Zero) h = Services.Monitors.Find(_settings.IslandMonitor)?.Handle ?? IntPtr.Zero;
-            if (h == IntPtr.Zero) h = NativeMethods.MonitorFromWindow(_hwnd, NativeMethods.MONITOR_DEFAULTTOPRIMARY);
             _islandMon = h;
             _islandMonAt = DateTime.UtcNow;
             return h;

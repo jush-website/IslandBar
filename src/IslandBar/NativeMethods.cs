@@ -89,6 +89,10 @@ namespace IslandBar
         [DllImport("user32.dll")]
         public static extern bool IsIconic(IntPtr hWnd);
         [DllImport("user32.dll")]
+        public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT value, int size);
+        [DllImport("user32.dll")]
         public static extern bool IsWindowVisible(IntPtr hWnd);
 
         [DllImport("user32.dll")]

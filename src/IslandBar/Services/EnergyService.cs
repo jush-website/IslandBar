@@ -54,6 +54,8 @@ namespace IslandBar.Services
         public double CpuTdp { get; }
         /// <summary>給人看的 CPU 估算說明</summary>
         public string CpuEstimateText => CpuTdp > 0 ? $"約 {CpuTdp:0} W 等級" : "型號不在清單裡，用一般電腦的數字";
+        /// <summary>RAPL 有量到記憶體（記憶體就不另外估）</summary>
+        public bool RaplHasDram => _raplHasDram && _raplW.HasValue;
         public bool HasSample { get; private set; }
 
         /// <summary>設定：螢幕瓦數、校正倍率、桌機／筆電（由電池判斷）</summary>
@@ -67,7 +69,13 @@ namespace IslandBar.Services
         private double? _batteryW, _meterW, _raplW;
         private bool _dirty;
         private PerformanceCounter[] _meterCounters, _raplCounters;
-        private bool _countersTried, _loggedReading;
+        private bool _countersTried, _loggedReading, _detectStarted, _raplHasDram;
+
+        /// <summary>自動偵測到的裝置（CPU、顯示卡、螢幕、硬碟、記憶體…）</summary>
+        public EnergyDevices Hardware { get; } = new EnergyDevices();
+
+        /// <summary>設定頁按「重新偵測」</summary>
+        public void Redetect(bool hasBattery) => Hardware.Detect(CpuName, CpuTdp, hasBattery);
 
         public static string FilePath => Path.Combine(Path.GetDirectoryName(AppSettings.FilePath) ?? "", "energy.json");
 
@@ -96,32 +104,64 @@ namespace IslandBar.Services
                 ProbeMeasured(hasBattery && !charging);
             }
 
-            bool laptop = hasBattery;
+            // 第一次：在背景偵測有哪些裝置（WMI 要一兩秒）
+            if (!_detectStarted)
+            {
+                _detectStarted = true;
+                bool bat = hasBattery;
+                System.Threading.Tasks.Task.Run(() => { try { Hardware.Detect(CpuName, CpuTdp, bat); } catch (Exception ex) { Log.Error("Energy.Detect", ex); } });
+            }
+            var hw = Hardware.Devices;
+            bool detected = hw.Count > 0;
+            bool laptop = detected ? Hardware.Laptop : hasBattery;
             double eff = 0.87;   // 電源供應器／變壓器效率（80+ 金牌在一般負載大約 87~90%）
+            double load = Math.Pow(Math.Clamp(cpuPercent, 0, 100) / 100.0, 0.9);
+            double gu = Math.Clamp(gpuUsage ?? 0, 0, 100) / 100.0;
 
             // CPU
             double cpu;
             if (_raplW.HasValue) { cpu = _raplW.Value; CpuMeasured = true; }
             else
             {
+                var c = hw.FirstOrDefault(d => d.Kind == "cpu");
                 double tdp = CpuTdp > 0 ? CpuTdp : (laptop ? 28 : 65);
-                double idle = tdp * 0.12 + 4, max = tdp * 1.25;
-                cpu = idle + (max - idle) * Math.Pow(Math.Clamp(cpuPercent, 0, 100) / 100.0, 0.9);
+                double idle = c?.IdleW ?? tdp * 0.12 + 4, max = c?.MaxW ?? tdp * 1.25;
+                cpu = idle + (max - idle) * load;
                 CpuMeasured = false;
             }
             // 顯示卡
             double gpu = 0;
             GpuMeasured = false;
             if (gpuPowerW.HasValue && gpuPowerW.Value > 0) { gpu = gpuPowerW.Value; GpuMeasured = true; }
+            else if (detected)
+            {
+                foreach (var g in hw.Where(d => d.Kind == "gpu"))
+                {
+                    if (g.Integrated) { if (!_raplW.HasValue) gpu += g.MaxW * gu; }   // 內顯有 RAPL 時已經算在封裝裡
+                    else gpu += g.IdleW + (g.MaxW - g.IdleW) * gu;
+                }
+            }
             else if (gpuUsage.HasValue)
-                gpu = gpuShared ? 25 * gpuUsage.Value / 100.0           // 內顯：CPU 使用率看不到它在忙
-                                : 15 + 135 * gpuUsage.Value / 100.0;    // 不知道型號的獨顯
-            // 主機板、記憶體、硬碟、風扇、USB；筆電含內建螢幕
-            double other = laptop ? 8 : 30;
+                gpu = gpuShared ? 25 * gu : 15 + 135 * gu;
+            // 記憶體、硬碟、主機板／風扇（偵測到的裝置；RAPL 有量記憶體就不重複算）
+            double other;
+            if (detected)
+            {
+                double ram = _raplHasDram ? 0 : hw.Where(d => d.Kind == "ram").Sum(d => d.IdleW + (d.MaxW - d.IdleW) * load);
+                double disk = hw.Where(d => d.Kind == "disk").Sum(d => d.IdleW);
+                double board = hw.Where(d => d.Kind == "board").Sum(d => d.IdleW + (d.MaxW - d.IdleW) * load);
+                other = ram + disk + board;
+            }
+            else other = laptop ? 8 : 30;
             double cal = Math.Clamp(s?.EnergyCalibration ?? 1.0, 0.3, 3.0);
+            // 螢幕：自動＝偵測到的每個螢幕；遠端桌面連進來時這台的螢幕通常是關的，不算；閒置超過 10 分鐘當作螢幕已經關了
             double monitor = 0;
-            int monW = s?.EnergyMonitorWatts ?? 0;
-            if (monW > 0 && IdleSeconds() < 600) monitor = monW;   // 閒置超過 10 分鐘當作螢幕已經關了
+            bool screenOn = IdleSeconds() < 600 && !Voice.VoiceDiag.IsRemoteSession;
+            if (s == null || s.EnergyMonitorAuto)
+            {
+                if (screenOn) monitor = hw.Where(d => d.Kind == "monitor").Sum(d => d.IdleW);
+            }
+            else if (s.EnergyMonitorWatts > 0 && screenOn) monitor = s.EnergyMonitorWatts;
 
             double total;
             if (_batteryW.HasValue) { total = _batteryW.Value; SystemMeasured = true; SourceText = "實測（電池放電）"; }
@@ -264,15 +304,27 @@ namespace IslandBar.Services
             {
                 _countersTried = true;
                 _meterCounters = OpenCounters("Power Meter", n => true, true, out string meterInfo);
-                // Energy Meter 的 _Total 是 PKG＋PP0＋DRAM 加起來（PP0 是 PKG 的一部分，會重複算）：只拿封裝和記憶體
-                _raplCounters = OpenCounters("Energy Meter", n => Regex.IsMatch(n, @"pkg|package|dram", RegexOptions.IgnoreCase), false, out string raplInfo);
+                // Energy Meter（RAPL）：_Total 是全部加起來，PP0（核心）、PP1（內顯）又是 PKG（封裝）的一部分，會重複算。
+                // 有 PSYS（整個平台，筆電常見）就只看它；不然看 PKG＋DRAM
+                string[] rapl = RaplInstances();
+                Func<string, bool> pick = rapl.Any(n => n.EndsWith("_PSYS", StringComparison.OrdinalIgnoreCase))
+                    ? n => n.EndsWith("_PSYS", StringComparison.OrdinalIgnoreCase)
+                    : n => n.EndsWith("_PKG", StringComparison.OrdinalIgnoreCase) || n.EndsWith("_DRAM", StringComparison.OrdinalIgnoreCase);
+                _raplHasDram = rapl.Any(n => pick(n) && (n.EndsWith("_DRAM", StringComparison.OrdinalIgnoreCase) || n.EndsWith("_PSYS", StringComparison.OrdinalIgnoreCase)));
+                _raplCounters = OpenCounters("Energy Meter", pick, false, out string raplInfo);
                 Log.Write($"Energy: CPU「{CpuName}」估 {CpuTdp:0} W；Power Meter {meterInfo}；Energy Meter {raplInfo}");
             }
             _meterW = ReadMilliwatts(_meterCounters);
             _raplW = ReadMilliwatts(_raplCounters);
-            if (!_loggedReading && (_raplW.HasValue || _meterW.HasValue)) { _loggedReading = true; Log.Write($"Energy: 讀到 Power Meter {_meterW?.ToString("0.0") ?? "-"} W，RAPL（封裝＋記憶體）{_raplW?.ToString("0.0") ?? "-"} W"); }
+            if (!_loggedReading && (_raplW.HasValue || _meterW.HasValue)) { _loggedReading = true; Log.Write($"Energy: 讀到 Power Meter {_meterW?.ToString("0.0") ?? "-"} W，RAPL {_raplW?.ToString("0.0") ?? "-"} W（{string.Join("+", _raplCounters?.Select(c => c.InstanceName) ?? Array.Empty<string>())}）"); }
             if (_meterW is <= 1 or > 3000) _meterW = null;
             if (_raplW is <= 0.5 or > 1000) _raplW = null;
+        }
+
+        private static string[] RaplInstances()
+        {
+            try { return PerformanceCounterCategory.Exists("Energy Meter") ? new PerformanceCounterCategory("Energy Meter").GetInstanceNames() : Array.Empty<string>(); }
+            catch { return Array.Empty<string>(); }
         }
 
         /// <summary>打開某個效能計數器分類裡每個執行個體的「Power」（毫瓦）</summary>

@@ -604,14 +604,69 @@ namespace IslandBar
             }));
             p.Children.Add(customRow);
 
+            // ---- 偵測到的裝置 ----
+            p.Children.Add(Heading("偵測到的裝置", 16));
+            p.Children.Add(Note("自動找出這台電腦的 CPU、顯示卡、螢幕（看實際尺寸）、硬碟、記憶體，各估大概幾瓦；量得到的（CPU、NVIDIA 顯示卡）就用量到的數字。換了零件或接了新螢幕，按「重新偵測」。"));
+            var devList = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+            void ShowDevices()
+            {
+                devList.Children.Clear();
+                var hw = en?.Hardware;
+                if (hw == null || hw.Devices.Count == 0) { devList.Children.Add(Note("偵測中…（開機後幾秒）")); return; }
+                string Icon(string k) => k switch { "cpu" => "CPU", "gpu" => "顯示卡", "monitor" => "螢幕", "disk" => "硬碟", "ram" => "記憶體", _ => "其他" };
+                devList.Children.Add(Note($"{hw.ChassisText}（{hw.DetectedAt:HH:mm} 偵測）"));
+                foreach (var d in hw.Devices)
+                {
+                    string watts;
+                    if (d.Kind == "cpu" && en.CpuMeasured) watts = $"實測 {en.CpuW:0} W" + (en.RaplHasDram ? "（含記憶體）" : "");
+                    else if (d.Kind == "gpu" && en.GpuMeasured) watts = $"實測 {en.GpuW:0} W";
+                    else if (d.Kind == "gpu" && d.Integrated) watts = en.CpuMeasured ? "算在 CPU 實測裡" : $"忙的時候最多約 {d.MaxW:0} W";
+                    else if (d.Kind == "ram" && en.RaplHasDram) watts = "算在 CPU 實測裡";
+                    else if (d.Kind == "monitor") watts = Services.Voice.VoiceDiag.IsRemoteSession ? $"約 {d.IdleW:0} W（遠端桌面時不算）" : $"約 {d.IdleW:0} W";
+                    else watts = Math.Abs(d.MaxW - d.IdleW) < 0.5 ? $"約 {d.IdleW:0.#} W" : $"約 {d.IdleW:0.#}～{d.MaxW:0} W";
+                    var row = new Grid { Margin = new Thickness(0, 3, 0, 0), MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    row.Children.Add(new TextBlock { Text = Icon(d.Kind), Foreground = Dim, FontSize = 12.5 });
+                    var nm = new TextBlock { Text = d.Name + (string.IsNullOrEmpty(d.Note) ? "" : "　" + d.Note), FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 12, 0) };
+                    Grid.SetColumn(nm, 1); row.Children.Add(nm);
+                    var wt = new TextBlock { Text = watts, FontSize = 12.5, Foreground = Dim };
+                    Grid.SetColumn(wt, 2); row.Children.Add(wt);
+                    devList.Children.Add(row);
+                }
+            }
+            ShowDevices();
+            var devTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            devTimer.Tick += (s, e) => ShowDevices();
+            devList.Loaded += (s, e) => devTimer.Start();
+            devList.Unloaded += (s, e) => devTimer.Stop();
+            p.Children.Add(devList);
+            var redetect = MakeButton("重新偵測", false);
+            redetect.Click += async (s, e) =>
+            {
+                if (en == null) return;
+                redetect.IsEnabled = false;
+                redetect.Content = "偵測中…";
+                bool bat = System.Windows.Forms.SystemInformation.PowerStatus.BatteryChargeStatus != System.Windows.Forms.BatteryChargeStatus.NoSystemBattery;
+                await Task.Run(() => en.Redetect(bat));
+                ShowDevices();
+                redetect.Content = "重新偵測";
+                redetect.IsEnabled = true;
+            };
+            p.Children.Add(redetect);
+
             // ---- 螢幕 ----
             p.Children.Add(Heading("螢幕", 16));
-            p.Children.Add(Note("桌機的螢幕是另外插電的，要算進去就填大概幾瓦（24 吋約 15～25 W、27 吋約 20～35 W，螢幕背面的貼紙或說明書有寫）。閒置超過 10 分鐘當作螢幕已經關了。筆電內建螢幕已經算在裡面。"));
-            p.Children.Add(Slider(0, 80, S.EnergyMonitorWatts, v => { S.EnergyMonitorWatts = (int)Math.Round(v); S.Save(); }, v => v < 0.5 ? "不算" : $"{v:0} W"));
+            p.Children.Add(Note("預設照偵測到的螢幕尺寸估（24 吋約 17 W、27 吋約 21 W）；閒置超過 10 分鐘、或從遠端桌面連進來時，當作這台的螢幕是關的。知道實際瓦數（螢幕背面的貼紙）可以改成手動填。"));
+            var monSlider = Slider(0, 120, S.EnergyMonitorWatts, v => { S.EnergyMonitorWatts = (int)Math.Round(v); S.Save(); }, v => v < 0.5 ? "不算" : $"{v:0} W");
+            monSlider.Visibility = S.EnergyMonitorAuto ? Visibility.Collapsed : Visibility.Visible;
+            p.Children.Add(Check("螢幕耗電自動偵測", S.EnergyMonitorAuto, v => { S.EnergyMonitorAuto = v; S.Save(); monSlider.Visibility = v ? Visibility.Collapsed : Visibility.Visible; }));
+            p.Children.Add(monSlider);
 
             // ---- 校正 ----
             p.Children.Add(Heading("用插座電表校正", 16));
-            p.Children.Add(Note("估算一定有誤差。如果有插座型電表（量電器的那種），在電腦閒著的時候看一下幾瓦，填進來按「校正」，之後的估算就會照比例調整（螢幕要另外插、不要接在同一個電表上）。"));
+            p.Children.Add(Note("估算一定有誤差。如果有插座型電表（量電器的那種），在電腦閒著的時候看一下幾瓦，填進來按「校正」，之後的估算就會照比例調整（電表只接主機，螢幕不要接在同一個電表上）。"));
             var calRow = new WrapPanel();
             var meter = new TextBox { MinWidth = 90, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 8, 8, 0), VerticalContentAlignment = VerticalAlignment.Center };
             var calBtn = MakeButton("校正", false);
