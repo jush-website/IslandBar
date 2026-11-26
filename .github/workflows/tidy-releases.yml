@@ -1,0 +1,41 @@
+name: tidy-releases
+
+# 把每個 Release 的說明改成只有那一版的重點（從 CHANGELOG.md 取），要手動按「Run workflow」才會跑
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rewrite release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          repo = os.environ["REPO"]
+          secs, cur = {}, None
+          for l in open("CHANGELOG.md", encoding="utf-8").read().splitlines():
+              m = re.match(r"^## v(\S+)", l)
+              if m:
+                  cur = m.group(1); secs[cur] = []; continue
+              if cur and l.strip():
+                  secs[cur].append(l)
+          rels = json.loads(subprocess.check_output(["gh", "api", "--paginate", f"repos/{repo}/releases?per_page=100"]))
+          for r in rels:
+              v = r["tag_name"].lstrip("v")
+              body = (secs.get(v) or ["- 小修正與改進"]) + [
+                  "",
+                  f"**下載**：Windows 選 `IslandBar-Setup-{v}.msi`（安裝版，會自動更新）或 `IslandBar-portable.exe`（免安裝）；Linux 選 `.deb` 或 `.tar.gz`。",
+                  "",
+                  f"[完整更新紀錄](https://github.com/{repo}/blob/main/CHANGELOG.md)",
+              ]
+              subprocess.run(["gh", "api", "-X", "PATCH", f"repos/{repo}/releases/{r['id']}", "-f", "body=" + "\n".join(body), "--silent"], check=True)
+              print("updated", r["tag_name"])
+          PY

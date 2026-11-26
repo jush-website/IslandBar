@@ -112,6 +112,24 @@ jobs:
           name: IslandBar-${{ steps.ver.outputs.version }}
           path: out/*
 
+      - name: Release notes
+        if: steps.ver.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          # 只放這一版的重點（從 CHANGELOG.md 取出這一版那一段），完整紀錄用連結
+          $v = "${{ steps.ver.outputs.version }}"
+          $lines = Get-Content CHANGELOG.md -Encoding utf8
+          $out = @(); $in = $false
+          foreach ($l in $lines) {
+            if ($l -match '^## v') { if ($in) { break }; $in = ($l.Trim() -eq "## v$v"); continue }
+            if ($in -and $l.Trim().Length -gt 0) { $out += $l }
+          }
+          if ($out.Count -eq 0) { $out = @('- 小修正與改進') }
+          $msi = "IslandBar-Setup-$v.msi"
+          $body = @($out) + @('', "**下載**：Windows 選 ``$msi``（安裝版，會自動更新）或 ``IslandBar-portable.exe``（免安裝）；Linux 選 ``.deb`` 或 ``.tar.gz``。", '', "[完整更新紀錄](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)")
+          Set-Content notes.md ($body -join "`n") -Encoding utf8
+          Get-Content notes.md
+
       - name: GitHub Release
         if: steps.ver.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
@@ -119,6 +137,6 @@ jobs:
           tag_name: v${{ steps.ver.outputs.version }}
           name: IslandBar v${{ steps.ver.outputs.version }}
           target_commitish: ${{ github.sha }}
-          body_path: CHANGELOG-latest.md
+          body_path: notes.md
           make_latest: true
           files: out/*

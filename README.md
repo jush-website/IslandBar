@@ -105,7 +105,7 @@ Linux 桌面也有一個動態島，只做裝置監控（沒有音樂、天氣�
 
 ## 發新版本
 
-1. 改 `version.txt`（例如 `1.2.0`），並更新 `CHANGELOG-latest.md`
+1. 改 `version.txt`（例如 `1.2.0`），並在 `CHANGELOG.md` 最上面加這一版的重點（一到三行；發布時只會放這一段）
 2. push 到 `main`
 
 GitHub Actions 會自動編譯，發現這個版本還沒有 Release 就會建立 `v1.2.0` Release 並附上 MSI；
