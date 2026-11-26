@@ -38,7 +38,7 @@ namespace IslandBar
             var today = DateTime.Today;
             var day = _calSelected ?? today;
             bool isToday = day == today;
-            UpcomingTitle.Text = isToday ? "接下來" : day.ToString("M/d（ddd）", ZhTw) + " 的行程";
+            UpcomingTitle.Text = isToday ? "接下來" : day.ToString("M/d（ddd）", ZhTw);
             UpcomingGlyph.Text = isToday ? "" : "";
 
             // 專注模式
@@ -291,7 +291,7 @@ namespace IslandBar
             sp.Children.Add(_text);
             sp.Children.Add(new TextBlock { Text = "什麼時候", Foreground = DarkUi.Dim, FontSize = 11.5, Margin = new Thickness(0, 10, 0, 4) });
             var presets = new WrapPanel();
-            foreach (var (label, val) in new[] { ("10 分", "10"), ("30 分", "30"), ("1 小時", "60"), ("今晚 8 點", "今天 20:00"), ("明早 9 點", "明天 9:00") })
+            foreach (var (label, val) in new[] { ("10 分", "10"), ("30 分", "30"), ("1 小時", "60"), ("明早 9 點", "明天 9:00"), ("明晚 8 點", "明天 20:00") })
             {
                 var chip = DarkUi.Chip(label, () => { _time.Text = val; _time.Focus(); _time.SelectAll(); }, 12);
                 chip.Margin = new Thickness(0, 0, 6, 6);
@@ -405,7 +405,9 @@ namespace IslandBar
         /// </summary>
         public static DateTime? Parse(string s, DateTime now)
         {
-            s = (s ?? "").Trim().Replace("：", ":").Replace("／", "/").Replace(" ", "");
+            // 日期和時間中間的空白先留著（「2027/1/5 8:00」去掉空白會變成「1/58」），判斷完日期再拿掉
+            string spaced = Regex.Replace((s ?? "").Trim().Replace("：", ":").Replace("／", "/").Replace("　", " "), @"\s+", " ");
+            s = spaced.Replace(" ", "");
             if (s.Length == 0) return null;
             Match m;
 
@@ -431,12 +433,12 @@ namespace IslandBar
                 date = d;
                 rest = s.Substring(m.Length);
             }
-            else if ((m = Regex.Match(s, @"^(\d{4})[/\-年](\d{1,2})[/\-月](\d{1,2})(日|號)?")).Success)
+            else if ((m = Regex.Match(spaced, @"^(\d{4})\s?[/\-年]\s?(\d{1,2})\s?[/\-月]\s?(\d{1,2})(日|號)?(?!\d)")).Success)
             {
                 try { date = new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value)); } catch { return null; }
-                rest = s.Substring(m.Length);
+                rest = spaced.Substring(m.Length).Replace(" ", "");
             }
-            else if ((m = Regex.Match(s, @"^(\d{1,2})[/月](\d{1,2})(日|號)?")).Success && (s.Contains('/') || s.Contains('月')))
+            else if ((m = Regex.Match(spaced, @"^(\d{1,2})\s?[/月]\s?(\d{1,2})(日|號)?(?!\d)")).Success)
             {
                 try
                 {
@@ -445,7 +447,7 @@ namespace IslandBar
                     date = d;
                 }
                 catch { return null; }
-                rest = s.Substring(m.Length);
+                rest = spaced.Substring(m.Length).Replace(" ", "");
             }
             if (date is DateTime day)
             {
