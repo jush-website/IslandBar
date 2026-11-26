@@ -306,6 +306,7 @@ namespace IslandBar
 
             // 存到哪裡
             sp.Children.Add(new TextBlock { Text = "提醒在哪裡", Foreground = DarkUi.Dim, FontSize = 11.5, Margin = new Thickness(0, 10, 0, 4) });
+            TextBlock cloudNote = null;
             var where = new WrapPanel();
             _localChip = DarkUi.Chip("只在這台電腦", () => SetCloud(false), 12);
             _cloudChip = DarkUi.Chip("也加到" + cloudLabel + "（手機也看得到）", () => SetCloud(true), 12);
@@ -313,7 +314,7 @@ namespace IslandBar
             where.Children.Add(_localChip);
             where.Children.Add(_cloudChip);
             sp.Children.Add(where);
-            var cloudNote = new TextBlock { Foreground = DarkUi.Dim, FontSize = 11, TextWrapping = TextWrapping.Wrap,
+            cloudNote = new TextBlock { Foreground = DarkUi.Dim, FontSize = 11, TextWrapping = TextWrapping.Wrap,
                                             Text = "會打開" + cloudLabel + "的新增活動頁面（標題、時間都填好了），在瀏覽器按「儲存」就完成；這台電腦一樣會提醒你。" };
             sp.Children.Add(cloudNote);
             void Paint()
@@ -323,7 +324,7 @@ namespace IslandBar
                     chip.Background = on ? DarkUi.Accent : DarkUi.Card;
                     if (chip.Child is TextBlock tb) { tb.Foreground = on ? DarkUi.Bg : Brushes.White; tb.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal; }
                 }
-                cloudNote.Visibility = ToCloud ? Visibility.Visible : Visibility.Collapsed;
+                if (cloudNote != null) cloudNote.Visibility = ToCloud ? Visibility.Visible : Visibility.Collapsed;
             }
             void SetCloud(bool v) { ToCloud = v; Paint(); }
             foreach (var c in new[] { _localChip, _cloudChip })
