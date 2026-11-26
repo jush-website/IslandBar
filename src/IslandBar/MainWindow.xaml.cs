@@ -1174,6 +1174,10 @@ namespace IslandBar
             UpdateChatFab();   // 全螢幕、隱藏動態島時，旁邊的笑臉按鈕也一起收起來（對話小窗也會先藏起來）
         }
 
+        /// <summary>
+        /// 全螢幕的程式是不是在「動態島所在的那個螢幕」上：每個螢幕分開判斷，
+        /// 副螢幕上的動態島不會因為主螢幕在玩遊戲、看全螢幕影片就跟著藏起來（反過來也一樣）。
+        /// </summary>
         private bool IsForegroundFullscreen()
         {
             try
@@ -1185,7 +1189,11 @@ namespace IslandBar
                 if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
                     return false;
 
-                // 系統回報的全螢幕狀態（D3D 遊戲 / 全螢幕程式 / 簡報模式）
+                // 先看前景視窗在哪個螢幕：不是動態島的螢幕就不用藏
+                IntPtr mon = NativeMethods.MonitorFromWindow(fg, NativeMethods.MONITOR_DEFAULTTONEAREST);
+                if (mon != IslandMonitorHandle()) return false;
+
+                // 系統回報的全螢幕狀態（D3D 遊戲 / 全螢幕程式 / 簡報模式）——上面已經確定是同一個螢幕
                 if (NativeMethods.SHQueryUserNotificationState(out int quns) == 0 && (quns == 2 || quns == 3 || quns == 4))
                     return true;
 
@@ -1194,10 +1202,6 @@ namespace IslandBar
                     return false;
 
                 if (!NativeMethods.GetWindowRect(fg, out var wr)) return false;
-
-                IntPtr mon = NativeMethods.MonitorFromWindow(fg, NativeMethods.MONITOR_DEFAULTTONEAREST);
-                IntPtr myMon = NativeMethods.MonitorFromWindow(_hwnd, NativeMethods.MONITOR_DEFAULTTOPRIMARY);
-                if (mon != myMon) return false;
 
                 var mi = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
                 if (!NativeMethods.GetMonitorInfo(mon, ref mi)) return false;
@@ -1211,6 +1215,29 @@ namespace IslandBar
             }
         }
 
+        private IntPtr _islandMon;
+        private DateTime _islandMonAt;
+
+        /// <summary>動態島現在在哪個螢幕（看動態島本身的中心點，不是整個視窗；幾秒重算一次，拖到別的螢幕也跟得上）</summary>
+        private IntPtr IslandMonitorHandle()
+        {
+            if (_islandMon != IntPtr.Zero && (DateTime.UtcNow - _islandMonAt).TotalSeconds < 2) return _islandMon;
+            IntPtr h = IntPtr.Zero;
+            try
+            {
+                if (Island.IsLoaded && Island.ActualWidth > 0 && PresentationSource.FromVisual(Island) != null)
+                {
+                    var c = Island.PointToScreen(new Point(Island.ActualWidth / 2, Math.Min(Island.ActualHeight, 40) / 2));   // 實體像素
+                    h = NativeMethods.MonitorFromPoint(new NativeMethods.POINT { X = (int)c.X, Y = (int)c.Y }, NativeMethods.MONITOR_DEFAULTTONEAREST);
+                }
+            }
+            catch { h = IntPtr.Zero; }
+            if (h == IntPtr.Zero) h = Services.Monitors.Find(_settings.IslandMonitor)?.Handle ?? IntPtr.Zero;
+            if (h == IntPtr.Zero) h = NativeMethods.MonitorFromWindow(_hwnd, NativeMethods.MONITOR_DEFAULTTOPRIMARY);
+            _islandMon = h;
+            _islandMonAt = DateTime.UtcNow;
+            return h;
+        }
 
         // ================================================================
         //  背景不透明度
