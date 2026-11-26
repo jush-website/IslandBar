@@ -75,6 +75,8 @@ namespace IslandBar
 
         /// <summary>Google 日曆等的 iCal 私人網址</summary>
         public string CalendarIcsUrl { get; set; } = "";
+        /// <summary>新增提醒時也加到雲端日曆（Google 日曆等，其他裝置看得到）；上次選的記起來</summary>
+        public bool ReminderToCalendar { get; set; } = false;
 
         /// <summary>要讀 epoch / loss 的訓練 log 檔</summary>
         public string TrainingLogPath { get; set; } = "";
@@ -165,6 +167,8 @@ namespace IslandBar
 
         /// <summary>動態島旁邊顯示對話按鈕（表情圖示）</summary>
         public bool ShowChatButton { get; set; } = true;
+        /// <summary>點對話小窗旁邊（別的程式、桌面）就自動收起</summary>
+        public bool ChatDockAutoClose { get; set; } = true;
 
         /// <summary>語音助理：按住說話鍵說話，放開就執行</summary>
         public bool AssistantEnabled { get; set; } = true;

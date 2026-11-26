@@ -26,6 +26,7 @@ namespace IslandBar
             public string StartIslandTimer(TimeSpan d) { Calls.Add("timer:" + d); return "計時 " + Commands.Describe(d); }
             public string Status(string what) { Calls.Add("status:" + what); return what == "weather" ? "台北現在多雲，22 度，明天降雨機率 60%" : what == "quota" ? "Claude 5小時 用了 42%，2時10分後重置" : "status " + what; }
             public Task<string> BoostAsync() { Calls.Add("boost"); return Task.FromResult("已加速"); }
+            public string OpenRadar() { Calls.Add("radar"); return "已打開天氣雷達"; }
         }
 
         private static readonly string[] RulePhrases =

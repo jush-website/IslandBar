@@ -66,7 +66,7 @@ namespace IslandBar
                 Assistant = new AssistantService(() => _settings, this, Dispatcher);
                 Assistant.StateChanged += OnVoiceState;
                 Assistant.Level += OnVoiceLevel;
-                Assistant.RemindersChanged += () => { BuildUpcoming(); UpdateTimerUi(); };
+                Assistant.RemindersChanged += () => { BuildUpcoming(); UpdateTimerUi(); if (TabCalendar.IsChecked == true) BuildCalendar(); };
                 Assistant.ReminderFired += text =>
                 {
                     if (_userHidden || _fullscreenHidden) return;
@@ -384,6 +384,12 @@ namespace IslandBar
                     if (_stats.HasBattery) sb.Append($"，電池 {_stats.BatteryPercent:0}%");
                     return sb.ToString();
             }
+        }
+
+        public string OpenRadar()
+        {
+            OpenRadarRequested?.Invoke();
+            return "已打開天氣雷達";
         }
 
         public async Task<string> BoostAsync()

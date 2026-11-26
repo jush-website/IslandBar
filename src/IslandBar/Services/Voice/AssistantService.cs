@@ -19,6 +19,8 @@ namespace IslandBar.Services.Voice
         public DateTime Due { get; set; }
         /// <summary>純計時（「計時 10 分鐘」、動態島上的 +10 分）：沒有內容，只說時間到</summary>
         public bool IsTimer { get; set; }
+        /// <summary>也加到了雲端日曆（Google 日曆等）：日曆同步回來後清單裡只顯示一筆</summary>
+        public bool Cloud { get; set; }
         internal Timer Timer;
     }
 
@@ -342,10 +344,10 @@ namespace IslandBar.Services.Voice
         /// <summary>
         /// 新增提醒（語音、對話、動態島「接下來」都用這一個，同一份清單）。text 空白＝純計時。
         /// </summary>
-        public Reminder AddReminderAt(DateTime due, string text, bool save = true)
+        public Reminder AddReminderAt(DateTime due, string text, bool save = true, bool cloud = false)
         {
             bool timer = string.IsNullOrWhiteSpace(text) || text.Trim() == "時間到";
-            var r = new Reminder { Text = timer ? "時間到" : text.Trim(), Due = due, IsTimer = timer };
+            var r = new Reminder { Text = timer ? "時間到" : text.Trim(), Due = due, IsTimer = timer, Cloud = cloud };
             Schedule(r);
             Reminders.Add(r);
             RemindersChanged?.Invoke();
@@ -361,6 +363,12 @@ namespace IslandBar.Services.Voice
             var wait = r.Due - DateTime.Now;
             if (wait < TimeSpan.FromMilliseconds(200)) wait = TimeSpan.FromMilliseconds(200);
             r.Timer?.Dispose();
+            // 行事曆式的提醒可能在好幾週後：計時器最多等 20 天，到時再重排（Timer 不能等超過 49 天）
+            if (wait > TimeSpan.FromDays(20))
+            {
+                r.Timer = new Timer(_ => _ui.BeginInvoke(new Action(() => { if (Reminders.Contains(r)) Schedule(r); })), null, TimeSpan.FromDays(20), Timeout.InfiniteTimeSpan);
+                return;
+            }
             r.Timer = new Timer(_ => _ui.BeginInvoke(new Action(() => Fire(r))), null, wait, Timeout.InfiniteTimeSpan);
         }
 
@@ -374,14 +382,14 @@ namespace IslandBar.Services.Voice
             SaveReminders();
         }
 
-        private sealed class SavedReminder { public Guid Id { get; set; } public string Text { get; set; } public DateTime Due { get; set; } public bool IsTimer { get; set; } }
+        private sealed class SavedReminder { public Guid Id { get; set; } public string Text { get; set; } public DateTime Due { get; set; } public bool IsTimer { get; set; } public bool Cloud { get; set; } }
 
         /// <summary>提醒存檔：IslandBar 重開（例如自動更新）時提醒不會不見</summary>
         private void SaveReminders()
         {
             try
             {
-                var list = Reminders.Select(r => new SavedReminder { Id = r.Id, Text = r.Text, Due = r.Due, IsTimer = r.IsTimer }).ToList();
+                var list = Reminders.Select(r => new SavedReminder { Id = r.Id, Text = r.Text, Due = r.Due, IsTimer = r.IsTimer, Cloud = r.Cloud }).ToList();
                 File.WriteAllText(RemindersPath, JsonSerializer.Serialize(list));
             }
             catch (Exception ex) { Log.Write("Reminders: 存檔失敗 " + ex.Message); }
@@ -398,7 +406,7 @@ namespace IslandBar.Services.Voice
                 {
                     // 關著的時候過了 30 分鐘以內的：重開後馬上提醒；更早的就算了
                     if (sr.Due < now - TimeSpan.FromMinutes(30)) continue;
-                    var r = new Reminder { Id = sr.Id, Text = sr.Text ?? "時間到", Due = sr.Due < now ? now + TimeSpan.FromSeconds(5) : sr.Due, IsTimer = sr.IsTimer };
+                    var r = new Reminder { Id = sr.Id, Text = sr.Text ?? "時間到", Due = sr.Due < now ? now + TimeSpan.FromSeconds(5) : sr.Due, IsTimer = sr.IsTimer, Cloud = sr.Cloud };
                     Schedule(r);
                     Reminders.Add(r);
                 }

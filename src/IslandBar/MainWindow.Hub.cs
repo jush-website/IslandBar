@@ -304,7 +304,7 @@ namespace IslandBar
             ToggleChatDock();
         }
 
-        /// <summary>打開／收起動態島旁的對話小窗（不會因為點別的地方而收起）</summary>
+        /// <summary>打開／收起動態島旁的對話小窗（點旁邊會自動收起，設定裡可以關）</summary>
         public void ToggleChatDock()
         {
             if (_chatDock != null) { CloseChatDock(); return; }
@@ -314,6 +314,7 @@ namespace IslandBar
             _chatDock.OpenFullRequested += () => { CloseChatDock(); AssistantWindowRequested?.Invoke(); };
             _chatDock.SettingsRequested += () => SettingsPageRequested?.Invoke("assistant", null);
             _chatDock.Closed += (s, e) => { if (_chatDock == s) { _chatDock = null; UpdateChatFab(); } };
+            _chatDock.ClickedOutside += OnChatDockClickedOutside;
             _chatDock.Show();
             _chatDock.Activate();
             BounceChatFab();
@@ -335,6 +336,23 @@ namespace IslandBar
             a.KeyFrames.Add(new EasingDoubleKeyFrame(1.0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(360)), new ElasticEase { Oscillations = 1, Springiness = 4, EasingMode = EasingMode.EaseOut }));
             st.BeginAnimation(ScaleTransform.ScaleXProperty, a);
             st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+        }
+
+        /// <summary>點對話小窗外面：別的程式、桌面、動態島 → 收起；按笑臉（它自己會切換）和 IslandBar 的其他視窗（設定、右鍵選單）不算</summary>
+        private void OnChatDockClickedOutside(IntPtr ownWindow, Point screenPx)
+        {
+            if (!_settings.ChatDockAutoClose || _chatDock == null) return;
+            if (ownWindow != IntPtr.Zero)
+            {
+                if (ownWindow != _hwnd) return;
+                try
+                {
+                    var p = ChatFab.PointFromScreen(screenPx);
+                    if (ChatFab.IsVisible && p.X >= -4 && p.Y >= -4 && p.X <= ChatFab.ActualWidth + 4 && p.Y <= ChatFab.ActualHeight + 4) return;
+                }
+                catch { }
+            }
+            CloseChatDock();
         }
 
         public void CloseChatDock()

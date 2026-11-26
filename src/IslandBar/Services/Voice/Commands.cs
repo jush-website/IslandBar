@@ -23,6 +23,8 @@ namespace IslandBar.Services.Voice
         /// <summary>what：time / cpu / ram / gpu / quota / weather / pair / all</summary>
         string Status(string what);
         Task<string> BoostAsync();
+        /// <summary>打開天氣雷達（Windy）視窗</summary>
+        string OpenRadar();
     }
 
     /// <summary>一次指令的結果</summary>
@@ -139,6 +141,7 @@ namespace IslandBar.Services.Voice
             // ---- 時間、狀態 ----
             if (Regex.IsMatch(t, @"(現在)?幾點(了|鐘)?$|現在時間|what(')?stime")) return Done(_host.Status("time"));
             if (Regex.IsMatch(t, @"(今天)(是)?(幾號|幾月幾號|星期幾|禮拜幾|日期)")) return Done(_host.Status("date"));
+            if (Regex.IsMatch(t, @"^(打開|開啟|開|看|看一下|叫出|顯示|show|open)?(天氣|氣象|降雨)?(雷達|雷達圖|雷達回波|回波圖|windy|radar)$")) return Radar();
             if (Regex.IsMatch(t, @"耗電|用電|電費|幾度電|多少度電|功耗|幾瓦|多少瓦|用了多少電")) return Done(_host.Status("energy"));
             if (Regex.IsMatch(t, @"電量|還有多少電|剩多少電|沒電了|電池")) return Done(_host.Status("battery"));
             if (Regex.IsMatch(t, @"天氣|下雨|下雪|颱風|氣溫|幾度|要帶傘|冷不冷|熱不熱")) return Done(_host.Status("weather"));
@@ -290,6 +293,13 @@ namespace IslandBar.Services.Voice
                 r.Reply = $"用 Google 搜尋「{query}」";
                 r.Actions.Add("Google 搜尋");
             }
+            return r;
+        }
+
+        public CommandResult Radar()
+        {
+            var r = new CommandResult { Reply = _host.OpenRadar() };
+            r.Actions.Add("天氣雷達");
             return r;
         }
 

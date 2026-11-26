@@ -447,10 +447,13 @@ namespace IslandBar
         /// <summary>日曆格子：有行程的日期加底線，提示框列出當天行程</summary>
         private void DecorateCalendarDay(DateTime day, Border cell, TextBlock tb)
         {
-            var list = _calendar.Events.Where(e => e.AllDay ? (e.Start.Date <= day && e.End.Date > day) : e.Start.Date == day).ToList();
+            var list = _calendar.Events.Where(e => e.AllDay ? (e.Start.Date <= day && e.End.Date > day) : e.Start.Date == day)
+                                       .Select(e => (e.AllDay ? "全天" : e.Start.ToString("HH:mm")) + "  " + e.Summary).ToList();
+            // 自己加的提醒也標在月曆上
+            list.AddRange(RemindersOn(day).Select(r => r.Due.ToString("HH:mm") + "  " + (r.IsTimer ? "計時" : r.Text) + "（提醒）"));
             if (list.Count == 0) return;
             if (day != DateTime.Today) tb.TextDecorations = TextDecorations.Underline;
-            cell.ToolTip = string.Join("\n", list.Select(e => (e.AllDay ? "全天" : e.Start.ToString("HH:mm")) + "  " + e.Summary));
+            cell.ToolTip = string.Join("\n", list);
         }
 
         public void RefreshCalendarNow() => _ = _calendar.RefreshAsync();

@@ -299,6 +299,7 @@ namespace IslandBar
             p.Children.Add(Check("全螢幕（遊戲、影片）時自動隱藏（多螢幕時只看動態島所在的那個螢幕）", S.HideOnFullscreen, v => { S.HideOnFullscreen = v; Changed(); }));
             p.Children.Add(Check("24 小時制", S.Use24Hour, v => { S.Use24Hour = v; Changed(); }));
             p.Children.Add(Check("動態島旁邊顯示對話按鈕（按一下打開對話小窗，再按一次收起）", S.ShowChatButton, v => { S.ShowChatButton = v; Changed(); }));
+            p.Children.Add(Check("點對話小窗旁邊就自動收起", S.ChatDockAutoClose, v => { S.ChatDockAutoClose = v; Changed(); }));
         }
 
         // ================================================================

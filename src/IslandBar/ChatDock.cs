@@ -1,4 +1,6 @@
 using System;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -25,6 +27,13 @@ namespace IslandBar
         public event Action CloseRequested;
         public event Action OpenFullRequested;
         public event Action SettingsRequested;
+        /// <summary>
+        /// 在小窗外面按了滑鼠：ownWindow＝按到的是 IslandBar 自己的哪個視窗（動態島、設定…），別的程式是 IntPtr.Zero；
+        /// point 是螢幕上的實體像素。要不要收起由動態島決定（按笑臉本身不算）。
+        /// </summary>
+        public event Action<IntPtr, Point> ClickedOutside;
+        private readonly DispatcherTimer _clickWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
+        private bool _btnWasDown = true;   // 打開那一下的滑鼠還沒放開，不要算進去
 
         public const double DockWidth = 380, DockHeight = 500;
         private FrameworkElement _card;
@@ -103,8 +112,9 @@ namespace IslandBar
 
             KeyDown += (s, e) => { if (e.Key == Key.Escape) CloseRequested?.Invoke(); };
             _follow.Tick += (s, e) => Follow(false);
-            Loaded += (s, e) => { Follow(true); _follow.Start(); PlayOpen(); _panel.FocusInput(); };
-            Closed += (s, e) => { _follow.Stop(); _panel.Detach(); };
+            _clickWatch.Tick += (s, e) => WatchClicks();
+            Loaded += (s, e) => { Follow(true); _follow.Start(); _clickWatch.Start(); PlayOpen(); _panel.FocusInput(); };
+            Closed += (s, e) => { _follow.Stop(); _clickWatch.Stop(); _panel.Detach(); };
         }
 
         /// <summary>動畫的中心點＝笑臉在小窗裡的位置（小窗可能在笑臉下方、左邊、上方）</summary>
@@ -160,6 +170,34 @@ namespace IslandBar
         }
 
         /// <summary>跟著動態島走：動態島看不到時（隱藏、全螢幕）先藏起來</summary>
+        /// <summary>
+        /// 點小窗外面就收起：不靠「視窗失去焦點」（動態島不搶焦點、遠端桌面時也常常收不到），
+        /// 直接看滑鼠按下去的那一刻游標在哪個視窗上。
+        /// </summary>
+        private void WatchClicks()
+        {
+            if (_closing) return;
+            bool down = (GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0;
+            if (down && !_btnWasDown && GetCursorPos(out var pt))
+            {
+                IntPtr me = new WindowInteropHelper(this).Handle;
+                IntPtr root = GetAncestor(WindowFromPoint(pt), 2 /* GA_ROOT */);
+                if (root != IntPtr.Zero && root != me)
+                {
+                    GetWindowThreadProcessId(root, out uint pid);
+                    try { ClickedOutside?.Invoke(pid == (uint)Environment.ProcessId ? root : IntPtr.Zero, new Point(pt.X, pt.Y)); } catch { }
+                }
+            }
+            _btnWasDown = down;
+        }
+
+        [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
+        [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
+        [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT pt);
+        [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(POINT pt);
+        [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+
         private void Follow(bool force)
         {
             var a = _anchor();

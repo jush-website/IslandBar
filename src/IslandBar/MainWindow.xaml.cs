@@ -95,7 +95,7 @@ namespace IslandBar
             _weatherTimer.Tick += async (s, e) => await RefreshWeatherAsync();
             _watchTimer.Tick += (s, e) => WatchTick();
             _expandDelay.Tick += (s, e) => { _expandDelay.Stop(); SetMode(IslandMode.Expanded); };
-            _collapseDelay.Tick += (s, e) => { _collapseDelay.Stop(); if (_mode == IslandMode.Expanded || (_mode == IslandMode.Wheel && _wheelClickMode)) SetMode(IslandMode.Compact); };
+            _collapseDelay.Tick += (s, e) => { _collapseDelay.Stop(); if (_reminderDialogOpen) return; if (_mode == IslandMode.Expanded || (_mode == IslandMode.Wheel && _wheelClickMode)) SetMode(IslandMode.Compact); };
             _hudTimer.Tick += (s, e) => { _hudTimer.Stop(); if (_mode == IslandMode.Hud) SetMode(IslandMode.Compact); };
             _autoHideDelay.Tick += (s, e) => AutoHideTick();
 

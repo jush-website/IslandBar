@@ -161,6 +161,28 @@ namespace IslandBar
                 upLog.AppendLine($"reminders: {_window.Assistant?.Reminders.Count}; saved file: {File.Exists(Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), "reminders.json"))}");
                 foreach (var q in new[] { "20", "1.5 小時", "14:30", "下午3點", "3點半", "明天", "90分", "0" })
                     upLog.AppendLine($"parse '{q}' → {(ReminderDialog.Parse(q) is DateTime pd ? pd.ToString("MM/dd HH:mm") : "(null)")}");
+                // 行事曆式的日期（固定「現在」＝2026/11/26 週四 22:00）
+                var fixedNow = new DateTime(2026, 11, 26, 22, 0, 0);
+                foreach (var q in new[] { "明天 9:00", "明天下午3點", "明晚8點", "後天", "週五 14:00", "週三", "下週一 10:30", "11/28 14:00", "12月3日 晚上7點", "2027/1/5 8:00", "11/20 9:00", "今天 21:00", "今天 23:00", "今晚8點" })
+                    upLog.AppendLine($"parse@1126 '{q}' → {(ReminderDialog.Parse(q, fixedNow) is DateTime pd ? pd.ToString("yyyy/MM/dd ddd HH:mm", new System.Globalization.CultureInfo("zh-TW")) : "(null)")}");
+                var t3 = _window.Assistant?.AddReminderAt(DateTime.Today.AddDays(3).AddHours(10), "繳電話費");
+                var t4 = _window.Assistant?.AddReminderAt(DateTime.Today.AddDays(40).AddHours(9), "很久以後的提醒", cloud: true);
+                upLog.AppendLine("google: " + Services.CloudCalendar.NewEventUrl(Services.CloudCalendar.Kind.Google, "繳電話費", new DateTime(2026, 11, 29, 10, 0, 0), TimeSpan.FromMinutes(30), "由 IslandBar 新增"));
+                upLog.AppendLine("outlook: " + Services.CloudCalendar.NewEventUrl(Services.CloudCalendar.Kind.OutlookWork, "繳電話費", new DateTime(2026, 11, 29, 10, 0, 0), TimeSpan.FromMinutes(30), ""));
+                upLog.AppendLine("detect: " + Services.CloudCalendar.Detect("https://calendar.google.com/calendar/ical/x/basic.ics") + " / " + Services.CloudCalendar.Detect("https://outlook.office365.com/owa/calendar/x/calendar.ics"));
+                // 新增提醒的視窗：開起來截圖，按取消要關得掉
+                try
+                {
+                    var dlg = new ReminderDialog(DateTime.Today.AddDays(2), true, "Google 日曆");
+                    dlg.Show();
+                    await Task.Delay(800);
+                    Save(dlg.Content as Visual, Path.Combine(dir, "reminder-dialog.png"));
+                    var cancelM = typeof(ReminderDialog).GetMethod("Cancel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    cancelM?.Invoke(dlg, null);
+                    await Task.Delay(300);
+                    upLog.AppendLine($"dialog after cancel visible: {dlg.IsVisible}");
+                }
+                catch (Exception ex) { upLog.AppendLine("dialog error: " + ex); }
                 foreach (var tab in new[] { "media", "calendar", "weather", "quota", "stats", "clip", "quick" })
                 {
                     _window.DebugExpand(tab);
@@ -170,6 +192,12 @@ namespace IslandBar
                 upLog.AppendLine($"compact timer: '{_window.DebugCompactTimer}'");
                 if (t1 != null) _window.Assistant.CancelReminder(t1);
                 if (t2 != null) _window.Assistant.CancelReminder(t2);
+                _window.DebugSelectDay(DateTime.Today.AddDays(3));
+                await Task.Delay(800);
+                Save(_window.RootVisual, Path.Combine(dir, "island-calendar-day.png"));
+                _window.DebugSelectDay(null);
+                if (t3 != null) _window.Assistant.CancelReminder(t3);
+                if (t4 != null) _window.Assistant.CancelReminder(t4);
                 upLog.AppendLine($"after cancel: {_window.Assistant?.Reminders.Count}");
                 File.WriteAllText(Path.Combine(dir, "upcoming-test.txt"), upLog.ToString());
                 // 系統分頁：AI 額度不放左欄時，裡面多一個「AI 額度」
@@ -583,7 +611,7 @@ namespace IslandBar
                         "用 Edge 開 GitHub", "打開瀏覽器到 YouTube", "打開瀏覽器 YouTube", "打開瀏覽器", "開啟 Edge 瀏覽器", "在瀏覽器上搜尋貓咪", "請用瀏覽器幫我開啟 youtube 好嗎",
                         "打開 YouTube 搜尋 lofi", "去 YouTube 看周杰倫", "把 YouTube 打開", "YouTube 開起來", "我要看 YouTube", "上臉書", "我要打開 YouTube",
                         "Open YouTube", "打開 YouTube 首頁", "打開 YouTube Music", "我想聽周杰倫", "播放周杰倫", "打開記事本", "叫出記事本", "把聲音打開",
-                        "瀏覽器設定", "看書", "YouTube 搜尋 lofi", "搜尋台北美食", "用 Google 搜尋貓咪", "現在幾點"
+                        "瀏覽器設定", "看書", "YouTube 搜尋 lofi", "搜尋台北美食", "用 Google 搜尋貓咪", "現在幾點", "打開雷達", "天氣雷達", "看一下雷達回波"
                     })
                     {
                         host.Calls.Clear();
