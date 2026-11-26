@@ -61,7 +61,8 @@ namespace IslandBar.Services
         public void Detect(string cpuName, double cpuTdp, bool hasBattery)
         {
             var list = new List<Device>();
-            Laptop = hasBattery || IsLaptopChassis(out string chassis);
+            bool chassisLaptop = IsLaptopChassis(out string chassis);
+            Laptop = hasBattery || chassisLaptop;
             ChassisText = Laptop ? "筆電" : "桌機";
 
             // CPU
