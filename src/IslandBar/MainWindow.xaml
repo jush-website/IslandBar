@@ -81,7 +81,7 @@
         <!-- 實心強調按鈕 -->
         <Style x:Key="AccentButton" TargetType="Button">
             <Setter Property="Foreground" Value="#0B1F1C" />
-            <Setter Property="Background" Value="{StaticResource Accent}" />
+            <Setter Property="Background" Value="{DynamicResource Accent}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -192,7 +192,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="RepeatButton">
                         <Grid Background="Transparent">
-                            <Border Height="4" CornerRadius="2" Background="{StaticResource Accent}" VerticalAlignment="Center" />
+                            <Border Height="4" CornerRadius="2" Background="{DynamicResource Accent}" VerticalAlignment="Center" />
                         </Grid>
                     </ControlTemplate>
                 </Setter.Value>
@@ -344,16 +344,16 @@
                                 <Border x:Name="CompactEqScrim" CornerRadius="6" Background="#80000000" Visibility="Collapsed" IsHitTestVisible="False" />
                                 <StackPanel x:Name="EqBars" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
                                             Height="12" Visibility="Collapsed" IsHitTestVisible="False">
-                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
-                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
-                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
-                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="12" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
                                     </StackPanel>
@@ -384,16 +384,16 @@
                             <Border x:Name="SideEqScrim" CornerRadius="7" Background="#80000000" Visibility="Collapsed" IsHitTestVisible="False" />
                             <StackPanel x:Name="SideEqBars" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
                                             Height="14" Visibility="Collapsed" IsHitTestVisible="False">
-                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
-                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
-                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
-                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{StaticResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
+                                    <Rectangle Width="2.5" Height="14" RadiusX="1.25" RadiusY="1.25" Fill="{DynamicResource Accent}" Margin="0.75,0" RenderTransformOrigin="0.5,1">
                                         <Rectangle.RenderTransform><ScaleTransform ScaleY="0.3" /></Rectangle.RenderTransform>
                                     </Rectangle>
                                     </StackPanel>
@@ -457,7 +457,7 @@
                             <ColumnDefinition Width="24" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Ellipse x:Name="VoicePulse" Width="26" Height="26" Fill="{StaticResource Accent}" Opacity="0"
+                        <Ellipse x:Name="VoicePulse" Width="26" Height="26" Fill="{DynamicResource Accent}" Opacity="0"
                                  HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
                             <Ellipse.RenderTransform><ScaleTransform x:Name="VoicePulseScale" ScaleX="1" ScaleY="1" /></Ellipse.RenderTransform>
                         </Ellipse>
@@ -560,7 +560,7 @@
                                 <TextBlock x:Name="MediaArtist" Text="" FontSize="13" Foreground="{StaticResource Secondary}"
                                            Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
                                 <TextBlock x:Name="MediaSource" Text="" FontSize="11" Foreground="{StaticResource Tertiary}" Margin="0,3,0,0" />
-                                <TextBlock x:Name="MediaLyric" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,4,0,0"
+                                <TextBlock x:Name="MediaLyric" Text="" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,4,0,0"
                                            TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
 
                                 <Grid x:Name="MediaProgressHost" Margin="0,12,0,0" Height="10" Background="Transparent" Cursor="Hand"
@@ -1056,7 +1056,7 @@
                     Cursor="Hand" ToolTip="對話（再按一次收起）"
                     MouseLeftButtonUp="ChatFab_Click" MouseEnter="ChatFab_MouseEnter" MouseLeave="ChatFab_MouseLeave">
                 <Grid>
-                    <Ellipse x:Name="ChatFabRing" Stroke="{StaticResource Accent}" StrokeThickness="1.5" Opacity="0" />
+                    <Ellipse x:Name="ChatFabRing" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" Opacity="0" />
                     <TextBlock x:Name="ChatFabGlyph" Style="{StaticResource Glyph}" Text="&#xE76E;" FontSize="14" />
                     <Viewbox x:Name="ChatFabFace" Width="19" Height="19" IsHitTestVisible="False" Visibility="Collapsed" />
                 </Grid>

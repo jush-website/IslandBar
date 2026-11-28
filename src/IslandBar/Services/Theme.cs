@@ -34,7 +34,9 @@ namespace IslandBar.Services
             c.A = 255;
             Current = c;
             Accent.Color = c;
-            OnAccent.Color = Luminance(c) > 0.45 ? Color.FromRgb(0x0E, 0x0E, 0x10) : Colors.White;
+            // 白字和深字哪個對比比較高就用哪個
+            double l = Luminance(c);
+            OnAccent.Color = (l + 0.05) / 0.055 >= 1.05 / (l + 0.05) ? Color.FromRgb(0x0E, 0x0E, 0x10) : Colors.White;
             AccentSoft.Color = Mix(Color.FromRgb(0x0E, 0x0E, 0x10), c, 0.16);
             UserBubble.Color = Mix(Color.FromRgb(0x0E, 0x0E, 0x10), c, 0.38);
             try { Changed?.Invoke(); } catch (Exception ex) { Log.Error("Theme.Changed", ex); }

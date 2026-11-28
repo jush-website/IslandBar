@@ -105,11 +105,10 @@ namespace IslandBar
         {
             try
             {
-                if (Resources["Accent"] is SolidColorBrush b)
-                {
-                    if (b.IsFrozen) Resources["Accent"] = new SolidColorBrush(Theme.Current);
-                    else b.Color = Theme.Current;
-                }
+                // XAML 裡用 DynamicResource Accent：換掉資源，按鈕、進度條、等化器都會跟著換
+                var nb = new SolidColorBrush(Theme.Current);
+                nb.Freeze();
+                Resources["Accent"] = nb;
                 UpdateDots();
             }
             catch (Exception ex) { Log.Error("Theme.Island", ex); }
