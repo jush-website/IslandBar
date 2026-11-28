@@ -219,6 +219,7 @@ namespace IslandBar
             _gpu.Start();
 
             StartExtras();
+            StartDesktop();
             StartFeatures();
             StatsTick();
             UpdateDarkModeTile();
@@ -241,6 +242,7 @@ namespace IslandBar
             UiTick();
             _ = RefreshWeatherAsync();
             ApplyFeatureSettings();
+            ApplyDesktopSettings();
         }
 
         /// <summary>在動態島上短暫顯示一則訊息（例如更新進度）</summary>
@@ -266,6 +268,7 @@ namespace IslandBar
             _quota.Stop();
             _gpu.Stop();
             try { _energy.Save(); } catch { }
+            StopDesktop();
             StopExtras();
             Close();
         }

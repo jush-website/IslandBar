@@ -58,8 +58,8 @@ namespace IslandBar
         private static readonly Brush Card = Frozen(Color.FromRgb(0x1E, 0x1E, 0x22));
         private static readonly Brush CardHover = Frozen(Color.FromRgb(0x2A, 0x2A, 0x2F));
         private static readonly Brush Dim = Frozen(Color.FromRgb(0x8E, 0x8E, 0x96));
-        private static readonly Brush Accent = Frozen(Color.FromRgb(0x34, 0xD3, 0xC0));
-        private static readonly Brush OnAccent = Frozen(Color.FromRgb(0x0E, 0x0E, 0x10));
+        private static readonly Brush Accent = Services.Theme.Accent;
+        private static readonly Brush OnAccent = Services.Theme.OnAccent;
         private static readonly Brush Good = Frozen(Color.FromRgb(0x30, 0xD1, 0x58));
         private static readonly Brush Bad = Frozen(Color.FromRgb(0xFF, 0x6B, 0x6B));
 
@@ -78,6 +78,7 @@ namespace IslandBar
             ("system", "\uEC4A", "系統與加速", "工具"),
             ("weather", "\uE9CA", "天氣與行程", "工具"),
             ("widgets", "\uE8A9", "桌面小工具", "工具"),
+            ("desktop", "\uE771", "桌面與工作列", "工具"),
             ("general", "\uE713", "一般", "")
         };
 
@@ -231,6 +232,7 @@ namespace IslandBar
                 case "system": BuildSystem(page); break;
                 case "weather": BuildWeather(page); break;
                 case "widgets": BuildWidgets(page); break;
+                case "desktop": BuildDesktop(page); break;
                 case "general": BuildGeneral(page); break;
                 default: _page = "appearance"; BuildAppearance(page); break;
             }
@@ -268,6 +270,7 @@ namespace IslandBar
         private void BuildAppearance(StackPanel p)
         {
             p.Children.Add(PageTitle("外觀與位置"));
+            p.Children.Add(PageLink("主題色、工作列透明：到「桌面與工作列」 ›", "desktop", null));
             p.Children.Add(Heading("位置"));
             p.Children.Add(Segmented(new[] { ("上方置中", IslandPosition.TopCenter), ("左上", IslandPosition.TopLeft), ("右上", IslandPosition.TopRight), ("左側", IslandPosition.Left), ("右側", IslandPosition.Right) },
                 S.AlongEdge == null ? S.Position : (IslandPosition?)null, v => { S.Position = v; S.AlongEdge = null; Changed(); }));
@@ -1219,6 +1222,83 @@ namespace IslandBar
         //  桌面小工具
         // ================================================================
 
+        private void BuildDesktop(StackPanel p)
+        {
+            p.Children.Add(PageTitle("桌面與工作列"));
+            p.Children.Add(Note("讓動態島、設定和對話視窗、工作列用同一個主題色；工作列可以變透明或毛玻璃，再加幾個好用的小技巧。都是 IslandBar 自己做的，不會改 Windows 的檔案，關掉就恢復原狀。"));
+
+            // ---- 主題色 ----
+            p.Children.Add(Heading("主題色", 20));
+            p.Children.Add(Note("按鈕、進度條、選取、對話泡泡、工作列染色都用這個顏色。「跟桌布」會挑桌布裡最有代表性的鮮豔顏色，換桌布時自動跟著換。"));
+            var swatch = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(14), Background = Services.Theme.Accent, Margin = new Thickness(0, 6, 10, 0) };
+            var hexText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 0), Foreground = Dim };
+            void ShowHex() => hexText.Text = "目前：" + Services.Theme.ToHex(Services.Theme.Current);
+            ShowHex();
+            var customRow = new WrapPanel { Visibility = S.ThemeMode == "custom" ? Visibility.Visible : Visibility.Collapsed };
+            void Mode(string m)
+            {
+                S.ThemeMode = m;
+                if (m == "custom" && !Services.Theme.TryParse(S.ThemeColor, out _)) S.ThemeColor = Services.Theme.ToHex(Services.Theme.Current);
+                customRow.Visibility = m == "custom" ? Visibility.Visible : Visibility.Collapsed;
+                S.Save();
+                _h.Window?.ApplyTheme();
+                ShowHex();
+            }
+            var modes = new[] { ("預設（青綠）", "default"), ("跟 Windows 強調色", "windows"), ("跟桌布顏色", "wallpaper"), ("自己選", "custom") };
+            p.Children.Add(Segmented(modes.Select((m, i) => (m.Item1, i)), Math.Max(0, Array.FindIndex(modes, m => m.Item2 == S.ThemeMode)), i => Mode(modes[i].Item2)));
+            var cur = new WrapPanel();
+            cur.Children.Add(swatch);
+            cur.Children.Add(hexText);
+            p.Children.Add(cur);
+            foreach (var hex in new[] { "#34D3C0", "#5AA9FF", "#9B8CFF", "#FF7AB6", "#FF8A5B", "#FFC94D", "#7BD88F", "#C8C8D0" })
+            {
+                Services.Theme.TryParse(hex, out var c);
+                var dot = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Background = new SolidColorBrush(c), Margin = new Thickness(0, 8, 8, 0), Cursor = Cursors.Hand, ToolTip = hex };
+                string h = hex;
+                dot.MouseLeftButtonUp += (s, e) => { S.ThemeColor = h; S.Save(); _h.Window?.ApplyTheme(); ShowHex(); };
+                customRow.Children.Add(dot);
+            }
+            var hexBox = new TextBox { Text = S.ThemeColor ?? "", Width = 96, Padding = new Thickness(6, 3, 6, 3), Margin = new Thickness(4, 8, 0, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "自己輸入色碼，例如 #FF8A5B" };
+            hexBox.LostFocus += (s, e) => { if (Services.Theme.TryParse(hexBox.Text, out var c)) { S.ThemeColor = Services.Theme.ToHex(c); S.Save(); _h.Window?.ApplyTheme(); ShowHex(); } };
+            hexBox.KeyDown += (s, e) => { if (e.Key == Key.Enter && Services.Theme.TryParse(hexBox.Text, out var c)) { S.ThemeColor = Services.Theme.ToHex(c); S.Save(); _h.Window?.ApplyTheme(); ShowHex(); } };
+            customRow.Children.Add(hexBox);
+            p.Children.Add(customRow);
+
+            // ---- 工作列外觀 ----
+            p.Children.Add(Heading("工作列外觀", 20));
+            p.Children.Add(Note(Services.TaskbarStyler.IsWindows11
+                ? "Windows 11 的工作列有自己畫的背景，效果會比 Windows 10 淡一些；不喜歡選「原本的樣子」就恢復。"
+                : "選了馬上套用；選「原本的樣子」就恢復 Windows 預設。"));
+            var styles = new[] { ("原本的樣子", "off"), ("全透明", "clear"), ("主題色半透明", "tint"), ("模糊", "blur"), ("毛玻璃", "acrylic") };
+            var tintRow = Labeled("染色濃度", Slider(5, 90, S.TaskbarTintOpacity, v => { S.TaskbarTintOpacity = (int)Math.Round(v); S.Save(); }, v => $"{v:0}%"));
+            tintRow.Visibility = S.TaskbarStyle == "tint" ? Visibility.Visible : Visibility.Collapsed;
+            p.Children.Add(Segmented(styles.Select((m, i) => (m.Item1, i)), Math.Max(0, Array.FindIndex(styles, m => m.Item2 == S.TaskbarStyle)), i =>
+            {
+                S.TaskbarStyle = styles[i].Item2;
+                tintRow.Visibility = S.TaskbarStyle == "tint" ? Visibility.Visible : Visibility.Collapsed;
+                Changed();
+            }));
+            p.Children.Add(tintRow);
+            p.Children.Add(Check("有視窗最大化時，那個螢幕的工作列恢復成一般深色", S.TaskbarNormalWhenMaximized, v => { S.TaskbarNormalWhenMaximized = v; Changed(); }));
+
+            // ---- 工作列小技巧 ----
+            p.Children.Add(Heading("工作列小技巧", 20));
+            p.Children.Add(Check("在工作列上滾滾輪調音量（每格 2%，動態島會顯示音量）", S.TaskbarScrollVolume, v => { S.TaskbarScrollVolume = v; Changed(); }));
+            p.Children.Add(Check("滑鼠中鍵點工作列上的程式＝關掉它（實驗功能：會打開右鍵選單幫你按「關閉視窗」）", S.TaskbarMiddleClose, v => { S.TaskbarMiddleClose = v; Changed(); }));
+            p.Children.Add(Check("工作列時鐘顯示秒（Windows 內建的設定）", Services.TaskbarTricks.ClockSeconds, v => Services.TaskbarTricks.ClockSeconds = v));
+            p.Children.Add(Note("時鐘的秒數沒有馬上出現的話，按下面重新啟動檔案總管（開著的資料夾視窗會被關掉）。"));
+            var restart = MakeButton("重新啟動檔案總管", false);
+            bool armed = false;
+            restart.Click += (s, e) =>
+            {
+                if (!armed) { armed = true; restart.Content = "再按一次確定（資料夾視窗會關掉）"; return; }
+                armed = false;
+                restart.Content = "重新啟動檔案總管";
+                System.Threading.Tasks.Task.Run(Services.TaskbarTricks.RestartExplorer);
+            };
+            p.Children.Add(restart);
+        }
+
         private void BuildWidgets(StackPanel p)
         {
             p.Children.Add(PageTitle("桌面小工具"));
@@ -1426,6 +1506,9 @@ namespace IslandBar
             ["亮度"] = new[] { "螢幕亮度" }, ["音量"] = new[] { "各程式音量", "播放裝置" }, ["喇叭"] = new[] { "播放裝置" },
             ["錄影"] = new[] { "螢幕錄影" }, ["錄螢幕"] = new[] { "螢幕錄影" }, ["gif"] = new[] { "GIF" }, ["歌詞"] = new[] { "同步歌詞", "歌詞" },
             ["會議"] = new[] { "會議", "麥克風靜音" }, ["靜音"] = new[] { "麥克風靜音", "靜音" }, ["meet"] = new[] { "會議" }, ["zoom"] = new[] { "會議" },
+            ["主題"] = new[] { "主題色" }, ["顏色"] = new[] { "主題色" }, ["配色"] = new[] { "主題色" }, ["桌布"] = new[] { "主題色" },
+            ["工作列"] = new[] { "工作列外觀", "工作列小技巧" }, ["透明"] = new[] { "工作列外觀" }, ["毛玻璃"] = new[] { "工作列外觀" }, ["秒"] = new[] { "工作列小技巧" },
+            ["中鍵"] = new[] { "工作列小技巧" }, ["滾輪"] = new[] { "工作列小技巧" },
             ["語音"] = new[] { "語音助理", "自我檢查" }, ["沒反應"] = new[] { "自我檢查" }, ["排查"] = new[] { "自我檢查" }, ["診斷"] = new[] { "自我檢查", "診斷" },
             ["麥克風"] = new[] { "麥克風", "自我檢查" }, ["遠端"] = new[] { "自我檢查" },
             ["耗電"] = new[] { "耗電量與電費" }, ["電費"] = new[] { "耗電量與電費", "電價" }, ["用電"] = new[] { "耗電量與電費" }, ["功耗"] = new[] { "耗電量與電費" },

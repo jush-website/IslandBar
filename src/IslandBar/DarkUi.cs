@@ -17,9 +17,10 @@ namespace IslandBar
         public static readonly Brush Card2 = Frozen(0x2A, 0x2A, 0x2F);
         public static readonly Brush Hover = Frozen(0x1B, 0x1B, 0x1F);
         public static readonly Brush Dim = Frozen(0x8E, 0x8E, 0x96);
-        public static readonly Brush Accent = Frozen(0x34, 0xD3, 0xC0);
-        public static readonly Brush AccentSoft = Frozen(0x14, 0x2A, 0x28);
-        public static readonly Brush UserBubble = Frozen(0x17, 0x4E, 0x48);
+        // 主題色（設定 → 桌面與工作列 → 主題色 可以換）：同一個筆刷，換色時所有地方一起變
+        public static readonly SolidColorBrush Accent = Services.Theme.Accent;
+        public static readonly SolidColorBrush AccentSoft = Services.Theme.AccentSoft;
+        public static readonly SolidColorBrush UserBubble = Services.Theme.UserBubble;
         public static readonly Brush Warn = Frozen(0xFF, 0xB0, 0x40);
         public static readonly FontFamily Icons = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets");
         public static readonly FontFamily Text = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft JhengHei UI");

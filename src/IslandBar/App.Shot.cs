@@ -618,6 +618,56 @@ namespace IslandBar
                 catch (Exception ex) { et.AppendLine("錯誤：" + ex); }
                 File.WriteAllText(Path.Combine(dir, "energy-test.txt"), et.ToString());
 
+                // ---- 桌面與工作列：主題色、工作列外觀 ----
+                var dt = new System.Text.StringBuilder();
+                try
+                {
+                    // 假桌布：大部分藍色、一小塊橘色、一些灰
+                    var wb = new WriteableBitmap(64, 36, 96, 96, PixelFormats.Bgra32, null);
+                    var px = new byte[64 * 36 * 4];
+                    for (int y = 0; y < 36; y++) for (int x = 0; x < 64; x++)
+                    {
+                        int i = (y * 64 + x) * 4;
+                        (byte r, byte g, byte b) = x < 40 ? ((byte)30, (byte)90, (byte)200) : x < 48 ? ((byte)240, (byte)140, (byte)40) : ((byte)120, (byte)120, (byte)120);
+                        px[i] = b; px[i + 1] = g; px[i + 2] = r; px[i + 3] = 255;
+                    }
+                    wb.WritePixels(new Int32Rect(0, 0, 64, 36), px, 64 * 4, 0);
+                    var dom = Services.Theme.DominantColor(wb);
+                    dt.AppendLine($"假桌布主色：{(dom.HasValue ? Services.Theme.ToHex(dom.Value) : "null")} → 看得清楚：{(dom.HasValue ? Services.Theme.ToHex(Services.Theme.Readable(dom.Value)) : "")}");
+                    dt.AppendLine($"Windows 強調色：{(Services.Theme.WindowsAccent() is Color wa ? Services.Theme.ToHex(wa) : "讀不到")}");
+                    dt.AppendLine($"桌布：{Services.Theme.WallpaperPath() ?? "（沒有）"}，主色 {(Services.Theme.WallpaperColor() is Color wc ? Services.Theme.ToHex(wc) : "讀不到")}");
+                    dt.AppendLine($"Windows 11：{Services.TaskbarStyler.IsWindows11}（{Environment.OSVersion.Version}），時鐘顯示秒：{Services.TaskbarTricks.ClockSeconds}");
+                    _settings.ThemeMode = "custom"; _settings.ThemeColor = "#FF8A5B";
+                    _window.ApplyTheme();
+                    dt.AppendLine($"自訂 → {Services.Theme.ToHex(Services.Theme.Current)}，字色 {Services.Theme.OnAccent.Color}");
+                    _settings.TaskbarStyle = "acrylic";
+                    _window.ApplySettings(_settings);
+                    await Task.Delay(1500);
+                    dt.AppendLine("工作列：" + _window.DebugTaskbarInfo);
+                    try
+                    {
+                        var sb = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                        using var bmp = new System.Drawing.Bitmap(sb.Width, 80);
+                        using (var gfx = System.Drawing.Graphics.FromImage(bmp)) gfx.CopyFromScreen(sb.Left, sb.Bottom - 80, 0, 0, bmp.Size);
+                        bmp.Save(Path.Combine(dir, "taskbar-acrylic.png"), System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    catch (Exception ex) { dt.AppendLine("截工作列失敗：" + ex.Message); }
+                    _window.DebugExpand("calendar");
+                    await Task.Delay(1200);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-theme-orange.png"));
+                    _window.DebugCollapse();
+                    OpenSettings("desktop", null);
+                    await Task.Delay(1500);
+                    Save(_hub.CurrentContent, Path.Combine(dir, "settings-desktop-orange.png"));
+                    _settings.TaskbarStyle = "off";
+                    _settings.ThemeMode = "default"; _settings.ThemeColor = "";
+                    _window.ApplySettings(_settings);
+                    await Task.Delay(800);
+                    dt.AppendLine($"還原 → {Services.Theme.ToHex(Services.Theme.Current)}");
+                }
+                catch (Exception ex) { dt.AppendLine("錯誤：" + ex); }
+                File.WriteAllText(Path.Combine(dir, "desktop-test.txt"), dt.ToString());
+
 
                 // ---- 全螢幕判斷：蓋滿螢幕的無邊框視窗＝全螢幕；最大化的無標題列視窗＝不是 ----
                 var ft = new System.Text.StringBuilder();

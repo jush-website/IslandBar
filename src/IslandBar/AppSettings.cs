@@ -47,6 +47,22 @@ namespace IslandBar
         /// <summary>有同步歌詞時（LRCLIB），收合的動態島改顯示目前唱到的那一句</summary>
         public bool ShowLyrics { get; set; } = true;
 
+        // ---- 桌面與工作列 ----
+        /// <summary>主題色：default（青綠）／windows（跟 Windows 強調色）／wallpaper（跟桌布）／custom</summary>
+        public string ThemeMode { get; set; } = "default";
+        /// <summary>自訂主題色（#RRGGBB）</summary>
+        public string ThemeColor { get; set; } = "";
+        /// <summary>工作列外觀：off／clear（全透明）／tint（主題色半透明）／blur（模糊）／acrylic（毛玻璃）</summary>
+        public string TaskbarStyle { get; set; } = "off";
+        /// <summary>染色的濃度（0~100）</summary>
+        public int TaskbarTintOpacity { get; set; } = 35;
+        /// <summary>有視窗最大化時工作列恢復成一般深色</summary>
+        public bool TaskbarNormalWhenMaximized { get; set; } = true;
+        /// <summary>在工作列上滾滾輪調音量</summary>
+        public bool TaskbarScrollVolume { get; set; } = true;
+        /// <summary>滑鼠中鍵點工作列上的程式＝關掉它</summary>
+        public bool TaskbarMiddleClose { get; set; } = true;
+
         // ---- 耗電量與電費 ----
         /// <summary>動態島「系統」分頁裡的「耗電」</summary>
         public bool ShowEnergy { get; set; } = true;
