@@ -343,8 +343,6 @@ namespace IslandBar
                 case "energy":
                 case "power":
                     return EnergySummary();
-                case "glow":
-                    return _glow.Summary(DateTime.Now);
                 case "date":
                     return $"今天是 {DateTime.Now.ToString("yyyy年M月d日 dddd", ZhTwCulture)}";
                 case "weather":

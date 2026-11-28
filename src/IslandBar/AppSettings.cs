@@ -79,14 +79,6 @@ namespace IslandBar
         public string CalendarIcsUrl { get; set; } = "";
         /// <summary>新增提醒時也加到雲端日曆（Google 日曆等，其他裝置看得到）；上次選的記起來</summary>
         public bool ReminderToCalendar { get; set; } = false;
-        /// <summary>天氣分頁顯示火燒雲（晨彩／晚霞）預報</summary>
-        public bool GlowForecast { get; set; } = true;
-        /// <summary>晚霞／晨彩機會高時，日落（日出）前提醒</summary>
-        public bool GlowNotify { get; set; } = true;
-        /// <summary>幾分以上才提醒</summary>
-        public int GlowNotifyScore { get; set; } = 70;
-        /// <summary>提前幾分鐘提醒</summary>
-        public int GlowNotifyLead { get; set; } = 45;
 
         /// <summary>要讀 epoch / loss 的訓練 log 檔</summary>
         public string TrainingLogPath { get; set; } = "";

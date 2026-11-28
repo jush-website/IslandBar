@@ -144,7 +144,6 @@ namespace IslandBar.Services.Voice
             if (Regex.IsMatch(t, @"^(打開|開啟|開|看|看一下|叫出|顯示|show|open)?(天氣|氣象|降雨)?(雷達|雷達圖|雷達回波|回波圖|windy|radar)$")) return Radar();
             if (Regex.IsMatch(t, @"耗電|用電|電費|幾度電|多少度電|功耗|幾瓦|多少瓦|用了多少電")) return Done(_host.Status("energy"));
             if (Regex.IsMatch(t, @"電量|還有多少電|剩多少電|沒電了|電池")) return Done(_host.Status("battery"));
-            if (Regex.IsMatch(t, @"晚霞|火燒雲|朝霞|晨彩|霞光|夕陽.*(好看|漂亮)|日出.*(好看|漂亮)")) return Done(_host.Status("glow"));
             if (Regex.IsMatch(t, @"天氣|下雨|下雪|颱風|氣溫|幾度|要帶傘|冷不冷|熱不熱")) return Done(_host.Status("weather"));
             if (Regex.IsMatch(t, @"加速|清理(記憶體|電腦|一下)?$|電腦(好|很|有點)?(卡|慢|lag)|boost")) return Done(await _host.BoostAsync());
             if (Regex.IsMatch(t, @"額度|用量|quota|token")) return Done(_host.Status("quota"));

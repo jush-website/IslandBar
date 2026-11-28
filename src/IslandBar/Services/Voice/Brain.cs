@@ -494,8 +494,8 @@ namespace IslandBar.Services.Voice
                 new JsonObject { ["percent"] = P("integer", "0~100"), ["change"] = P("string", "相對調整", "up", "down", "mute", "unmute") }),
             Fn("set_timer", "設定倒數計時；有 reminder 就是到時間用語音提醒那件事",
                 new JsonObject { ["minutes"] = P("number", "幾分鐘（可以有小數）"), ["reminder"] = P("string", "到時間要提醒的事（可省略）") }, "minutes"),
-            Fn("get_status", "查詢資訊：time 時間日期、weather 天氣、quota AI 額度（Claude/Codex/Antigravity）、cpu/ram/gpu 電腦效能、pair GPU 叢集、battery 無線耳機滑鼠等的電量、energy 電腦耗電量（幾瓦、今天和這個月用了幾度電、電費）、glow 火燒雲（晚霞、晨彩）預報",
-                new JsonObject { ["what"] = P("string", "要查什麼", "time", "weather", "quota", "all", "gpu", "pair", "battery", "energy", "glow") }, "what"),
+            Fn("get_status", "查詢資訊：time 時間日期、weather 天氣、quota AI 額度（Claude/Codex/Antigravity）、cpu/ram/gpu 電腦效能、pair GPU 叢集、battery 無線耳機滑鼠等的電量、energy 電腦耗電量（幾瓦、今天和這個月用了幾度電、電費）",
+                new JsonObject { ["what"] = P("string", "要查什麼", "time", "weather", "quota", "all", "gpu", "pair", "battery", "energy") }, "what"),
             Fn("boost_pc", "一鍵加速：整理記憶體、清掉暫存檔", new JsonObject()),
             Fn("open_radar", "打開天氣雷達地圖（Windy、降雨雷達回波）", new JsonObject()),
             Fn("lock_pc", "鎖定電腦螢幕", new JsonObject())
