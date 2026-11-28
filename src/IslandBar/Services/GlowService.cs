@@ -118,7 +118,7 @@ namespace IslandBar.Services
 
             var why = new List<string>
             {
-                canvasCover < 15 ? "天空太乾淨、沒有雲可以染色" : canvasCover > 88 ? "中高雲太厚" : $"中高雲 {canvasCover:0}%（剛好當畫布）",
+                canvasCover < 15 ? "天空太乾淨、沒有雲可以染色" : canvasCover > 88 ? "中高雲太厚" : canvasCover < 35 ? $"中高雲 {canvasCover:0}%（偏少）" : $"中高雲 {canvasCover:0}%（剛好當畫布）",
                 block > 0.5 ? $"{Compass(az)}方向的地平線被雲擋住" : block > 0.25 ? $"{Compass(az)}方向有些雲" : $"{Compass(az)}方向的地平線很開",
             };
             if (low > 50) why.Add($"本地低雲 {low:0}%");
