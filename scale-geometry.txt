@@ -1,0 +1,8 @@
+off compact: window DIP 176,0 672x368; rect px 176,0 672x368; visualDpi 1 device 1; island at 201.6,0 size 335x34; text Ideal; fab Visible 595,3,0,0
+off expanded: window DIP 176,0 672x368; rect px 176,0 672x368; visualDpi 1 device 1; island at 6.4,0 size 652x256; text Ideal; fab Visible 668,13,0,0
+on compact: window DIP 176,0 672x368; rect px 176,0 672x368; visualDpi 0.8 device 1; island at 202,0 size 335x33.75; text Display; fab Visible 595.4999999999999,3,0,0
+on expanded: window DIP 176,0 672x368; rect px 176,0 672x368; visualDpi 0.8 device 1; island at 6,0 size 652.5x256.25; text Display; fab Visible 667.9999999999999,13,0,0
+100 compact: window DIP 92,0 840x460; rect px 92,0 840x460; visualDpi 1 device 1; island at 252,0 size 335x34; text Display; fab Visible 595,3,0,0
+idle CPU over 20 s: 0.51% of all 4 cores (406 ms CPU)
+widget off: 700,24 240x280 dpi 1
+widget on: 700,24 240x280 dpi 0.8

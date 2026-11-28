@@ -1,0 +1,6 @@
+borderless-cover: False Shell_SystemDialog / PickerHost（622×269，螢幕 1024×768）
+  hidden after 2.6s: False
+  after close: False Shell_SystemDialog / PickerHost（622×269，螢幕 1024×768） hidden=False
+maximized-nocaption: False Shell_SystemDialog / PickerHost（622×269，螢幕 1024×768）
+  hidden after 2.6s: False
+  after close: False Shell_SystemDialog / PickerHost（622×269，螢幕 1024×768） hidden=False

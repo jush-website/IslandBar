@@ -1,0 +1,13 @@
+索引 1: MX Master 3S Mouse 72% id=logi-unit-12345678
+索引 2: MX Keys S Keyboard 25% 充電中
+索引 3: G502 LIGHTSPEED Mouse 59% 大約
+索引 4: M705 Mouse 55%
+索引 5: （沒有）
+索引 6: POP Mouse Mouse 100% 充電中 已充飽
+索引 255: （沒有）
+電壓換算：4186→100% 3856→59% 3600→3%
+這台電腦的 Logitech HID++ 裝置：0 組
+分組測試：同一組 OK
+藍牙路徑：True
+HID 介面共 1 個，有標準電量欄位：0 個（1 ms）
+實際讀到：0 個

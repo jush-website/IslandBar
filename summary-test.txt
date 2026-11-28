@@ -1,0 +1,14 @@
+OCR：
+Let Windows and apps access your location?
+IslandBar needs permission to use signals like GPS or Wi-Fi, which can be used to determine
+your precise location. To stop receiving these messages or change this later, go to Sett'ngs.
+Open Settings
+Yes
+No
+
+card visible=True done=True at 302,30 420x175
+card2 at 302,30 420x313; island 92,0
+
+selection test (UIA on window): 'The Q3 project review has been moved to Thursda'
+via focused element: '(null: focus is elsewhere on CI)'
+no selection: '(null)'

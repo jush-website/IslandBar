@@ -1,0 +1,7 @@
+假桌布主色：#1D59C7 → 看得清楚：#3773E2
+Windows 強調色：#0091F8
+桌布：C:\Windows\web\wallpaper\Windows\img0.jpg，主色 #155DBC
+Windows 11：True（10.0.26100.0），時鐘顯示秒：False
+自訂 → #FF8A5B，字色 #FF0E0E10
+工作列：1 條工作列
+還原 → #34D3C0

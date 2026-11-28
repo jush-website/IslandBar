@@ -1,0 +1,2 @@
+加速完成：記憶體 21%→14%，清掉 271 MB
+trimmed=137 temp=44/284211706 dumps=0/0 dns=True

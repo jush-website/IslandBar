@@ -1,0 +1,2 @@
+settings 1004x700
+chat 900x620

@@ -1,0 +1,20 @@
+event '週會' → Google Meet https://meet.google.com/abc-defg-hij
+event 'Teams 討論' → Teams https://teams.microsoft.com/l/meetup-join/19%3ameeting_xyz%40thread.v2/0?context=%7b%7d
+event '吃飯' → - 
+zoom: https://us02web.zoom.us/j/8812345678?pwd=abc
+mic: muted=False hotkey='' record hotkey=''
+lrc parsed: 5 lines; at 3s → #1; at 0.1s → #-1
+clean 'Queen - Bohemian Rhapsody (Official Video Remastered)' / 'Queen Official' → 'Bohemian Rhapsody' / 'Queen'
+clean '告白氣球 Love Confession【官方完整版 MV】' / '周杰倫 Jay Chou' → '告白氣球 Love Confession' / '周杰倫 Jay Chou'
+clean 'Shape of You' / 'Ed Sheeran - Topic' → 'Shape of You' / 'Ed Sheeran'
+lrclib live lookup: 56 synced lines
+lyrics: active=True lines=5 index=1 width=220
+audio outputs: 0 (); apps: 0
+brightness displays: 0
+quick: brightnessRow=Collapsed displays=0 sub=- mixerRows=0
+mixer: brightnessRow=Collapsed displays=0 sub=mixer mixerRows=0
+recording started: True
+recording: D:\a\IslandBar\IslandBar\shots\rec\錄影_20261128_115705.mp4 exists=True size=916903 frames=143 dropped=0 out=1024x768 audio=False audioErr=沒辦法錄電腦的聲音：Element not found. (0x80070490)
+video duration: 4.1s
+gif: GIF 動圖：錄影_20261128_115705.gif size=5540911
+gif frames: 41

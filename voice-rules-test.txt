@@ -1,0 +1,60 @@
+呼叫瀏覽器開啟youtube → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+呼叫瀏覽器開啟 YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+用 Chrome 打開 YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ chrome.exe https://www.youtube.com
+用chrome開youtube → 已開啟 YouTube  <開啟 YouTube>  ⇒ chrome.exe https://www.youtube.com
+幫我用 Google Chrome 開 YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ chrome.exe https://www.youtube.com
+用 Edge 開 GitHub → 已開啟 GitHub  <開啟 GitHub>  ⇒ microsoft-edge:https://github.com
+打開瀏覽器到 YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+打開瀏覽器 YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+打開瀏覽器 → 已開啟 瀏覽器  <開啟 瀏覽器>  ⇒ https://www.google.com
+開啟 Edge 瀏覽器 → 已開啟 Edge  <開啟 Edge>  ⇒ microsoft-edge:
+在瀏覽器上搜尋貓咪 → 用 Google 搜尋「貓咪」  <Google 搜尋>  ⇒ https://www.google.com/search?q=%E8%B2%93%E5%92%AA
+請用瀏覽器幫我開啟 youtube 好嗎 → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+打開 YouTube 搜尋 lofi → 在 YouTube 搜尋「lofi」  <YouTube 搜尋>  ⇒ https://www.youtube.com/results?search_query=lofi
+去 YouTube 看周杰倫 → 在 YouTube 搜尋「周杰倫」  <YouTube 搜尋>  ⇒ https://www.youtube.com/results?search_query=%E5%91%A8%E6%9D%B0%E5%80%AB
+把 YouTube 打開 → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+YouTube 開起來 → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+我要看 YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+上臉書 → 已開啟 Facebook  <開啟 Facebook>  ⇒ https://www.facebook.com
+我要打開 YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+Open YouTube → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+打開 YouTube 首頁 → 已開啟 YouTube  <開啟 YouTube>  ⇒ https://www.youtube.com
+打開 YouTube Music → 已開啟 YouTube Music  <開啟 YouTube Music>  ⇒ https://music.youtube.com
+我想聽周杰倫 → 在 YouTube Music 找「周杰倫」  <YouTube Music 搜尋>  ⇒ https://music.youtube.com/search?q=%E5%91%A8%E6%9D%B0%E5%80%AB
+播放周杰倫 → 在 YouTube Music 找「周杰倫」  <YouTube Music 搜尋>  ⇒ https://music.youtube.com/search?q=%E5%91%A8%E6%9D%B0%E5%80%AB
+打開記事本 → 已開啟 記事本  <開啟 記事本>  ⇒ notepad.exe
+叫出記事本 → 已開啟 記事本  <開啟 記事本>  ⇒ notepad.exe
+把聲音打開 → 音量 unmute  [volume:unmute]
+瀏覽器設定 → （交給 AI）
+看書 → （交給 AI）
+YouTube 搜尋 lofi → 在 YouTube 搜尋「lofi」  <YouTube 搜尋>  ⇒ https://www.youtube.com/results?search_query=lofi
+搜尋台北美食 → 用 Google 搜尋「台北美食」  <Google 搜尋>  ⇒ https://www.google.com/search?q=%E5%8F%B0%E5%8C%97%E7%BE%8E%E9%A3%9F
+用 Google 搜尋貓咪 → 用 Google 搜尋「貓咪」  <Google 搜尋>  ⇒ https://www.google.com/search?q=%E8%B2%93%E5%92%AA
+現在幾點 → status time  [status:time]
+打開雷達 → 已打開天氣雷達  <天氣雷達>  [radar]
+天氣雷達 → 已打開天氣雷達  <天氣雷達>  [radar]
+看一下雷達回波 → 已打開天氣雷達  <天氣雷達>  [radar]
+
+== AI 沒動手時照字面開
+我想要你幫我用瀏覽器看一下 YouTube 上的影片 → 已開啟 YouTube  ⇒ https://www.youtube.com
+可以幫我叫出 YouTube 嗎謝謝 → 已開啟 YouTube  ⇒ https://www.youtube.com
+用 Chrome 幫我開一下 GitHub 的網站 → 已開啟 GitHub  ⇒ chrome.exe https://github.com
+幫我開賴 → （不處理）
+今天天氣如何 → （不處理）
+台灣最高的山是哪一座 → （不處理）
+
+== 環境
+遠端桌面=False，麥克風=0 個
+沒有麥克風的提示：找不到麥克風：確認麥克風有接好，或到 Windows 設定 → 系統 → 音效 → 輸入 選一個麥克風
+靜音的提示：「Remote Audio」收不到聲音：麥克風可能被靜音，或 Windows 擋住了桌面程式用麥克風（點這裡開隱私權設定）
+
+== 自我檢查
+✓ 語音助理已開啟
+• 說話鍵（右 Ctrl）這次開機還沒收到過：按住它說話一次，再回來檢查
+✗ 還沒下載語音辨識模型（約 230 MB）：按下面「語音辨識」的下載
+✗ 找不到麥克風：確認麥克風有接好，或到 Windows 設定 → 系統 → 音效 → 輸入 選一個麥克風
+• 沒有找到 AI 大腦：只能用基本指令（打開程式、放音樂、計時…），其他說法需要 PAIR／Ollama 或本機小模型
+✓ 「呼叫瀏覽器開啟 YouTube」→ 開啟 YouTube
+✓ 「用 Chrome 打開 YouTube」→ 開啟 YouTube
+✓ 「打開記事本」→ 開啟 記事本
+✓ 「在瀏覽器上搜尋 IslandBar」→ Google 搜尋

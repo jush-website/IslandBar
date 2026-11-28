@@ -1,0 +1,20 @@
+url: http://10.1.0.114:47811/s/<token>  addresses: 10.1.0.114/Ethernet 4/120, 172.21.144.1/vEthernet (nat)/20
+[127.0.0.1] page: 200 11133 chars, has upload button=True
+[10.1.0.114] page: 200 11133 chars, has upload button=True
+no slash: 302 → /s/TJGc-3KOLJYavPAA/
+wrong token: 404
+upload #1: 200 {"ok":true,"name":"\u624B\u6A5F \u7167\u7247.jpg"}
+upload #2: 200 {"ok":true,"name":"\u624B\u6A5F \u7167\u7247 (2).jpg"}
+saved: 手機 照片 (2).jpg 3145851 bytes, identical=True
+saved: 手機 照片.jpg 3145851 bytes, identical=True
+path traversal name → {"ok":true,"name":"evil.txt"} (outside exists=False)
+text: 200
+state: {"pc":"runnervmop6rv","offers":[{"id":"t2","name":"\u96FB\u8166\u526A\u8CBC\u7C3F\u7684\u4E00\u6BB5\u6587\u5B57","size":30,"text":"\u96FB\u8166\u526A\u8CBC\u7C3F\u7684\u4E00\u6BB5\u6587\u5B57","kind":"text"},{"id":"f1","name":"\u96FB\u8166\u7D66\u624B\u6A5F.txt","size":24,"text":null,"kind":"file"}]}
+download: 200 '從電腦傳到手機 OK' disposition=attachment; filename="_____.txt"; filename*=UTF-8''%E9%9B%BB%E8%85%A6%E7%B5%A6%E6%89%8B%E6%A9%9F.txt
+missing offer: 404
+client: iPhone
+card: visible=True at 297,36 actual 430x616 width=430 sizeToContent=Height content 430x616 state=Normal
+after hide: running=True cardVisible=False
+after stop: refused (HttpRequestException)
+IsLocal 8.8.8.8=False 192.168.1.5=True
+SafeName: '_CON.txt' 'd.png' '手機檔案_'

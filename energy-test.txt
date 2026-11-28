@@ -1,0 +1,36 @@
+CPU：AMD EPYC 7763 64-Core Processor，估 0 W
+  AMD Ryzen 5 8600G w/ Radeon 760M Graphics → 65 W
+  AMD Ryzen 7 7800X3D 8-Core Processor → 120 W
+  AMD Ryzen 9 7945HX → 45 W
+  AMD Ryzen 7 5800U → 15 W
+  AMD Ryzen AI 9 HX 370 → 28 W
+  13th Gen Intel(R) Core(TM) i7-13700K → 125 W
+  12th Gen Intel(R) Core(TM) i5-1240P → 28 W
+  Intel(R) Core(TM) Ultra 7 155H → 45 W
+  Intel(R) Core(TM) i5-10400 → 65 W
+  AMD EPYC 7763 64-Core Processor → 0 W
+現在：68.4 W（估算）CPU 15.6 顯示卡 0.0 其他 26.5 螢幕 20
+偵測：桌機，6 個裝置
+  cpu AMD EPYC 7763 64-Core Processor 11.8~81.3 W 型號不在清單裡，用一般電腦的數字
+  monitor HyperVMonitor 20~20 W 另外插電
+  disk Msft Virtual Disk 3~5.4 W 硬碟
+  disk Msft Virtual Disk 3~5.4 W 硬碟
+  ram 2 條 記憶體（共 16 GB） 6~9.6 W 
+  board 主機板、晶片組、風扇、USB 14~20 W 
+  gpu tdp NVIDIA GeForce RTX 4090 → 450
+  gpu tdp NVIDIA GeForce RTX 5070 Ti → 300
+  gpu tdp AMD Radeon RX 7800 XT → 263
+  gpu tdp Intel(R) Arc(TM) B580 Graphics → 190
+  gpu tdp NVIDIA GeForce GTX 1650 → 110
+  gpu tdp Some Unknown GPU → ?
+今天 0.0030 度，150 秒
+1 月每度（級距 121–330）：2.26
+7 月每度（級距 121–330）：2.55
+自訂 5 元：5
+級距：120 度以下、121–330 度、331–500 度、501–700 度、701–1000 度、1001 度以上
+本月 16.78 度，預估 18.36 度
+語音：電腦現在大約 65 瓦（估算）；今天用了 0.00 度，這個月 16.8 度，約 NT$38；照這樣整個月大約 18.4 度、NT$42
+這個月用了多少電 → [status:energy]
+電腦現在幾瓦 → [status:energy]
+電費多少 → [status:energy]
+電池還有多少電 → [status:battery]

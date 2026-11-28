@@ -1,0 +1,19 @@
+== 加上之後
+{
+  "statusLine": {
+    "padding": 1,
+    "command": "\"D:/a/IslandBar/IslandBar/publish/IslandBar.exe\" --statusline --chain",
+    "type": "command"
+  }
+}
+== 狀態列輸出：CUSTOM 額度 Opus
+
+== 額度檔：{"updatedAt":"2026-11-28T11:57:37.2588627\u002B00:00","five_hour":{"used_percentage":42,"resets_at":1999999999},"seven_day":{"used_percentage":7}}
+== 拿掉之後
+{
+  "statusLine": {
+    "padding": 1,
+    "command": "\"C:\\Program Files\\nodejs\\node.exe\" \"D:\\a\\_temp\\額度 測試\\statusline.js\"",
+    "type": "command"
+  }
+}
