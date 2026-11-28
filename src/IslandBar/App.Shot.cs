@@ -618,6 +618,33 @@ namespace IslandBar
                 catch (Exception ex) { et.AppendLine("錯誤：" + ex); }
                 File.WriteAllText(Path.Combine(dir, "energy-test.txt"), et.ToString());
 
+                // ---- 火燒雲預報 ----
+                var gt = new System.Text.StringBuilder();
+                try
+                {
+                    gt.AppendLine($"台北 11/28 日出方位 {Services.GlowService.SolarAzimuthAtSun(25.04, 121.5, new DateTime(2026, 11, 28), false):0.0}，日落 {Services.GlowService.SolarAzimuthAtSun(25.04, 121.5, new DateTime(2026, 11, 28), true):0.0}；6/21 日落 {Services.GlowService.SolarAzimuthAtSun(25.04, 121.5, new DateTime(2026, 6, 21), true):0.0}");
+                    var d = Services.GlowService.Destination(25.04, 121.5, 270, 100);
+                    gt.AppendLine($"往西 100 公里：{d.lat:0.000},{d.lon:0.000}");
+                    await _window.DebugRefreshGlow();
+                    foreach (var ev in _window.Glow.Events) gt.AppendLine($"{ev.Time:MM/dd HH:mm} {ev.Kind} {ev.Score} {ev.Level} 往{ev.Direction}（{ev.Azimuth:0}°）：{ev.Factors}");
+                    gt.AppendLine("錯誤：" + (_window.Glow.LastError ?? "無"));
+                    gt.AppendLine("語音：" + _window.Glow.Summary(DateTime.Now));
+                    var host3 = new FakeHost();
+                    var cmd3 = new Services.Voice.Commands(host3, (t, x) => "", () => 0);
+                    foreach (var q in new[] { "今天會有晚霞嗎", "明天有火燒雲嗎", "今天夕陽會好看嗎", "明天會下雨嗎" })
+                    {
+                        host3.Calls.Clear();
+                        await cmd3.TryRulesAsync(q);
+                        gt.AppendLine($"{q} → [{string.Join(",", host3.Calls)}]");
+                    }
+                    _window.DebugExpand("weather");
+                    await Task.Delay(1500);
+                    Save(_window.RootVisual, Path.Combine(dir, "island-weather-glow.png"));
+                    _window.DebugCollapse();
+                }
+                catch (Exception ex) { gt.AppendLine("錯誤：" + ex); }
+                File.WriteAllText(Path.Combine(dir, "glow-test.txt"), gt.ToString());
+
                 // ---- 全螢幕判斷：蓋滿螢幕的無邊框視窗＝全螢幕；最大化的無標題列視窗＝不是 ----
                 var ft = new System.Text.StringBuilder();
                 try

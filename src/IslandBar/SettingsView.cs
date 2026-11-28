@@ -1188,6 +1188,18 @@ namespace IslandBar
             city.Click += (s, e) => _h.Window?.OpenCityPicker();
             p.Children.Add(city);
 
+            p.Children.Add(Heading("火燒雲預報（晨彩、晚霞）", 20));
+            p.Children.Add(Note("天氣分頁的「晚霞 72」按鈕：依你所在地的雲量估今天、明天日出日落的霞光機會（0～100，越高越可能有火燒雲）。看三件事：頭頂有沒有中高雲當畫布、太陽那個方向的地平線開不開、本地有沒有低雲或下雨。資料來自 Open-Meteo，分數是估計不是機率；山擋住地平線沒有算進去。點按鈕會開「霞光 SkyGlow」網站看全台景點地圖和雲海預測。"));
+            p.Children.Add(Check("天氣分頁顯示火燒雲預報", S.GlowForecast, v => { S.GlowForecast = v; Changed(); }));
+            p.Children.Add(Check("機會高時，日落（日出）前在動態島提醒", S.GlowNotify, v => { S.GlowNotify = v; Changed(); }));
+            p.Children.Add(Labeled("幾分以上才提醒", Segmented(new[] { ("50 分（中）", 50), ("70 分（高）", 70), ("80 分（很高）", 80) },
+                S.GlowNotifyScore >= 80 ? 80 : S.GlowNotifyScore >= 70 ? 70 : 50, v => { S.GlowNotifyScore = v; Changed(); })));
+            p.Children.Add(Labeled("提前多久", Segmented(new[] { ("30 分鐘", 30), ("45 分鐘", 45), ("1 小時", 60) },
+                S.GlowNotifyLead >= 60 ? 60 : S.GlowNotifyLead >= 45 ? 45 : 30, v => { S.GlowNotifyLead = v; Changed(); })));
+            var sky = MakeButton("開啟霞光 SkyGlow（全台地圖、雲海）", false);
+            sky.Click += (s, e) => OpenFile(MainWindow.SkyGlowUrl);
+            p.Children.Add(sky);
+
             p.Children.Add(Heading("行程（Google 日曆等）", 20));
             p.Children.Add(Note("貼上 iCal 網址（Google 日曆設定 → 整合日曆 →「iCal 格式的私人網址」）。行程前 30 分鐘倒數、前 10 分鐘提醒。Google 的 iCal 更新會延遲幾個小時。"));
             var url = new TextBox { Text = S.CalendarIcsUrl ?? "", Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 6, 0, 0) };
@@ -1207,8 +1219,8 @@ namespace IslandBar
             p.Children.Add(Note("行程的地點或說明裡有 Google Meet、Teams、Zoom、Webex 連結時：開始前動態島跳出提醒，點一下就加入；「接下來」清單裡的會議也有「加入」按鈕。"));
             p.Children.Add(Check("會議開始前提醒，點一下加入", S.MeetingJoinPrompt, v => { S.MeetingJoinPrompt = v; Changed(); }));
             p.Children.Add(Labeled("提前多久", Segmented(new[] { ("1 分鐘", 1), ("3 分鐘", 3), ("5 分鐘", 5), ("10 分鐘", 10) },
-                S.MeetingLeadMinutes switch { 1 => 0, 3 => 1, 10 => 3, _ => 2 },
-                v => { S.MeetingLeadMinutes = v switch { 0 => 1, 1 => 3, 3 => 10, _ => 5 }; Changed(); })));
+                S.MeetingLeadMinutes is 1 or 3 or 10 ? S.MeetingLeadMinutes : 5,
+                v => { S.MeetingLeadMinutes = v; Changed(); })));
             p.Children.Add(Heading("一鍵靜音麥克風", 16));
             p.Children.Add(Note($"按 {HotkeyText.Pretty(S.MicMuteHotkey)} 把麥克風靜音（系統層級，Meet、Teams、Zoom、Discord 全部都聽不到），再按一次取消。快捷鍵在「快捷鍵與工具」改。"));
             p.Children.Add(Check("靜音時，收合的動態島一直顯示紅色「麥克風靜音」", S.MicMuteIndicator, v => { S.MicMuteIndicator = v; Changed(); }));
@@ -1426,6 +1438,7 @@ namespace IslandBar
             ["亮度"] = new[] { "螢幕亮度" }, ["音量"] = new[] { "各程式音量", "播放裝置" }, ["喇叭"] = new[] { "播放裝置" },
             ["錄影"] = new[] { "螢幕錄影" }, ["錄螢幕"] = new[] { "螢幕錄影" }, ["gif"] = new[] { "GIF" }, ["歌詞"] = new[] { "同步歌詞", "歌詞" },
             ["會議"] = new[] { "會議", "麥克風靜音" }, ["靜音"] = new[] { "麥克風靜音", "靜音" }, ["meet"] = new[] { "會議" }, ["zoom"] = new[] { "會議" },
+            ["晚霞"] = new[] { "火燒雲預報" }, ["火燒雲"] = new[] { "火燒雲預報" }, ["日落"] = new[] { "火燒雲預報" }, ["雲海"] = new[] { "火燒雲預報" }, ["霞光"] = new[] { "火燒雲預報" },
             ["語音"] = new[] { "語音助理", "自我檢查" }, ["沒反應"] = new[] { "自我檢查" }, ["排查"] = new[] { "自我檢查" }, ["診斷"] = new[] { "自我檢查", "診斷" },
             ["麥克風"] = new[] { "麥克風", "自我檢查" }, ["遠端"] = new[] { "自我檢查" },
             ["耗電"] = new[] { "耗電量與電費" }, ["電費"] = new[] { "耗電量與電費", "電價" }, ["用電"] = new[] { "耗電量與電費" }, ["功耗"] = new[] { "耗電量與電費" },

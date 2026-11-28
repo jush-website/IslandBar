@@ -832,7 +832,9 @@
                                 </StackPanel>
                             </StackPanel>
                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <StackPanel x:Name="WxActions" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="WxGlowButton" Style="{StaticResource PillAction}" Content="霞光" Margin="0,0,6,0" Visibility="Collapsed"
+                                            Click="WxGlow_Click" />
                                     <Button x:Name="WxRadarButton" Style="{StaticResource PillAction}" Content="Windy 雷達 ↗"
                                             ToolTip="開啟 Windy 雷達（可以釘在桌面）" Click="WxRadar_Click" />
                                 </StackPanel>

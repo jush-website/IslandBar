@@ -241,6 +241,7 @@ namespace IslandBar
             UiTick();
             _ = RefreshWeatherAsync();
             ApplyFeatureSettings();
+            if (_settings.GlowForecast && _glow.Events.Count == 0 && _forecast != null) _ = RefreshGlowAsync(); else UpdateGlowUi();
         }
 
         /// <summary>在動態島上短暫顯示一則訊息（例如更新進度）</summary>
@@ -985,8 +986,10 @@ namespace IslandBar
             if (_currentMedia != null && _mode == IslandMode.Expanded) UpdateMediaProgress();
 
             TimerTick();
+            if (now.Minute != _lastGlowMinute) { _lastGlowMinute = now.Minute; GlowTick(); }
         }
         private DateTime _lastDay = DateTime.MinValue;
+        private int _lastGlowMinute = -1;
 
         private bool _statsSampling;
 
@@ -1128,6 +1131,7 @@ namespace IslandBar
                 return;
             }
             _forecast = f;
+            _ = RefreshGlowAsync();
             UpdateChatFabMood();
             ApplyForecast(f);
         }
